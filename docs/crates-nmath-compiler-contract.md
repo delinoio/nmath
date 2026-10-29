@@ -35,6 +35,7 @@ The transform parses `.nts` text with the standard tsrs TypeScript parser and pr
 
 - The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module.
 - `__nmath` operator helpers are overloaded in TypeScript declarations. An overload accepts NMath operands and returns a lazy expression; the remaining overloads accept ordinary JS operands and return the ordinary result type. A union that may be NMath or ordinary JS matches no overload, so the checker requires narrowing. The type checker, not speculative dispatch, decides the semantics. The runtime helper calls the NMath operation only when an operand is an NMath value.
+- A comma-expression index stays one helper argument: `a[f(), g()]` lowers to `__nmath.get(a, (f(), g()))`, and the same applies to `a[f(), g()] = value`.
 - Literal-only arithmetic (both operands numeric or string literals) is not rewritten.
 - `a[i] = value` is rewritten only inside async functions or module top level. Elsewhere the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
 - Compound assignment (`+=` and others), `++` and `--` on bracket expressions are left unchanged. Comparison and bitwise operators are never rewritten.

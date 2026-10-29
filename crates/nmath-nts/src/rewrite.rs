@@ -164,6 +164,19 @@ impl Rewriter<'_> {
         bracket + 1
     }
 
+    /// Parenthesizes a comma-expression index (`a[f(), g()]`) so it stays one
+    /// helper argument instead of splitting into two.
+    fn keep_single_argument(&mut self, argument: P<Node>, depth: i64) {
+        if argument.kind() != Kind::BinaryExpression
+            || argument.as_binary_expression().operator_token.kind() != Kind::CommaToken
+        {
+            return;
+        }
+        let start = self.token_start(argument);
+        self.open(start, "(".to_string(), depth, Some((start, end(argument))));
+        self.close(end(argument), ")", depth);
+    }
+
     fn visit_children(&mut self, node: P<Node>, async_context: bool, depth: i64) {
         for child in node.iter_children() {
             self.visit(child, async_context, depth + 1);
@@ -268,6 +281,7 @@ impl Rewriter<'_> {
             Some((target_start, end(node))),
         );
         self.replace(end(element.expression), bracket_end, ", ", depth, None);
+        self.keep_single_argument(element.argument_expression, depth);
         let separator = self.separator_after(end(operator));
         self.replace(
             end(element.argument_expression),
@@ -312,6 +326,7 @@ impl Rewriter<'_> {
             Some((start, end(node))),
         );
         self.replace(end(element.expression), bracket_end, ", ", depth, None);
+        self.keep_single_argument(element.argument_expression, depth);
         self.replace(
             end(element.argument_expression),
             end(node),

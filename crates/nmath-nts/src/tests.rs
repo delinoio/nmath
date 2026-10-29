@@ -90,6 +90,11 @@ fn rewrites_element_reads() {
     );
     assert_eq!(lower("x = a[mask(m)];"), "x = __nmath.get(a, mask(m));");
     assert_eq!(lower("x = (a[i]);"), "x = (__nmath.get(a, i));");
+    assert_eq!(lower("x = a[f(), g()];"), "x = __nmath.get(a, (f(), g()));");
+    assert_eq!(
+        lower("x = a[ i + 1, j ];"),
+        "x = __nmath.get(a,  (__nmath.add(i, 1), j));"
+    );
     assert_eq!(lower("x = f((a[i]));"), "x = f((__nmath.get(a, i)));");
     assert_eq!(
         lower("x = a[i][j];"),
@@ -117,6 +122,10 @@ fn rewrites_element_assignment_at_top_level_and_in_async_functions() {
         "class C { async m() { (await __nmath.set(a, i, v)); } }"
     );
     assert_eq!(lower("a[i]=v;"), "(await __nmath.set(a, i, v));");
+    assert_eq!(
+        lower("a[f(), g()] = v;"),
+        "(await __nmath.set(a, (f(), g()), v));"
+    );
     assert_eq!(
         lower("a[b[k]] = c[i];"),
         "(await __nmath.set(a, __nmath.get(b, k), __nmath.get(c, i)));"
