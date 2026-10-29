@@ -205,7 +205,84 @@ macro_rules! float_num {
         }
     )*};
 }
-float_num!(f32, f64);
+float_num!(f64);
+
+impl Num for f32 {
+    fn nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+        fn sum(values: &[f32], token: &CancellationToken) -> Result<f32> {
+            token.check()?;
+            let n = values.len();
+            if n < 8 {
+                return Ok(values.iter().fold(-0.0_f32, |total, &value| total + value));
+            }
+            if n <= 128 {
+                // Match NumPy 2.5.4's eight-lane real pairwise block order.
+                let mut lanes: [f32; 8] = values[..8].try_into().unwrap();
+                let end = n - n % 8;
+                for block in values[8..end].chunks_exact(8) {
+                    for lane in 0..8 {
+                        lanes[lane] += block[lane];
+                    }
+                }
+                let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+                for &value in &values[end..] {
+                    total += value;
+                }
+                return Ok(total);
+            }
+            let mid = (n / 2) / 8 * 8;
+            Ok(sum(&values[..mid], token)? + sum(&values[mid..], token)?)
+        }
+        Ok(Some(sum(values, token)?))
+    }
+
+    fn mean(self, count: usize) -> Self {
+        self / count as f32
+    }
+
+    fn add(a: Self, b: Self) -> Self {
+        a + b
+    }
+
+    fn sub(a: Self, b: Self) -> Self {
+        a - b
+    }
+
+    fn mul(a: Self, b: Self) -> Self {
+        a * b
+    }
+
+    fn div(a: Self, b: Self) -> Self {
+        a / b
+    }
+
+    fn rem(a: Self, b: Self) -> Self {
+        if b == 0.0 {
+            return f32::NAN;
+        }
+        let r = a % b;
+        if r != 0.0 && ((r < 0.0) != (b < 0.0)) {
+            r + b
+        } else if r == 0.0 {
+            0.0_f32.copysign(b)
+        } else {
+            r
+        }
+    }
+
+    fn pow(a: Self, b: Self) -> Result<Self> {
+        Ok(a.powf(b))
+    }
+
+    fn neg(a: Self) -> Self {
+        -a
+    }
+}
 
 // Complex operations keep component precision. Division uses a ratio to avoid
 // squaring the denominator. Power handles zero and small integer exponents
@@ -861,6 +938,127 @@ mod tests {
         assert_eq!(budget.usage().peak, 8);
         drop(result);
         assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn float32_pairwise_sum_and_mean_preserve_precision_and_budget() {
+        let values = vec![0.1_f32; 1_000_000];
+        let input = dense(vec![1_000_000], Buffer::F32(values.clone()));
+        let budget = MemoryBudget::new(Device::Cpu, 4);
+        let token = CancellationToken::new();
+        let sum = reduce(ReduceOp::Sum, &input, None, &budget, &token).unwrap();
+        let Buffer::F32(sums) = &sum.buffer else {
+            panic!("Expected float32 sum")
+        };
+        assert_eq!(sums[0], 100_000.007_812_5); // NumPy 2.5.4, float32 sum.
+        assert!((sums[0] - 100_000.0).abs() < 1.0);
+        assert_ne!(sums[0], 100_958.343_75);
+        assert_eq!(budget.usage().peak, 4);
+        drop(sum);
+        let mean = reduce(ReduceOp::Mean, &input, None, &budget, &token).unwrap();
+        let Buffer::F32(means) = &mean.buffer else {
+            panic!("Expected float32 mean")
+        };
+        assert_eq!(means[0], 0.100_000_008_940_696_72); // NumPy 2.5.4, float32 mean.
+        assert!((means[0] - 0.1).abs() < 0.000_001);
+        assert_ne!(means[0], 0.100_958_347_320_556_64);
+        drop(mean);
+        assert_eq!(budget.usage().used, 0);
+
+        let rows = dense(
+            vec![2, 1_000_000],
+            Buffer::F32([values.clone(), values].concat()),
+        );
+        let budget = MemoryBudget::new(Device::Cpu, 8);
+        for op in [ReduceOp::Sum, ReduceOp::Mean] {
+            let result = reduce(op, &rows, Some(&[1]), &budget, &token).unwrap();
+            assert_eq!(result.shape, vec![2]);
+            let Buffer::F32(actual) = &result.buffer else {
+                panic!("Expected float32 rows")
+            };
+            let target = if op == ReduceOp::Sum { 100_000.0 } else { 0.1 };
+            let tolerance = if op == ReduceOp::Sum { 1.0 } else { 0.000_001 };
+            assert!(
+                actual
+                    .iter()
+                    .all(|&value| (value - target).abs() < tolerance)
+            );
+            let reference = if op == ReduceOp::Sum {
+                100_000.007_812_5
+            } else {
+                0.100_000_008_940_696_72
+            };
+            assert_eq!(actual, &vec![reference; 2]);
+            assert_eq!(budget.usage().peak, 8);
+            drop(result);
+        }
+    }
+
+    #[test]
+    fn float32_pairwise_matches_numpy_at_block_boundaries() {
+        // NumPy 2.5.4 float32 sums for [1e8, 1, ..., 1, -1e8].
+        let (budget, token) = env();
+        for (len, expected) in [
+            (7, 0.0),
+            (8, 0.0),
+            (9, 0.0),
+            (127, 112.0),
+            (128, 112.0),
+            (129, 120.0),
+            (256, 240.0),
+            (257, 240.0),
+        ] {
+            let mut values = vec![1.0_f32; len];
+            values[0] = 100_000_000.0;
+            values[len - 1] = -100_000_000.0;
+            let input = dense(vec![len], Buffer::F32(values));
+            assert_eq!(
+                reduce(ReduceOp::Sum, &input, None, &budget, &token)
+                    .unwrap()
+                    .buffer,
+                Buffer::F32(vec![expected])
+            );
+        }
+        token.cancel();
+        let input = dense(vec![129], Buffer::F32(vec![1.0; 129]));
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, None, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+    }
+
+    #[test]
+    fn float32_mean_keeps_float32_overflow_and_axis_shape() {
+        let (budget, token) = env();
+        let max = f32::MAX;
+        let pair = dense(vec![2], Buffer::F32(vec![max, max]));
+        for op in [ReduceOp::Sum, ReduceOp::Mean] {
+            let result = reduce(op, &pair, None, &budget, &token).unwrap();
+            assert_eq!(result.shape, Vec::<usize>::new());
+            assert_eq!(result.buffer, Buffer::F32(vec![f32::INFINITY]));
+        }
+        let rows = dense(vec![2, 2], Buffer::F32(vec![max, max, 2.0, 4.0]));
+        let mean = reduce(ReduceOp::Mean, &rows, Some(&[1]), &budget, &token).unwrap();
+        assert_eq!(
+            (mean.shape, mean.buffer),
+            (vec![2], Buffer::F32(vec![f32::INFINITY, 3.0]))
+        );
+        let doubles = dense(vec![2], Buffer::F64(vec![max as f64, max as f64]));
+        assert_eq!(
+            reduce(ReduceOp::Mean, &doubles, None, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::F64(vec![max as f64])
+        );
+        let ints = dense(vec![2], Buffer::I32(vec![2, 4]));
+        assert_eq!(
+            reduce(ReduceOp::Mean, &ints, None, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::F64(vec![3.0])
+        );
     }
 
     #[test]

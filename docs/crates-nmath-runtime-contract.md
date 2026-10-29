@@ -31,6 +31,8 @@ Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`
 
 Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `sum`, `mean`, lexicographic `min`/`max`, and the existing 1-D/2-D `matmul` forms. Complex remainder is unsupported and fails at expression construction. Complex extrema propagate NaNs and preserve the first equal complex element. Sum and mean preserve the complex dtype. Contiguous complex reductions use pairwise accumulation in component precision.
 
+Contiguous CPU `float32` sum and mean use pairwise accumulation with `float32` intermediates, following the pinned NumPy real reduction order. Mean divides the `float32` sum in `float32` precision, including overflow. Noncontiguous reductions retain their existing accumulation order.
+
 Basic indexing shares complex storage; advanced indexing and explicit context copies preserve both components. An explicit `astype` may discard the imaginary component when converting to a real dtype. Complex-to-boolean casts test both components. Assignment from complex values to real numeric storage requires an explicit cast before the write; assignment to boolean storage uses complex truth semantics. Failed writes preserve the target.
 
 Boolean remainder and power use the NumPy `int8` result loop. Boolean addition and multiplication preserve `bool`; subtraction and both unary arithmetic operators reject boolean operands.
