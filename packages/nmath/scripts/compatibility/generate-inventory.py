@@ -71,17 +71,131 @@ EXCLUSIONS = {
     "polars.read_database_uri": "Remote storage, database connectors",
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
-COUNTERPARTS = {name: f"numpy.{target}" for name, target in {
-    "array": "array", "zeros": "zeros", "ones": "ones", "full": "full", "arange": "arange",
-    "add": "add", "subtract": "subtract", "multiply": "multiply", "divide": "divide", "true_divide": "trueDivide",
-    "remainder": "remainder", "mod": "mod", "power": "power", "positive": "positive", "negative": "negative",
-    "sum": "sum", "mean": "mean", "min": "min", "max": "max", "matmul": "matmul", "save": "save", "load": "load",
-    "random.default_rng": "random.defaultRng", "random.Generator.random": "NMathGenerator.random",
-}.items()}
-COUNTERPARTS = {"numpy." + key: value for key, value in COUNTERPARTS.items()}
-COUNTERPARTS.update({"numpy.random.Generator.random": "core.NMathGenerator.random", "numpy.ndarray": "core.NMathArray", "numpy.ndarray.__getitem__": "core.NMathArray.get",
-    "numpy.ndarray.__setitem__": "core.NMathArray.set", "pandas.Series": "pandas.Series", "pandas.DataFrame": "pandas.DataFrame",
-    "polars.Series": "polars.Series", "polars.DataFrame": "polars.DataFrame", "polars.LazyFrame": "polars.LazyFrame"})
+# Pin the inspected implementation, not the generator commit or execution host.
+COUNTERPART_REVISION = "25c6c0f0e399f4896682ade63cc9219b4de062e8"
+COUNTERPARTS = {}
+SCOPES = {}
+NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
+REAL = [dtype for dtype in NUMERIC if dtype not in {"float16", "complex64", "complex128"}]
+
+
+def counterparts(names, family, arguments, dtypes, limits, implementation, tests, fixtures=()):
+    """Register only inspected public counterparts; never propagate through aliases."""
+    for name, target in names.items():
+        if name in COUNTERPARTS:
+            raise ValueError(f"Duplicate counterpart: {name}")
+        COUNTERPARTS[name] = target
+        SCOPES[name] = {
+            "family": family, "status": "partial", "arguments": arguments,
+            "dtypes": list(dtypes), "conditions": limits,
+            "implementation": list(implementation), "tests": list(tests),
+            "fixtures": list(fixtures),
+        }
+
+
+CORE = ["packages/nmath/src/core.ts", "packages/nmath/src/numpy.ts", "packages/nmath/src/types.ts"]
+DTYPE_TESTS = [f"packages/nmath/test/{name}-dtypes.test.mjs" for name in ["integer", "complex", "float16"]]
+DTYPE_FIXTURES = [f"packages/nmath/test/fixtures/{name}-dtypes.json" for name in ["integer", "complex", "float16"]]
+NUMERIC_LIMITS = [
+    "Explicit context and dtype; lazy CPU computation with independent compute calls.",
+    "int64/uint64 use bigint; complex values use Complex or interleaved typed components; float16 has explicit bit transport.",
+    "GPU only supports its existing float32/int32/uint32 operation subset; float16, complex and narrow integer GPU jobs reject.",
+    "Fixture criteria apply only to recorded inputs; arbitrary power and long reductions remain pending. GPU power has 84 unresolved one-ULP differences.",
+]
+for op in ["array", "zeros", "ones", "full", "ndarray"]:
+    counterparts({"numpy." + op: "core.NMathArray" if op == "ndarray" else "numpy." + op},
+        "array-construction", {"array": ["context", "data", "options: dtype, optional shape"], "ndarray": ["context.array factory; no public ndarray constructor parity"], "zeros": ["context", "shape", "dtype"], "ones": ["context", "shape", "dtype"], "full": ["context", "shape", "value", "dtype"]}[op], NUMERIC,
+        NUMERIC_LIMITS + ["No scalar-class constructor parity, structured/extended/string/temporal dtypes, order/like/subok or full copy-policy parity."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+counterparts({"numpy.arange": "numpy.arange"}, "array-construction", ["context", "start", "stop", "step", "dtype"],
+    ["int32", "uint32", "float32", "float64"], ["JS number start/stop/step; default dtype float64; no 64-bit integer or full upstream dtype support."], CORE, ["packages/nmath/test/frames.test.mjs"])
+for op, target in {"add":"add", "subtract":"subtract", "multiply":"multiply", "divide":"divide", "true_divide":"trueDivide", "remainder":"remainder", "mod":"mod", "power":"power", "positive":"positive", "negative":"negative"}.items():
+    dtypes = [d for d in NUMERIC if not (op in {"remainder", "mod"} and d.startswith("complex")) and not (op in {"subtract", "positive", "negative"} and d == "bool")]
+    counterparts({"numpy." + op: "numpy." + target}, "elementwise", ["contextual operands", "broadcasting", "weak scalars"], dtypes,
+        NUMERIC_LIMITS + ["No out, where, casting/order keyword surface or ufunc method parity; boolean power/remainder produce int8."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+for op in ["sum", "mean", "min", "max"]:
+    counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
+        "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
+        NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+counterparts({"numpy.matmul":"numpy.matmul"}, "matrix-product", ["a", "b"], NUMERIC,
+    NUMERIC_LIMITS + ["Only existing vector/matrix 1-D/2-D forms; batched matmul and full ufunc options remain targets."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+for op, target, args, limit in [
+    ("__getitem__", "get", ["integer", "slice", "indices", "mask"], "Basic indexing shares storage; advanced selections copy. Full upstream mixed indexing remains pending."),
+    ("__setitem__", "set", ["selectors", "value", "signal"], "Asynchronous atomic writes; complex-to-real writes require explicit casts; failed writes preserve storage."),
+    ("astype", "astype", ["dtype"], "Lazy cast; explicit complex-to-real cast can discard imaginary components; casting/order/copy/subok options remain targets."),
+]:
+    counterparts({"numpy.ndarray." + op: "core.NMathArray." + target}, "indexing-casting", args, NUMERIC,
+        NUMERIC_LIMITS + [limit], CORE, DTYPE_TESTS + ["packages/nmath/test/core.test.mjs"], DTYPE_FIXTURES)
+for op in ["save", "load", "savez", "savez_compressed"]:
+    counterparts({"numpy." + op: "numpy." + op}, "numpy-io", ["local path", "explicit context/owned arrays", "signal", "overwrite for writes"], NUMERIC,
+        ["Writes reject existing files unless overwrite is explicit; scheduled atomic publication.",
+         "load is NPY-only; NPZ loading uses the additional numpy.loadNpz(context, path) adaptation returning a completed Map, not a lazy NpzFile.",
+         "savez/savez_compressed accept positional arrays plus a named Map; append .npz; stored/DEFLATE only; safe member names and bounded archive/header sizes.",
+         "Complex and float16 NPY accept both byte orders and C/Fortran order; other dtype layout restrictions remain. No mmap or file-object interface."],
+        CORE, DTYPE_TESTS + ["packages/nmath/test/npz.test.mjs"], DTYPE_FIXTURES + ["crates/nmath-core/tests/fixtures/io-npz/manifest.json", "crates/nmath-core/tests/fixtures/io-npz/complex-expected.json"])
+for op in ["default_rng", "Generator", "Generator.random", "Generator.integers", "Generator.uniform", "Generator.standard_normal", "Generator.normal", "Generator.exponential"]:
+    method = op.split(".")[-1]
+    dtype = REAL[:9] if method == "integers" else ["float32", "float64"] if method in {"random", "standard_normal"} else ["float64"] if method in {"uniform", "normal", "exponential"} else REAL
+    target = "numpy.random.defaultRng" if op == "default_rng" else "core.NMathGenerator" + ("." + method if "." in op else "")
+    counterparts({"numpy.random." + op: target}, "random", {
+            "default_rng": ["context", "seed: nonnegative integer <=128 bits"],
+            "Generator": ["context.generator(seed) factory"],
+            "random": ["shape (scalar: [])", "dtype: float32/float64, default float64"],
+            "integers": ["low: safe integer/bigint", "high: safe integer/bigint/undefined", "shape", "dtype: default int64", "endpoint: default false"],
+            "uniform": ["low: scalar", "high: scalar", "shape"],
+            "standard_normal": ["shape", "dtype: float32/float64, default float64"],
+            "normal": ["loc: scalar", "scale: scalar", "shape"],
+            "exponential": ["scale: scalar", "shape"],
+        }[method], dtype,
+        ["PCG64 only; Generator construction is through context.generator/defaultRng, not an arbitrary bit generator.",
+         "Integer bounds require safe JS integers or bigint; undefined high means [0, low); uint64 exclusive high can be 2**64.",
+         "Each successful compute advances shared state in request order; failures/cancellation preserve state.",
+         "No parameter broadcasting, out, entropy default, SeedSequence spawning or state import/export. Other distributions and bit generators remain targets.",
+         "Exact recorded byte sequences do not certify cross-platform transcendental behavior."],
+        ["packages/nmath/src/random.ts", "packages/nmath/src/numpy.ts"], ["packages/nmath/test/random-distributions.test.mjs"], ["packages/nmath/test/fixtures/random/provenance.json", "packages/nmath/test/fixtures/random/mixed.txt"])
+for family, ops in [("linalg", ["solve", "inv", "det"]), ("fft", ["fft", "ifft", "rfft", "irfft"])]:
+    for op in ops:
+        dtype = [d for d in NUMERIC if not (family == "linalg" and d == "float16") and not (op == "rfft" and d.startswith("complex"))]
+        limits = ["CPU only; lazy scheduled results; other family members remain pending.", "Non-finite/extreme-scale criteria and cross-platform acceptance remain pending.", "Linalg fixtures use source-matched residual/eigenvalue criteria; FFT identity fixtures check bounded round trips. FFT adaptation fixtures certify shape/dtype only, not forward-output error."]
+        limits += (["Final two axes must be square; batch axes broadcast; only rank-one solve RHS is a vector.", "Integer/bool compute as float64; float32/complex64 retained unless operands require double precision; singular solve/inv reject, det returns zero."] if family == "linalg" else ["One axis with crop/zero-pad; positive uint32 n; norm backward/forward/ortho; no out.", "float16/float32/complex64 produce single precision except irfft(float16) returns float16; other numeric inputs use double precision.", "rfft rejects complex input; irfft defaults to 2*(axis length-1), discards DC and even-length Nyquist imaginary parts."])
+        counterparts({"numpy." + family + "." + op: "numpy." + family + "." + op}, family,
+            ["a", "b (solve only)"] if family == "linalg" else ["a", "n", "axis", "norm"], dtype, limits,
+            ["packages/nmath/src/" + family + ".ts", "crates/nmath-core/src/numerical.rs"],
+            ["packages/nmath/test/numerical.test.mjs", "crates/nmath-core/tests/numerical.rs"],
+            ["crates/nmath-core/tests/fixtures/numerical/" + file for file in (["linalg.json"] if family == "linalg" else ["fft_adaptation.json", "fft_identity.json"])])
+
+TABLE_LIMITS = [
+    "CPU numeric/bool columns with explicit validity masks; no string/temporal/complex/nested columns at the inspected revision.",
+    "Completed Promise results; internal bounded row-local batches do not establish full streaming. Snapshots/results and sort/join/group boundaries materialize.",
+    "Single-key stable sort, inner/left equijoin and sum/mean/min/max/non-null-count grouping only. Full argument sets remain targets.",
+]
+PANDAS_LIMITS = [
+    "String/number labels only; arithmetic aligns equal unique label sets or identical duplicate sequences, not full outer alignment.",
+    "Nullable Series arithmetic/reductions and nullable scalar iloc reject. Boolean-column row filtering uses DataFrame.filter, unlike upstream label-filter semantics.",
+    "merge matches null keys; groupBy is an immediate single-key/single-value aggregate with as_index=False behavior, sorted/dropna defaults and optional sort/dropna flags.",
+    "Suffix adaptation uses one right suffix; no full pandas suffixes/index join interface.",
+]
+POLARS_LIMITS = [
+    "Positional rows; joins default to unmatched null keys, nullsEqual opts in; groupBy retains null groups and first-seen key order.",
+    "Computed projections require non-nullable input and must precede row operations; named selection supports validity masks.",
+    "collect has ComputeOptions, not upstream engine/optimizer/background options; no complete streaming acceptance.",
+]
+for lib, mappings, limits in [
+    ("pandas", {"Series":"Series", "DataFrame":"DataFrame", "Series.iloc":"Series.iloc", "Series.loc":"Series.loc", "Series.rename":"Series.rename", "DataFrame.sort_values":"DataFrame.sortValues", "DataFrame.merge":"DataFrame.merge", "DataFrame.groupby":"DataFrame.groupBy", "DataFrame.assign":"DataFrame.assign", "DataFrame.sum":"DataFrame.sum", **{"Series."+op:"Series."+op for op in ["add", "sub", "mul", "div", "mod", "pow", "sum", "mean", "min", "max"]}}, PANDAS_LIMITS),
+    ("polars", {"Series":"Series", "DataFrame":"DataFrame", "LazyFrame":"LazyFrame", "col":"col", "Series.len":"Series.len", "Series.alias":"Series.alias", "Series.to_pandas":"Series.toPandas", "DataFrame.to_pandas":"DataFrame.toPandas", "DataFrame.get_column":"DataFrame.getColumn", "DataFrame.lazy":"DataFrame.lazy", **{"LazyFrame."+op:"LazyFrame."+target for op,target in {"select":"select", "with_columns":"withColumns", "filter":"filter", "sort":"sort", "join":"join", "group_by":"groupBy", "collect":"collect"}.items()}, **{"Expr."+op:"ColumnExpr."+op for op in ["add", "sub", "mul", "truediv", "mod", "pow", "alias"]}}, POLARS_LIMITS),
+]:
+    counterparts({lib+"."+name:lib+"."+target for name,target in mappings.items()}, "tables", ["named numeric columns", "single key/value/operation where applicable", "explicit validity/index metadata"], REAL,
+        TABLE_LIMITS + limits, ["packages/nmath/src/"+lib+".ts", "packages/nmath/src/frame.ts"], ["packages/nmath/test/tables.test.mjs", "packages/nmath/test/frames.test.mjs"], ["packages/nmath/test/fixtures/tables.json"])
+for lib in ["pandas", "polars"]:
+    for format in ["csv", "json", "parquet", "feather" if lib == "pandas" else "ipc"]:
+        text_format = format in {"csv", "json"}
+        write = ("to_" if lib == "pandas" else "write_") + format
+        write_target = (("to" if lib == "pandas" else "write") + format.title()) if text_format else write
+        limits = ["Local paths; explicit context; scheduled CPU Promise; signal and explicit overwrite for writes; no full upstream options."]
+        limits += (["CSV header without index; JSON records orientation only (differs from pandas default columns). Explicit complete schema required for narrow/all-null dtype preservation.", "Parser buffers whole input; no full text streaming. No custom delimiter/encoding/compressed text/NDJSON; missing-token policies differ.", "JSON nonfinite values write as null; pandas custom indexes require dropIndex:true."] if text_format else ["Flat numeric/bool schema only; no float16/complex/string/temporal/nested/dictionary/extension columns or custom schema/field metadata.", "Arrow IPC file/Feather V2 only, uncompressed; no IPC stream or Feather V1. Parquet reads uncompressed/Snappy, writes Snappy without dictionary encoding.", "Serialized input buffered; decoding/writing batches still return a complete table. No projection/engine/compression options.", "pandas non-default indexes reject; default index reconstructed; nullable numeric preservation corresponds to dtype_backend=numpy_nullable, not default pandas inference."])
+        counterparts({lib+".read_"+format:lib+".read_"+format, lib+".DataFrame."+write:lib+".DataFrame."+write_target}, "text-io" if text_format else "columnar-io", ["context", "path", "schema (text reads)", "signal", "overwrite (writes)"], REAL, limits,
+            ["packages/nmath/src/"+lib+".ts", "packages/nmath/src/"+("io-text" if text_format else "columnar")+".ts"],
+            ["packages/nmath/test/"+("io-text" if text_format else "columnar")+".test.mjs"],
+            ["crates/nmath-core/tests/fixtures/"+("io-text" if text_format else "io-columnar")+"/manifest.json"])
 
 
 def digest(data):
@@ -370,6 +484,26 @@ def main():
     entries["numpy.ndarray.__setitem__"]["verification"].update(status="fixtures-available-native-result-not-certified", fixtureIds=[x["id"] for x in json.loads((ROOT / "fixtures/mutation.json").read_text())["cases"]], cpuCriterion="exact-contract")
     if "numpy.random.Generator.random" in entries:
         entries["numpy.random.Generator.random"]["verification"].update(status="fixtures-available-native-result-not-certified", fixtureIds=[x["id"] for x in json.loads((ROOT / "fixtures/random.json").read_text())["cases"]], cpuCriterion="random-exact-contract")
+    missing_counterparts = sorted(set(COUNTERPARTS) - set(entries))
+    if missing_counterparts:
+        raise SystemExit(f"Counterparts outside the inventory: {missing_counterparts}")
+    repository = ROOT.parents[2]
+    for name, scope in SCOPES.items():
+        row = entries[name]
+        row["supportedScope"] = scope
+        if not row["supportTarget"]:
+            raise SystemExit(f"Counterpart conflicts with exclusion: {name}")
+        evidence = []
+        for kind in ["implementation", "tests", "fixtures"]:
+            for path in scope[kind]:
+                evidence.append({"kind": kind, "path": path, "sha256": digest((repository / path).read_bytes())})
+        row["verification"].update(
+            evidence=evidence, sourceRevision=COUNTERPART_REVISION,
+            status="evidence-available-native-acceptance-pending",
+            crossPlatformStatus="pending", gpuStatus="pending",
+        )
+        row["arguments"]["supported"] = scope["arguments"]
+        row["dtypePlatform"]["supportedDtypes"] = scope["dtypes"]
     # JSON Lines shards are deterministic and remain below the Git LFS threshold.
     shards = []
     for lib in VERSIONS:
@@ -397,8 +531,16 @@ def main():
             path.unlink()
     write_json(out / "manifest.generated.json", {"schemaVersion": 1, "versions": VERSIONS, "sources": SOURCES,
         "boundaryStatus": "pending-reconciliation" if unresolved else "enumerated-pending-semantic-review",
-        "acceptanceStatus": "incomplete", "counterpartSourceRevision": "576712dc5d8d471eb0744d236850ad8d08ee4fc7", "counts": dict(collections.Counter(row["library"] for row in entries.values())),
+        "acceptanceStatus": "incomplete", "counterpartSourceRevision": COUNTERPART_REVISION, "counts": dict(collections.Counter(row["library"] for row in entries.values())),
         "unresolvedNames": sorted(unresolved), "shards": shards})
+    write_json(out / "support-summary.generated.json", {
+        "schemaVersion": 1, "sourceRevision": COUNTERPART_REVISION,
+        "acceptanceStatus": "incomplete",
+        "statuses": dict(sorted(collections.Counter(row["status"] for row in entries.values()).items())),
+        "partialFamilies": dict(sorted(collections.Counter(scope["family"] for scope in SCOPES.values()).items())),
+        "unperformed": ["cross-platform-native-acceptance", "gpu-release-matrix-acceptance", "full-api-semantic-review"],
+        "unresolved": ["GPU power: 84 one-ULP differences; no tolerance waiver", "strings/temporal worker integration requires follow-up reconciliation"],
+    })
     write_json(out / "modules.generated.json", sorted(module_audit, key=lambda x: x["name"]))
     write_json(out / "source-hashes.generated.json", dict(sorted(source_files.items())))
     print(json.dumps({"rows": len(entries), "unresolved": len(unresolved), "shards": len(shards)}))

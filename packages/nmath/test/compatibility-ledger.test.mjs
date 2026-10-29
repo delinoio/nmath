@@ -125,3 +125,100 @@ test("fixture IDs and numerical criteria have explicit obligations", () => {
     );
   }
 });
+
+test("reconciliation preserves every API name and agreed exclusion", () => {
+  const boundary = [...rows.values()]
+    .map((row) => `${row.name}\t${row.exclusion ?? ""}`)
+    .sort()
+    .join("\n");
+  assert.equal(rows.size, 52761);
+  assert.equal(
+    createHash("sha256").update(boundary).digest("hex"),
+    "e527ecf70c3b33d4d22b87e548cc0ab0cacca1a282c8a60cd0196d2659ca637c",
+  );
+});
+
+test("partial scopes have hashed implementation and test evidence, never acceptance", () => {
+  const repository = new URL("../../../", import.meta.url);
+  const summary = read("inventory/support-summary.generated.json");
+  const counts = {};
+  for (const row of rows.values()) {
+    if (!row.counterpart) {
+      assert.equal(row.supportedScope, undefined);
+      continue;
+    }
+    const scope = row.supportedScope;
+    assert.equal(row.status, "partial-counterpart", row.name);
+    assert.equal(scope.status, "partial", row.name);
+    assert.ok(
+      scope.arguments.length && scope.dtypes.length && scope.conditions.length,
+      row.name,
+    );
+    counts[scope.family] = (counts[scope.family] ?? 0) + 1;
+    assert.equal(
+      row.verification.sourceRevision,
+      manifest.counterpartSourceRevision,
+    );
+    assert.equal(row.verification.crossPlatformStatus, "pending");
+    assert.equal(row.verification.gpuStatus, "pending");
+    for (const evidence of row.verification.evidence) {
+      const bytes = readFileSync(new URL(evidence.path, repository));
+      assert.equal(
+        createHash("sha256").update(bytes).digest("hex"),
+        evidence.sha256,
+        evidence.path,
+      );
+    }
+    for (const kind of ["implementation", "tests", "fixtures"]) {
+      assert.deepEqual(
+        row.verification.evidence
+          .filter((item) => item.kind === kind)
+          .map((item) => item.path),
+        scope[kind],
+      );
+    }
+  }
+  assert.deepEqual(counts, summary.partialFamilies);
+  assert.equal(summary.sourceRevision, manifest.counterpartSourceRevision);
+  assert.equal(summary.acceptanceStatus, "incomplete");
+});
+
+test("bounded implementations do not certify dtype classes, aliases or adjacent APIs", () => {
+  for (const name of [
+    "numpy.float16",
+    "numpy.complex64",
+    "numpy.int8",
+    "numpy.fft.fftn",
+    "numpy.linalg.svd",
+    "numpy.random.Generator.gamma",
+    "pandas.Series.str.contains",
+    "pandas.Series.dt.year",
+    "polars.Expr.str.contains",
+    "pandas.DataFrame.filter",
+  ]) {
+    assert.equal(rows.get(name).status, "pending", name);
+    assert.equal(rows.get(name).supportTarget, true, name);
+  }
+  assert.ok(rows.get("numpy.array").supportedScope.dtypes.includes("float16"));
+  assert.ok(
+    !rows.get("numpy.remainder").supportedScope.dtypes.includes("complex64"),
+  );
+  assert.ok(
+    !rows.get("numpy.linalg.solve").supportedScope.dtypes.includes("float16"),
+  );
+  assert.ok(
+    !rows.get("numpy.fft.rfft").supportedScope.dtypes.includes("complex64"),
+  );
+  assert.equal(
+    rows.get("numpy.random.Generator.integers").counterpart,
+    "core.NMathGenerator.integers",
+  );
+  assert.equal(
+    rows.get("numpy.savez_compressed").counterpart,
+    "numpy.savez_compressed",
+  );
+  assert.equal(
+    rows.get("polars.LazyFrame.collect").status,
+    "partial-counterpart",
+  );
+});
