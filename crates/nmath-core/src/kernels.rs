@@ -612,10 +612,6 @@ pub fn reduce(
         }
     }
     let rank = input.shape.len();
-    // Reduced flags and the four rank-sized vectors in BroadcastPairs and
-    // its stride input all remain live until the reduction buffer is built.
-    let metadata_bytes = checked_reduction_bytes(rank, 1 + 4 * std::mem::size_of::<usize>())?;
-    let _metadata_reservation = budget.reserve(metadata_bytes)?;
     let reduced = reduce_axes(input.shape.len(), axes)?;
     // An empty reduced dimension has no min/max identity, regardless of the
     // available budget.
@@ -633,6 +629,10 @@ pub fn reduce(
             ),
         ));
     }
+    // Reduced flags and the four rank-sized vectors in BroadcastPairs and
+    // its stride input all remain live until the reduction buffer is built.
+    let metadata_bytes = checked_reduction_bytes(rank, 1 + 4 * std::mem::size_of::<usize>())?;
+    let _metadata_reservation = budget.reserve(metadata_bytes)?;
     let kept = reduced.iter().filter(|&&is_reduced| !is_reduced).count();
     let shape_bytes = checked_reduction_bytes(kept, std::mem::size_of::<usize>())?;
     let out_len: usize = input
@@ -1107,6 +1107,17 @@ mod tests {
         // np.zeros((0, 2)).max(axis=0) raises ValueError.
         let (b, t) = env();
         let empty = dense(vec![0, 2], Buffer::F64(vec![]));
+        let zero_budget = MemoryBudget::new(Device::Cpu, 0);
+        let empty_vector = dense(vec![0], Buffer::F64(vec![]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            assert_eq!(
+                reduce(op, &empty_vector, None, &zero_budget, &t)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ShapeMismatch
+            );
+            assert_eq!(zero_budget.usage().used, 0);
+        }
         for op in [ReduceOp::Min, ReduceOp::Max] {
             let r = reduce(op, &empty, Some(&[1]), &b, &t).unwrap();
             assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::F64(vec![])));
