@@ -162,8 +162,12 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
     }
     Ok(match dtype.ensure_computable().map_err(to_napi)? {
         DType::Bool => CoreBuffer::Bool(bytes.iter().map(|&b| b != 0).collect()),
+        DType::Int8 => read!(i8),
+        DType::Int16 => read!(i16),
         DType::Int32 => read!(i32),
         DType::Int64 => read!(i64),
+        DType::UInt8 => read!(u8),
+        DType::UInt16 => read!(u16),
         DType::UInt32 => read!(u32),
         DType::UInt64 => read!(u64),
         DType::Float32 => read!(f32),
@@ -175,8 +179,12 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
 fn buffer_to_bytes(buffer: &CoreBuffer) -> Vec<u8> {
     match buffer {
         CoreBuffer::Bool(v) => v.iter().map(|&b| b as u8).collect(),
+        CoreBuffer::I8(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::I16(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::I32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::I64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::U8(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::U16(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::U32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::U64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::F32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),

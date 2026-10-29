@@ -59,11 +59,11 @@ await a.set([0, 0], 100); // atomic, asynchronous write
 
 ## Scalars
 
-| Dtype                                   | JS value  |
-| --------------------------------------- | --------- |
-| `float32`, `float64`, `int32`, `uint32` | `number`  |
-| `int64`, `uint64`                       | `bigint`  |
-| `bool`                                  | `boolean` |
+| Dtype                                                                       | JS value  |
+| --------------------------------------------------------------------------- | --------- |
+| `float32`, `float64`, `int8`, `int16`, `int32`, `uint8`, `uint16`, `uint32` | `number`  |
+| `int64`, `uint64`                                                           | `bigint`  |
+| `bool`                                                                      | `boolean` |
 
 As operands, a JS `number` acts like a Python `float`, a `bigint` like a Python `int` and a `boolean` like a Python `bool` (NumPy NEP 50 rules). For example, `int32Array.add(1n)` stays `int32`, and `int32Array.add(1)` becomes `float64`.
 
@@ -108,7 +108,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 
 | Area                 | Available now                                                                                                   | Not yet available                                                                                                                             |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dtypes               | `bool`, `int32`, `int64`, `uint32`, `uint64`, `float32`, `float64`                                              | `int8`, `int16`, `uint8`, `uint16`, complex, string, datetime, timedelta, categorical, structured                                             |
+| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`          | complex, string, datetime, timedelta, categorical, structured                                                                                 |
 | NumPy arithmetic     | `+ - * / % **`, unary `+ -`, broadcasting, NEP 50 promotion                                                     | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                  |
 | NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                              | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                              |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment | several advanced selectors combined, `newaxis`, ellipsis                                                                                      |

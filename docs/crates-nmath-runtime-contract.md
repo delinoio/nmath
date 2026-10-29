@@ -25,6 +25,8 @@ This contract owns the `nmath-core` and `nmath-node` components of the [`nmath` 
 
 `DType` is a Rust enum whose variants map one-to-one to the dtype IDs in the [project index](project-nmath.md#stable-identifiers). Type promotion follows NumPy 2.5.4 rules (NEP 50 semantics for Python-scalar-like JS numbers). The core crate exposes `DType::promote(a, b)` and `DType::id()`.
 
+Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`int16`, `uint16`) storage. Arithmetic wraps at the result dtype width. Mixed signed/unsigned arrays promote to a signed width that can represent both ranges, or to `float64` when no such integer width exists. Weak integer operands must fit the promoted dtype. Integer true division and mean return `float64`; sum widens small signed integers to `int64` and small unsigned integers to `uint64`. NPY uses `|i1`, `|u1`, `<i2` and `<u2` descriptors for these dtypes.
+
 ### Arrays and storage
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.

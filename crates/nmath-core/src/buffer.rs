@@ -57,8 +57,12 @@ impl Scalar {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Buffer {
     Bool(Vec<bool>),
+    I8(Vec<i8>),
+    I16(Vec<i16>),
     I32(Vec<i32>),
     I64(Vec<i64>),
+    U8(Vec<u8>),
+    U16(Vec<u16>),
     U32(Vec<u32>),
     U64(Vec<u64>),
     F32(Vec<f32>),
@@ -69,8 +73,12 @@ macro_rules! each_buffer {
     ($buf:expr, $v:ident => $body:expr) => {
         match $buf {
             Buffer::Bool($v) => $body,
+            Buffer::I8($v) => $body,
+            Buffer::I16($v) => $body,
             Buffer::I32($v) => $body,
             Buffer::I64($v) => $body,
+            Buffer::U8($v) => $body,
+            Buffer::U16($v) => $body,
             Buffer::U32($v) => $body,
             Buffer::U64($v) => $body,
             Buffer::F32($v) => $body,
@@ -83,8 +91,12 @@ impl Buffer {
     pub fn dtype(&self) -> DType {
         match self {
             Buffer::Bool(_) => DType::Bool,
+            Buffer::I8(_) => DType::Int8,
+            Buffer::I16(_) => DType::Int16,
             Buffer::I32(_) => DType::Int32,
             Buffer::I64(_) => DType::Int64,
+            Buffer::U8(_) => DType::UInt8,
+            Buffer::U16(_) => DType::UInt16,
             Buffer::U32(_) => DType::UInt32,
             Buffer::U64(_) => DType::UInt64,
             Buffer::F32(_) => DType::Float32,
@@ -107,8 +119,12 @@ impl Buffer {
     pub fn filled(dtype: DType, len: usize, value: Scalar) -> Result<Buffer> {
         Ok(match dtype.ensure_computable()? {
             DType::Bool => Buffer::Bool(vec![value.as_f64() != 0.0; len]),
+            DType::Int8 => Buffer::I8(vec![value.as_i128() as i8; len]),
+            DType::Int16 => Buffer::I16(vec![value.as_i128() as i16; len]),
             DType::Int32 => Buffer::I32(vec![value.as_i128() as i32; len]),
             DType::Int64 => Buffer::I64(vec![value.as_i128() as i64; len]),
+            DType::UInt8 => Buffer::U8(vec![value.as_i128() as u8; len]),
+            DType::UInt16 => Buffer::U16(vec![value.as_i128() as u16; len]),
             DType::UInt32 => Buffer::U32(vec![value.as_i128() as u32; len]),
             DType::UInt64 => Buffer::U64(vec![value.as_i128() as u64; len]),
             DType::Float32 => Buffer::F32(vec![value.as_f64() as f32; len]),
@@ -120,8 +136,12 @@ impl Buffer {
     pub fn get(&self, i: usize) -> Scalar {
         match self {
             Buffer::Bool(v) => Scalar::Bool(v[i]),
+            Buffer::I8(v) => Scalar::Int(v[i] as i64),
+            Buffer::I16(v) => Scalar::Int(v[i] as i64),
             Buffer::I32(v) => Scalar::Int(v[i] as i64),
             Buffer::I64(v) => Scalar::Int(v[i]),
+            Buffer::U8(v) => Scalar::UInt(v[i] as u64),
+            Buffer::U16(v) => Scalar::UInt(v[i] as u64),
             Buffer::U32(v) => Scalar::UInt(v[i] as u64),
             Buffer::U64(v) => Scalar::UInt(v[i]),
             Buffer::F32(v) => Scalar::Float(v[i] as f64),
@@ -134,8 +154,12 @@ impl Buffer {
     pub fn set_from(&mut self, i: usize, src: &Buffer, j: usize) {
         match (self, src) {
             (Buffer::Bool(a), Buffer::Bool(b)) => a[i] = b[j],
+            (Buffer::I8(a), Buffer::I8(b)) => a[i] = b[j],
+            (Buffer::I16(a), Buffer::I16(b)) => a[i] = b[j],
             (Buffer::I32(a), Buffer::I32(b)) => a[i] = b[j],
             (Buffer::I64(a), Buffer::I64(b)) => a[i] = b[j],
+            (Buffer::U8(a), Buffer::U8(b)) => a[i] = b[j],
+            (Buffer::U16(a), Buffer::U16(b)) => a[i] = b[j],
             (Buffer::U32(a), Buffer::U32(b)) => a[i] = b[j],
             (Buffer::U64(a), Buffer::U64(b)) => a[i] = b[j],
             (Buffer::F32(a), Buffer::F32(b)) => a[i] = b[j],
@@ -159,8 +183,12 @@ impl Buffer {
             ($v:expr) => {
                 match dtype {
                     DType::Bool => Buffer::Bool($v.iter().map(|x| to_f64(*x) != 0.0).collect()),
+                    DType::Int8 => Buffer::I8($v.iter().map(|x| to_i128(*x) as i8).collect()),
+                    DType::Int16 => Buffer::I16($v.iter().map(|x| to_i128(*x) as i16).collect()),
                     DType::Int32 => Buffer::I32($v.iter().map(|x| to_i128(*x) as i32).collect()),
                     DType::Int64 => Buffer::I64($v.iter().map(|x| to_i128(*x) as i64).collect()),
+                    DType::UInt8 => Buffer::U8($v.iter().map(|x| to_i128(*x) as u8).collect()),
+                    DType::UInt16 => Buffer::U16($v.iter().map(|x| to_i128(*x) as u16).collect()),
                     DType::UInt32 => Buffer::U32($v.iter().map(|x| to_i128(*x) as u32).collect()),
                     DType::UInt64 => Buffer::U64($v.iter().map(|x| to_i128(*x) as u64).collect()),
                     DType::Float32 => Buffer::F32($v.iter().map(|x| to_f64(*x) as f32).collect()),
@@ -185,7 +213,7 @@ macro_rules! elem_num {
         }
     )*};
 }
-elem_num!(i32, i64, u32, u64, f32, f64);
+elem_num!(i8, i16, u8, u16, i32, i64, u32, u64, f32, f64);
 impl Elem for bool {
     fn f64(self) -> f64 {
         self as u8 as f64
@@ -209,7 +237,7 @@ macro_rules! from_vec {
         }
     )*};
 }
-from_vec!(bool => Bool, i32 => I32, i64 => I64, u32 => U32, u64 => U64, f32 => F32, f64 => F64);
+from_vec!(bool => Bool, i8 => I8, i16 => I16, u8 => U8, u16 => U16, i32 => I32, i64 => I64, u32 => U32, u64 => U64, f32 => F32, f64 => F64);
 
 /// An owned contiguous C-order array charged to a budget.
 #[derive(Debug)]
@@ -262,6 +290,25 @@ mod tests {
         );
         let big = Buffer::I64(vec![i64::MAX]);
         assert_eq!(big.cast(DType::Int64).unwrap(), big);
+    }
+
+    #[test]
+    fn small_integer_storage_and_casts() {
+        for (dtype, expected) in [
+            (DType::Int8, Buffer::I8(vec![-1, 0, 1])),
+            (DType::Int16, Buffer::I16(vec![-1, 0, 1])),
+            (DType::UInt8, Buffer::U8(vec![255, 0, 1])),
+            (DType::UInt16, Buffer::U16(vec![65535, 0, 1])),
+        ] {
+            // NumPy 2.5.4: np.array([-1, 0, 1], dtype='int64').astype(dtype).
+            let cast = Buffer::I64(vec![-1, 0, 1]).cast(dtype).unwrap();
+            assert_eq!(cast, expected);
+            assert_eq!(cast.byte_len(), 3 * dtype.item_size() as u64);
+            assert_eq!(cast.gather(&[2, 0]).get(0), cast.get(2));
+            let mut filled = Buffer::filled(dtype, 3, Scalar::Int(0)).unwrap();
+            filled.set_from(1, &cast, 0);
+            assert_eq!(filled.get(1), cast.get(0));
+        }
     }
 
     #[test]

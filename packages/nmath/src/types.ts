@@ -23,10 +23,28 @@ export type DType =
 
 /** Dtypes with CPU kernels in this build. */
 export type ComputableDType =
-  "bool" | "int32" | "int64" | "uint32" | "uint64" | "float32" | "float64";
+  | "bool"
+  | "int8"
+  | "int16"
+  | "uint8"
+  | "uint16"
+  | "int32"
+  | "int64"
+  | "uint32"
+  | "uint64"
+  | "float32"
+  | "float64";
 
 export type FloatDType = "float32" | "float64";
-export type IntDType = "int32" | "int64" | "uint32" | "uint64";
+export type IntDType =
+  | "int8"
+  | "int16"
+  | "uint8"
+  | "uint16"
+  | "int32"
+  | "int64"
+  | "uint32"
+  | "uint64";
 
 export type Shape = readonly number[];
 
@@ -38,34 +56,75 @@ export type ScalarOf<D extends DType> = D extends "int64" | "uint64"
     : number;
 
 /** Typed array used to exchange data of dtype `D`. */
-export type TypedArrayOf<D extends ComputableDType> = D extends "bool"
-  ? Uint8Array
-  : D extends "int32"
-    ? Int32Array
-    : D extends "int64"
-      ? BigInt64Array
-      : D extends "uint32"
-        ? Uint32Array
-        : D extends "uint64"
-          ? BigUint64Array
-          : D extends "float32"
-            ? Float32Array
-            : Float64Array;
+export type TypedArrayOf<D extends ComputableDType> = D extends "int8"
+  ? Int8Array
+  : D extends "int16"
+    ? Int16Array
+    : D extends "uint16"
+      ? Uint16Array
+      : D extends "bool" | "uint8"
+        ? Uint8Array
+        : D extends "int32"
+          ? Int32Array
+          : D extends "int64"
+            ? BigInt64Array
+            : D extends "uint32"
+              ? Uint32Array
+              : D extends "uint64"
+                ? BigUint64Array
+                : D extends "float32"
+                  ? Float32Array
+                  : Float64Array;
 
+// NumPy 2.5.4 result_type; tested against the recorded integer dtype fixture.
 type PromoteTable = {
   bool: {
     bool: "bool";
+    int8: "int8";
+    int16: "int16";
     int32: "int32";
     int64: "int64";
+    uint8: "uint8";
+    uint16: "uint16";
     uint32: "uint32";
     uint64: "uint64";
     float32: "float32";
     float64: "float64";
   };
-  int32: {
-    bool: "int32";
+  int8: {
+    bool: "int8";
+    int8: "int8";
+    int16: "int16";
     int32: "int32";
     int64: "int64";
+    uint8: "int16";
+    uint16: "int32";
+    uint32: "int64";
+    uint64: "float64";
+    float32: "float32";
+    float64: "float64";
+  };
+  int16: {
+    bool: "int16";
+    int8: "int16";
+    int16: "int16";
+    int32: "int32";
+    int64: "int64";
+    uint8: "int16";
+    uint16: "int32";
+    uint32: "int64";
+    uint64: "float64";
+    float32: "float32";
+    float64: "float64";
+  };
+  int32: {
+    bool: "int32";
+    int8: "int32";
+    int16: "int32";
+    int32: "int32";
+    int64: "int64";
+    uint8: "int32";
+    uint16: "int32";
     uint32: "int64";
     uint64: "float64";
     float32: "float64";
@@ -73,17 +132,51 @@ type PromoteTable = {
   };
   int64: {
     bool: "int64";
+    int8: "int64";
+    int16: "int64";
     int32: "int64";
     int64: "int64";
+    uint8: "int64";
+    uint16: "int64";
     uint32: "int64";
     uint64: "float64";
     float32: "float64";
     float64: "float64";
   };
+  uint8: {
+    bool: "uint8";
+    int8: "int16";
+    int16: "int16";
+    int32: "int32";
+    int64: "int64";
+    uint8: "uint8";
+    uint16: "uint16";
+    uint32: "uint32";
+    uint64: "uint64";
+    float32: "float32";
+    float64: "float64";
+  };
+  uint16: {
+    bool: "uint16";
+    int8: "int32";
+    int16: "int32";
+    int32: "int32";
+    int64: "int64";
+    uint8: "uint16";
+    uint16: "uint16";
+    uint32: "uint32";
+    uint64: "uint64";
+    float32: "float32";
+    float64: "float64";
+  };
   uint32: {
     bool: "uint32";
+    int8: "int64";
+    int16: "int64";
     int32: "int64";
     int64: "int64";
+    uint8: "uint32";
+    uint16: "uint32";
     uint32: "uint32";
     uint64: "uint64";
     float32: "float64";
@@ -91,8 +184,12 @@ type PromoteTable = {
   };
   uint64: {
     bool: "uint64";
+    int8: "float64";
+    int16: "float64";
     int32: "float64";
     int64: "float64";
+    uint8: "uint64";
+    uint16: "uint64";
     uint32: "uint64";
     uint64: "uint64";
     float32: "float64";
@@ -100,8 +197,12 @@ type PromoteTable = {
   };
   float32: {
     bool: "float32";
+    int8: "float32";
+    int16: "float32";
     int32: "float64";
     int64: "float64";
+    uint8: "float32";
+    uint16: "float32";
     uint32: "float64";
     uint64: "float64";
     float32: "float32";
@@ -109,8 +210,12 @@ type PromoteTable = {
   };
   float64: {
     bool: "float64";
+    int8: "float64";
+    int16: "float64";
     int32: "float64";
     int64: "float64";
+    uint8: "float64";
+    uint16: "float64";
     uint32: "float64";
     uint64: "float64";
     float32: "float64";
@@ -144,9 +249,10 @@ export type TrueDivide<D extends ComputableDType> = D extends FloatDType
   ? D
   : "float64";
 
-export type SumDType<D extends ComputableDType> = D extends "bool" | "int32"
+export type SumDType<D extends ComputableDType> = D extends
+  "bool" | "int8" | "int16" | "int32"
   ? "int64"
-  : D extends "uint32"
+  : D extends "uint8" | "uint16" | "uint32"
     ? "uint64"
     : D;
 

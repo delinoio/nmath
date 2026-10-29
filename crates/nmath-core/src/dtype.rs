@@ -92,7 +92,11 @@ impl DType {
     pub fn is_computable(self) -> bool {
         matches!(
             self,
-            DType::Bool
+            DType::Int8
+                | DType::Int16
+                | DType::UInt8
+                | DType::UInt16
+                | DType::Bool
                 | DType::Int32
                 | DType::Int64
                 | DType::UInt32

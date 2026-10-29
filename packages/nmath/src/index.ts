@@ -55,7 +55,8 @@ export function isNMath(value: unknown): value is Lazy<ComputableDType, Shape> {
 
 /**
  * Functional arithmetic with the same dtype promotion and static broadcasting checks as
- * the methods. A scalar may appear on either side.
+ * the methods. A scalar may appear on either side. Dtypes are inferred from
+ * operand properties so recursive method signatures cannot widen promotion.
  */
 export interface BinaryFunction {
   <
@@ -64,16 +65,16 @@ export interface BinaryFunction {
     D2 extends ComputableDType,
     S2 extends Shape,
   >(
-    a: Lazy<D1, S1>,
-    b: Lazy<D2, S2> & BroadcastCheck<S1, S2>,
+    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
+    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
   ): Expr<Promote<D1, D2>, Broadcast<S1, S2>>;
   <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
-    a: Lazy<D, S>,
+    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
     b: W,
   ): Expr<PromoteWeak<D, W>, S>;
   <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
     a: W,
-    b: Lazy<D, S>,
+    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   ): Expr<PromoteWeak<D, W>, S>;
 }
 
@@ -85,16 +86,16 @@ export interface DivideFunction {
     D2 extends ComputableDType,
     S2 extends Shape,
   >(
-    a: Lazy<D1, S1>,
-    b: Lazy<D2, S2> & BroadcastCheck<S1, S2>,
+    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
+    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
   ): Expr<TrueDivide<Promote<D1, D2>>, Broadcast<S1, S2>>;
   <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
-    a: Lazy<D, S>,
+    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
     b: W,
   ): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
   <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
     a: W,
-    b: Lazy<D, S>,
+    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   ): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
 }
 

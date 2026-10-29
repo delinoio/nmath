@@ -54,6 +54,8 @@ Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones
 - Explicit lossy conversions: `toNumber()`, `toDate()`.
 - Weak operand scalars follow NumPy NEP 50 with a fixed JS mapping: `number` acts as a Python `float`, `bigint` as a Python `int` and `boolean` as a Python `bool`.
 
+Small integer arrays exchange data through `Int8Array`, `Int16Array`, `Uint8Array` and `Uint16Array`. Scalar reads return `number`; signed and unsigned small-integer sums return `bigint`. Array-to-array promotion follows NumPy, including `int8` with `uint8` becoming `int16`, and `float32` with any 8-bit or 16-bit integer remaining `float32`.
+
 ### Typing
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.

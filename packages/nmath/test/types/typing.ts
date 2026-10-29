@@ -111,3 +111,26 @@ assertTrue<Equal<(typeof ftrue)["dtype"], "float64">>();
 add(ctx.zeros([2], "float32"), ctx.zeros([3], "float32"));
 // @ts-expect-error shapes [2, 3] and [4] do not broadcast
 np.subtract(m, ctx.zeros([4], "float32"));
+
+// Small integer results preserve width except for NumPy promotion and reductions.
+const i8 = ctx.zeros([2], "int8");
+const i16 = ctx.zeros([2], "int16");
+const u8 = ctx.zeros([2], "uint8");
+const u16 = ctx.zeros([2], "uint16");
+expectType<Int8Array>(i8.toTypedArray());
+expectType<Int16Array>(i16.toTypedArray());
+expectType<Uint8Array>(u8.toTypedArray());
+expectType<Uint16Array>(u16.toTypedArray());
+const mixed8 = i8.add(u8);
+assertTrue<Equal<typeof mixed8, Expr<"int16", [2]>>>();
+const mixed16 = i16.add(u16);
+assertTrue<Equal<typeof mixed16, Expr<"int32", [2]>>>();
+expectType<Expr<"float32", [2]>>(u16.add(ctx.zeros([2], "float32")));
+expectType<Expr<"int8", readonly [2]>>(i8.add(1n));
+expectType<Expr<"float64", readonly [2]>>(i8.add(1));
+expectType<Expr<"int64", []>>(i8.sum());
+expectType<Expr<"uint64", []>>(u16.sum());
+expectType<number>(i8.item(0));
+
+const mixedFunctional = add(i8, u8);
+assertTrue<Equal<typeof mixedFunctional, Expr<"int16", [2]>>>();

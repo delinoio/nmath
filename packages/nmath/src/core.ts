@@ -211,8 +211,13 @@ export abstract class Lazy<
     return new Expr(expr, this.context);
   }
 
+  // Infer dtype from the operand property, not recursively from method results:
+  // mixed small integer operations otherwise infer an extra float64 alternative.
   add<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
   add<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
   add(other: Operand): Expr<any, any> {
@@ -220,7 +225,10 @@ export abstract class Lazy<
   }
 
   sub<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
   sub<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
   sub(other: Operand): Expr<any, any> {
@@ -228,7 +236,10 @@ export abstract class Lazy<
   }
 
   mul<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
   mul<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
   mul(other: Operand): Expr<any, any> {
@@ -236,7 +247,10 @@ export abstract class Lazy<
   }
 
   div<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<TrueDivide<Promote<D, D2>>, Broadcast<S, S2>>;
   div<W extends WeakScalar>(other: W): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
   div(other: Operand): Expr<any, any> {
@@ -244,7 +258,10 @@ export abstract class Lazy<
   }
 
   mod<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
   mod<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
   mod(other: Operand): Expr<any, any> {
@@ -252,7 +269,10 @@ export abstract class Lazy<
   }
 
   pow<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & BroadcastCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
+        S,
+        S2
+      >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
   pow<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
   pow(other: Operand): Expr<any, any> {
@@ -314,7 +334,7 @@ export abstract class Lazy<
   }
 
   matmul<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<D2, S2> & MatMulCheck<S, S2>,
+    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & MatMulCheck<S, S2>,
   ): Expr<Promote<D, D2>, MatMulShape<S, S2>> {
     return new Expr(
       native(() =>
@@ -545,6 +565,14 @@ function typedArrayFor(dtype: ComputableDType, buffer: ArrayBuffer) {
   switch (dtype) {
     case "bool":
       return new Uint8Array(buffer);
+    case "int8":
+      return new Int8Array(buffer);
+    case "int16":
+      return new Int16Array(buffer);
+    case "uint8":
+      return new Uint8Array(buffer);
+    case "uint16":
+      return new Uint16Array(buffer);
     case "int32":
       return new Int32Array(buffer);
     case "int64":
@@ -677,7 +705,12 @@ function raggedInput(): NMathError {
 function itemSize(dtype: ComputableDType): number {
   switch (dtype) {
     case "bool":
+    case "int8":
+    case "uint8":
       return 1;
+    case "int16":
+    case "uint16":
+      return 2;
     case "int32":
     case "uint32":
     case "float32":
@@ -710,6 +743,10 @@ function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
       break;
     default:
       typed = new {
+        int8: Int8Array,
+        int16: Int16Array,
+        uint8: Uint8Array,
+        uint16: Uint16Array,
         int32: Int32Array,
         uint32: Uint32Array,
         float32: Float32Array,
@@ -875,6 +912,10 @@ function filled(
       return new BigUint64Array(size).fill(BigInt(value as bigint));
     default:
       return new {
+        int8: Int8Array,
+        int16: Int16Array,
+        uint8: Uint8Array,
+        uint16: Uint16Array,
         int32: Int32Array,
         uint32: Uint32Array,
         float32: Float32Array,

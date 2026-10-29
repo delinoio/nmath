@@ -166,7 +166,7 @@ macro_rules! int_num {
         }
     )*};
 }
-int_num!(i32, i64, u32, u64);
+int_num!(i8, i16, u8, u16, i32, i64, u32, u64);
 
 macro_rules! float_num {
     ($($t:ty),*) => {$(
@@ -329,8 +329,12 @@ pub fn binary(
             }
             Buffer::Bool(out)
         }
+        (Buffer::I8(x), Buffer::I8(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::I16(x), Buffer::I16(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::I32(x), Buffer::I32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::I64(x), Buffer::I64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::U8(x), Buffer::U8(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::U16(x), Buffer::U16(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::U32(x), Buffer::U32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::U64(x), Buffer::U64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::F32(x), Buffer::F32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
@@ -357,8 +361,12 @@ pub fn unary(
     let buffer = match op {
         UnaryOp::Pos => input.buffer.clone(),
         UnaryOp::Neg => match &input.buffer {
+            Buffer::I8(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
+            Buffer::I16(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
             Buffer::I32(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
             Buffer::I64(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
+            Buffer::U8(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
+            Buffer::U16(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
             Buffer::U32(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
             Buffer::U64(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
             Buffer::F32(v) => v.iter().map(|&x| -x).collect::<Vec<_>>().into(),
@@ -492,8 +500,12 @@ pub fn reduce(
     } else {
         let values: Vec<i128> = match &input.buffer {
             Buffer::Bool(v) => v.iter().map(|&x| x as i128).collect(),
+            Buffer::I8(v) => v.iter().map(|&x| x as i128).collect(),
+            Buffer::I16(v) => v.iter().map(|&x| x as i128).collect(),
             Buffer::I32(v) => v.iter().map(|&x| x as i128).collect(),
             Buffer::I64(v) => v.iter().map(|&x| x as i128).collect(),
+            Buffer::U8(v) => v.iter().map(|&x| x as i128).collect(),
+            Buffer::U16(v) => v.iter().map(|&x| x as i128).collect(),
             Buffer::U32(v) => v.iter().map(|&x| x as i128).collect(),
             Buffer::U64(v) => v.iter().map(|&x| x as i128).collect(),
             _ => unreachable!(),
@@ -603,8 +615,12 @@ pub fn matmul(
             }
             Buffer::Bool(out)
         }
+        (Buffer::I8(x), Buffer::I8(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::I16(x), Buffer::I16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I32(x), Buffer::I32(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I64(x), Buffer::I64(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::U8(x), Buffer::U8(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::U16(x), Buffer::U16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::U32(x), Buffer::U32(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::U64(x), Buffer::U64(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::F32(x), Buffer::F32(y)) => mm(x, y, n, k, m, token)?.into(),
