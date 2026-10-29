@@ -119,7 +119,7 @@ The published package includes `compatibility.json.gz`, a gzip-compressed JSON o
 - [Repository defaults](repository-defaults.md)
 - [Repository workflow](repository-workflow-contract.md)
 
-Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics.
+Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics. Bracket access used as a constructor target, including through parentheses and type-only wrappers, keeps its JavaScript grouping.
 
 ## Numeric tables
 

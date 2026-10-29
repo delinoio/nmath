@@ -438,8 +438,9 @@ fn is_rewritable_element_access(node: P<Node>) -> bool {
 
 /// Whether an element access is used as a reference rather than read as a
 /// value: an assignment target (plain, compound, `++`/`--`, destructuring,
-/// `for-in`/`for-of`), a `delete` operand, or a call or tagged-template callee
-/// (rewriting a callee would drop its `this` binding). Parentheses and
+/// `for-in`/`for-of`), a `delete` operand, or a call, constructor, or
+/// tagged-template target (rewriting a target can change its binding or
+/// grouping). Parentheses and
 /// type-only wrappers (`!`, `as`, `satisfies`, `<T>`) preserve the reference,
 /// so `(a[i])()` and `delete (a[i])` are reference positions too.
 fn is_reference_position(node: P<Node>) -> bool {
@@ -467,6 +468,7 @@ fn is_reference_position(node: P<Node>) -> bool {
     match parent.kind() {
         Kind::DeleteExpression => true,
         Kind::CallExpression => parent.as_call_expression().expression == node,
+        Kind::NewExpression => parent.as_new_expression().expression == node,
         Kind::TaggedTemplateExpression => parent.as_tagged_template_expression().tag == node,
         _ => false,
     }
