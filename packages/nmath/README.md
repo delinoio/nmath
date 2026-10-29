@@ -240,3 +240,29 @@ Report problems in [GitHub Issues](https://github.com/delinoio/nmath/issues). Th
 ## License
 
 Apache-2.0. See `LICENSE` and `NOTICE`. Native dependencies keep their own licenses.
+
+## Numeric tables
+
+The numeric table APIs are a bounded native subset of pandas 3.1.0 and Polars 2.1.0. They do not implement the complete pandas or Polars API. Columns can use bool, signed/unsigned 8-, 16-, 32- or 64-bit integers, float32 and float64. Nulls use explicit boolean validity columns; true means valid. String, time, categorical, complex and extended-precision families remain support targets. NaN/inf and floating-point summation behavior still require broader original-derived numerical acceptance; explicit-null integer fixtures do not establish complete missing-value parity.
+
+```ts
+import { createContext } from '@delinoio/nmath';
+import { DataFrame, Series } from '@delinoio/nmath/polars';
+
+const ctx = createContext({
+  maxConcurrentJobs: 2,
+  maxQueueLength: 8,
+  cpuMemoryBudget: 64n << 20n,
+  gpuMemoryBudget: 0n,
+});
+const frame = new DataFrame([
+  new Series('key', ctx.array([1n, 1n, 2n], {dtype: 'int64'})),
+  new Series('value', ctx.array([10n, 0n, 30n], {dtype: 'int64'}),
+    ctx.array([true, false, true], {dtype: 'bool'})),
+]);
+const result = await frame.lazy().groupBy('key', 'value', 'sum').collect();
+// key: [1n, 2n], value: [10n, 30n]
+await ctx.close();
+```
+
+Supported table operations: native multi-column compute, boolean-column filtering, stable single-key sorting, single-key inner/left equijoins, sum/mean/min/max/count grouping, and basic materialized lazy plans. pandas preserves explicit labels and matches null join keys; Polars uses positional rows and requires `nullsEqual:true` to match null join keys. Full label alignment, nullable expression arithmetic, arbitrary post-row projections, multiple keys, additional join modes, windows, pivots, strings, temporal/categorical operations, query optimization and internal streaming remain targets.

@@ -151,3 +151,15 @@ Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input 
 - [Repository defaults](repository-defaults.md)
 - [Repository workflow](repository-workflow-contract.md)
 - [Repository license](repository-license-contract.md)
+
+## Numeric tables
+
+A table plan contains numeric or boolean one-dimensional expressions and optional boolean validity expressions (`true` means valid). All source values and masks must have one context and matching lengths. An empty typed source is valid. String, temporal, categorical, complex, extended-precision and object columns are not supported by this table layer.
+
+A table computation submits one CPU job to the context scheduler. It validates all source contexts before admission, freezes all source expressions and masks in one job environment before evaluation, and evaluates the complete plan on a native worker thread. The snapshot gate is also held by array mutation commits, so a mutation cannot split the table's snapshot phase. The gate is released before table kernels run. Repeated computations are independent. A queued job sees mutations completed before its snapshot phase. Cancellation and close use the existing scheduler; cancellation never returns a table result.
+
+Plan nodes are source, named/positional projection, boolean-column filter, stable single-key sort, single-key inner/left equijoin and single-key group aggregation. Join keys must have identical numeric dtypes. Joins expand duplicate keys and preserve left-row and right-match order. Group operations are sum, mean, min, max and non-null count. Validity masks propagate through row operations; null filter values discard their rows. All-null groups produce zero for sum/count and invalid results for min/max/mean. Empty inputs produce typed empty results.
+
+All buffers for source snapshots, evaluated columns, row selection, sort scratch space, join row mappings, group representatives, aggregation intermediates and results are reserved against the CPU budget before allocation. Native table results retain their data and validity reservations until their array handles are released. Metadata bookkeeping is not a process-wide memory cap. Integer key comparisons preserve all 64 bits.
+
+Stable sorting uses an iterative merge sort with cooperative cancellation. Join matching and group discovery currently use repeated scans. The executor materializes intermediates; it is not the required internal streaming engine or a query optimizer. More scalable algorithms remain implementation targets.

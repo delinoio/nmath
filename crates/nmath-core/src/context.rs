@@ -374,7 +374,7 @@ impl Context {
         )
     }
 
-    fn submit(
+    pub(crate) fn submit(
         &self,
         kind: OperationKind,
         operation: &'static str,
