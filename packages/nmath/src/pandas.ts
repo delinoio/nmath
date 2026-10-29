@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { NMathContext } from "./core.js";
 import {
   readPandas,
@@ -5,7 +6,14 @@ import {
   type TextReadOptions,
   type TextWriteOptions,
 } from "./io-text-frames.js";
-// SPDX-License-Identifier: Apache-2.0
+import {
+  readColumnar,
+  writeColumnar,
+  requireDefaultIndex,
+  requireFrameRows,
+  type ColumnarReadOptions,
+  type ColumnarWriteOptions,
+} from "./columnar.js";
 // pandas-style entry point (subset). pandas operations always run on the CPU. The
 // compatibility inventory in README.md lists which pandas 3.1.0 APIs exist.
 
@@ -287,6 +295,38 @@ export class Series {
 
 /** Columns keyed by name with a shared length. */
 export class DataFrame {
+  async to_parquet(
+    context: NMathContext,
+    path: string,
+    options: ColumnarWriteOptions = {},
+  ): Promise<void> {
+    requireDefaultIndex(this.index);
+    return writeColumnar(
+      context,
+      path,
+      "parquet",
+      this.columnMap,
+      this.validity,
+      options,
+    );
+  }
+
+  async to_feather(
+    context: NMathContext,
+    path: string,
+    options: ColumnarWriteOptions = {},
+  ): Promise<void> {
+    requireDefaultIndex(this.index);
+    return writeColumnar(
+      context,
+      path,
+      "arrow",
+      this.columnMap,
+      this.validity,
+      options,
+    );
+  }
+
   readonly #columns: Map<string, Column>;
   readonly validity: Validity;
   readonly index: readonly Label[];
@@ -511,4 +551,24 @@ export function read_json(
   options?: TextReadOptions,
 ) {
   return readPandas(context, path, "json", options);
+}
+
+export async function read_parquet(
+  context: NMathContext,
+  path: string,
+  options: ColumnarReadOptions = {},
+): Promise<DataFrame> {
+  const result = await readColumnar(context, path, "parquet", options);
+  requireFrameRows(result);
+  return new DataFrame(new Map(result.columns), { validity: result.validity });
+}
+
+export async function read_feather(
+  context: NMathContext,
+  path: string,
+  options: ColumnarReadOptions = {},
+): Promise<DataFrame> {
+  const result = await readColumnar(context, path, "arrow", options);
+  requireFrameRows(result);
+  return new DataFrame(new Map(result.columns), { validity: result.validity });
 }

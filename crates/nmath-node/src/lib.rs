@@ -904,4 +904,5 @@ pub struct NativeNpzEntry {
     pub array: NativeArray,
 }
 
+mod columnar;
 mod io_text;
