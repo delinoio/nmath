@@ -550,9 +550,16 @@ pub fn unary(
 }
 
 /// Normalizes reduction axes; `None` reduces every axis.
-pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+fn reduce_axes_with_check(
+    rank: usize,
+    axes: Option<&[i64]>,
+    mut check: impl FnMut() -> Result<()>,
+) -> Result<Vec<bool>> {
     let mut reduced = vec![axes.is_none(); rank];
-    for &axis in axes.unwrap_or(&[]) {
+    for (position, &axis) in axes.unwrap_or(&[]).iter().enumerate() {
+        if position % CHUNK == 0 {
+            check()?;
+        }
         let a = if axis < 0 { axis + rank as i64 } else { axis };
         if a < 0 || a >= rank as i64 {
             return Err(Error::new(
@@ -568,7 +575,20 @@ pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
         }
         reduced[a as usize] = true;
     }
+    check()?;
     Ok(reduced)
+}
+
+pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || Ok(()))
+}
+
+fn reduce_axes_cancellable(
+    rank: usize,
+    axes: Option<&[i64]>,
+    token: &CancellationToken,
+) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || token.check())
 }
 
 pub fn reduce_shape(shape: &[usize], reduced: &[bool]) -> Vec<usize> {
@@ -588,31 +608,8 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
-    // Validate axes before charging or allocating reduction metadata so an
-    // invalid axis keeps its existing error even with a small budget.
-    if let Some(axes) = axes {
-        let rank = input.shape.len() as i64;
-        for (position, &axis) in axes.iter().enumerate() {
-            let normalized = if axis < 0 { axis + rank } else { axis };
-            if normalized < 0 || normalized >= rank {
-                return Err(Error::new(
-                    ErrorCode::IndexOutOfBounds,
-                    format!("Axis {axis} is out of bounds for an array of dimension {rank}."),
-                ));
-            }
-            if axes[..position]
-                .iter()
-                .any(|&prior| (if prior < 0 { prior + rank } else { prior }) == normalized)
-            {
-                return Err(Error::new(
-                    ErrorCode::IndexInvalid,
-                    format!("Axis {axis} is repeated."),
-                ));
-            }
-        }
-    }
     let rank = input.shape.len();
-    let reduced = reduce_axes(input.shape.len(), axes)?;
+    let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
     // available budget.
     let empty_reduction = input
@@ -995,6 +992,27 @@ mod tests {
                 .unwrap_err()
                 .code,
             ErrorCode::Cancelled
+        );
+    }
+
+    #[test]
+    fn reduction_axis_validation_honors_cancellation() {
+        let rank = 100_000;
+        let input = dense(vec![1; rank], Buffer::I32(vec![1]));
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let token = CancellationToken::new();
+        token.cancel();
+        let axes: Vec<i64> = (0..rank as i64).collect();
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, Some(&axes), &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+        assert_eq!(
+            reduce_axes(3, Some(&[0, -3])).unwrap_err().code,
+            ErrorCode::IndexInvalid
         );
     }
 
