@@ -468,14 +468,20 @@ impl Context {
     /// to release their resources.
     pub fn close(&self) {
         let inner = &self.inner;
-        let queued: Vec<Queued> = {
+        let (running, queued): (Vec<CancellationToken>, Vec<Queued>) = {
             let mut sched = inner.sched.lock().unwrap();
             sched.closed = true;
-            for token in sched.running.values() {
-                token.cancel();
-            }
-            sched.queue.drain(..).collect()
+            (
+                sched.running.values().cloned().collect(),
+                sched.queue.drain(..).collect(),
+            )
         };
+        // Cancel outside the scheduler lock: a job that started from the queue
+        // still has its `cancel_queued` callback registered, and that callback
+        // locks the scheduler.
+        for token in running {
+            token.cancel();
+        }
         for job in queued {
             finish_record(inner, job.id, ExecutionStatus::Cancelled);
             (job.cancel)(Error::new(ErrorCode::Cancelled, "The context was closed."));

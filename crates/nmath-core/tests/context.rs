@@ -481,3 +481,46 @@ fn npy_jobs_round_trip_atomically() {
     assert_eq!(loaded.shape(), &[2, 2]);
     assert_eq!(loaded.to_buffer(), Buffer::F32(vec![1.0, 2.0, 3.0, 4.0]));
 }
+
+#[test]
+fn close_does_not_deadlock_on_jobs_started_from_the_queue() {
+    let c = ctx(1, 4);
+    let blocker = occupy(&c);
+    // Queued behind the blocker, so its token keeps the queued-cancel callback
+    // after it starts.
+    let a = c.array(vec![1], Buffer::F64(vec![1.0])).unwrap();
+    let held = a.write_ticket().wait(&CancellationToken::new()).unwrap();
+    let (done, queued) = channel();
+    c.assign(
+        &a,
+        vec![],
+        &Expr::scalar(Scalar::Float(2.0)),
+        CancellationToken::new(),
+        done,
+    )
+    .unwrap();
+    drop(blocker._turn);
+    wait(&blocker.rx).unwrap();
+    // Wait until the queued assignment is running and blocked on `held`.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !c
+        .metrics()
+        .executions
+        .iter()
+        .any(|r| r.kind == nmath_core::OperationKind::Write && r.status == ExecutionStatus::Running)
+    {
+        assert!(std::time::Instant::now() < deadline, "job did not start");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let (closed_tx, closed_rx) = mpsc::channel();
+    let closer = c.clone();
+    std::thread::spawn(move || {
+        closer.close();
+        closed_tx.send(()).unwrap();
+    });
+    closed_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("close() deadlocked");
+    drop(held);
+    assert_eq!(wait(&queued).unwrap_err().code, ErrorCode::Cancelled);
+}
