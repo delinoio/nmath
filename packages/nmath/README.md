@@ -98,6 +98,8 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
+
 ## Entry points
 
 | Import                     | Purpose                                                                                                              |
@@ -158,6 +160,8 @@ node "out/main.js"
 ```
 
 The CLI is included in this package. When using a local installation with pnpm, invoke it with `pnpm exec nmath-compiler`. `check` reports diagnostics without emitting files. `build` emits ESM JavaScript, declarations and source maps; type or transform errors leave existing output unchanged. Add `--json` for structured diagnostics. Exit codes are 0 for success, 1 for diagnostics and 2 for usage or configuration errors.
+
+The compiler API and CLI can run when the numerical addon is unavailable, provided the compiler executable is installed. If the compiler executable is missing, reinstall the package or build the compiler from source with `pnpm --filter @delinoio/nmath build:compiler`.
 
 The programmatic API runs the same compiler:
 

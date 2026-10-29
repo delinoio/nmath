@@ -80,6 +80,103 @@ test("fixed pandas and Polars duplicate/null joins, groups, stable sort and empt
     await ctx.close();
   }
 });
+test("join coalesces only the right key after resolving retained names", async () => {
+  const ctx = context();
+  try {
+    for (const [suffix, leftName] of [
+      [undefined, "k_right"],
+      ["_rhs", "k_rhs"],
+    ]) {
+      const left = new pl.DataFrame([
+        series(ctx, "k", [1, 2]),
+        series(ctx, leftName, [7, null]),
+      ]);
+      const right = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "w", [9]),
+      ]);
+      const options = { how: "left", suffix };
+      for (const result of [
+        await left.toPandas().merge(right.toPandas(), "k", options),
+        await left.lazy().join(right.lazy(), "k", options).collect(),
+      ]) {
+        assert.deepEqual(result.columns, ["k", leftName, "w"]);
+        assert.deepEqual(rows(result), [
+          [1, 7, 9],
+          [2, null, null],
+        ]);
+        const retained =
+          result instanceof pd.DataFrame
+            ? result.get(leftName)
+            : result.getColumn(leftName);
+        assert.ok(retained.validity);
+        assert.equal(retained.validity.item(1), false);
+      }
+    }
+    const left = new pl.DataFrame([
+      series(ctx, "k", [1, 1]),
+      series(ctx, "k_right", [7, 8]),
+    ]);
+    const right = new pl.DataFrame([
+      series(ctx, "k", [1, 1]),
+      series(ctx, "w", [9, 10]),
+    ]);
+    for (const result of [
+      await left.toPandas().merge(right.toPandas(), "k"),
+      await left.lazy().join(right.lazy(), "k").collect(),
+    ]) {
+      assert.deepEqual(result.columns, ["k", "k_right", "w"]);
+      assert.deepEqual(rows(result), [
+        [1, 7, 9],
+        [1, 7, 10],
+        [1, 8, 9],
+        [1, 8, 10],
+      ]);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("join rejects retained collisions and preserves differently named keys", async () => {
+  const ctx = context();
+  try {
+    for (const suffix of [undefined, "_rhs", ""]) {
+      const overlapping = "v" + (suffix ?? "_right");
+      const left = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "v", [2]),
+        ...(suffix === "" ? [] : [series(ctx, overlapping, [3])]),
+      ]);
+      const right = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "v", [4]),
+      ]);
+      for (const join of [
+        () => left.toPandas().merge(right.toPandas(), "k", { suffix }),
+        () => left.lazy().join(right.lazy(), "k", { suffix }),
+      ]) {
+        await assert.rejects(
+          async () => join(),
+          (error) => error.code === "NMATH_INDEX_INVALID",
+        );
+      }
+    }
+    const left = new pl.DataFrame([series(ctx, "k", [1])]);
+    const right = new pl.DataFrame([
+      series(ctx, "r", [1]),
+      series(ctx, "w", [9]),
+    ]);
+    for (const result of [
+      await left.toPandas().merge(right.toPandas(), "k", { rightKey: "r" }),
+      await left.lazy().join(right.lazy(), "k", { rightKey: "r" }).collect(),
+    ]) {
+      assert.deepEqual(result.columns, ["k", "r", "w"]);
+      assert.deepEqual(rows(result), [[1, 1, 9]]);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
 test("one native execution per multi-column plan and independent repeated collection", async () => {
   const ctx = context();
   try {

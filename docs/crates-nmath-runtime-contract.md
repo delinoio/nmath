@@ -31,9 +31,13 @@ Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`
 
 Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `sum`, `mean`, lexicographic `min`/`max`, and the existing 1-D/2-D `matmul` forms. Complex remainder is unsupported and fails at expression construction. Complex extrema propagate NaNs and preserve the first equal complex element. Sum and mean preserve the complex dtype. Contiguous complex reductions use pairwise accumulation in component precision.
 
+Contiguous CPU `float32` sum and mean use pairwise accumulation with `float32` intermediates, following the pinned NumPy real reduction order. Mean divides the `float32` sum in `float32` precision, including overflow. Noncontiguous reductions retain their existing accumulation order.
+
 Basic indexing shares complex storage; advanced indexing and explicit context copies preserve both components. An explicit `astype` may discard the imaginary component when converting to a real dtype. Complex-to-boolean casts test both components. Assignment from complex values to real numeric storage requires an explicit cast before the write; assignment to boolean storage uses complex truth semantics. Failed writes preserve the target.
 
 Boolean remainder and power use the NumPy `int8` result loop. Boolean addition and multiplication preserve `bool`; subtraction and both unary arithmetic operators reject boolean operands.
+
+CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inner dimension after the first true product. Long unsuccessful scans check cancellation between bounded chunks.
 
 ### Arrays and storage
 
@@ -44,6 +48,7 @@ Boolean remainder and power use the NumPy `int8` result loop. Boolean addition a
 ### Lazy expressions
 
 - `Expr` is an immutable graph node. Constructors: `Input(array)`, `Scalar(value)`, `Unary(op, expr)`, `Binary(op, lhs, rhs)`, `Reduce(op, expr, axes)`, `MatMul(lhs, rhs)`, `Index(expr, selectors)`, `Cast(expr, dtype)`.
+- Metadata discovery and input freezing visit each distinct expression node once per traversal, in first-encounter order. A shared node keeps its identity across incoming edges. Numerical evaluation remains a separate operation.
 - Binary operator IDs: `add`, `sub`, `mul`, `div`, `mod`, `pow`. Unary operator IDs: `pos`, `neg`. Reduction IDs: `sum`, `mean`, `min`, `max`.
 - Shape and dtype of every node are inferred at construction. Invalid broadcasting fails at construction with `NMATH_SHAPE_BROADCAST`.
 - Indexing selectors: integer, `Slice { start, stop, step }` with `stop` excluded and `None` for an omitted bound, integer-array selection and boolean-mask selection. Negative indexes count from the end; out-of-range integers fail with `NMATH_INDEX_OUT_OF_BOUNDS`.
@@ -54,19 +59,21 @@ Boolean remainder and power use the NumPy `int8` result loop. Boolean addition a
 - Admission: if fewer than `max_concurrent_jobs` jobs run, the job starts. Otherwise it enters a FIFO queue. If the queue holds `max_queue_length` jobs, admission fails with `NMATH_SCHED_QUEUE_FULL`.
 - Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Workers check cancellation before starting work. Kernels check the token between chunks; a cancelled read or computation does not return its result. File writers check cancellation before atomic publication. Successful publication is terminal success: cancellation received after publication does not change the completion or metrics to cancelled.
 - `Context::close()` rejects new work with `NMATH_CONTEXT_CLOSED`, cancels queued work, cancels running work cooperatively and resolves after all jobs release their resources.
-- Jobs on one storage that write are serialized in request order. A write commits only after it fully succeeds.
+- A terminal job records its status, releases its execution slot, and starts the next queued job before it invokes its completion callback. The callback runs without the scheduler or callback-storage lock. It can close its context or submit and wait for another job, subject to normal admission and cancellation rules.
+- Jobs on one storage that write are serialized in admission order. Ticket creation and scheduler admission use one critical section, so a running context job never waits for a ticket held by a queued successor. A write commits only after it fully succeeds. Rejected and cancelled jobs give up unused tickets.
 
 ### Memory accounting
 
 - `MemoryBudget` tracks `used`, `peak` and `limit` separately for `cpu` and `gpu`. `reserve(bytes)` fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before any allocation when `used + bytes > limit`.
 - Inputs, snapshots, intermediates and results are all charged. Charges release on drop. GPU execution charges snapshots and host results to the CPU budget, and upload, storage, parameter, status and readback buffers to the GPU budget. Submitted allocations stay charged until device work finishes, including after cancellation. Driver and compiler internal allocations are outside the managed-allocation accounting boundary.
 
-Reduction and matrix-multiplication kernels borrow operands whose dtype already matches. Required operand conversions reserve their full byte size before allocation and release that reservation when the temporary drops. Reductions traverse output offsets without input-sized slot or integer scratch vectors. Min/max reserve their output-initialization flags. Casts and kernels check cancellation between chunks; failure and cancellation release temporary reservations.
+Reduction and matrix-multiplication kernels borrow operands whose dtype already matches. Required operand conversions reserve their full byte size before allocation and release that reservation when the temporary drops. Reductions traverse output offsets without input-sized slot or integer scratch vectors. Reduction rank metadata and min/max output-initialization flags remain charged for their live lifetimes; result data and shape remain charged until the result drops. Reduction byte sizes are checked before allocation. Casts and kernels check cancellation between chunks; failure and cancellation release temporary reservations.
 
 ### Random generation
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
-- Jobs that share a generator serialize. A job reads state at start and commits the advanced state only on success.
+- Jobs that share a generator serialize in admission order. The same critical section coordinates generator tickets with scheduler admission. A job reads state at start and commits the advanced state only on success.
+- CPU random evaluation checks the element count, float64 byte count and vector capacity before reserving or allocating the result. Unrepresentable sizes fail through the job callback with `NMATH_MEMORY_BUDGET_EXCEEDED`; a zero-length dimension produces an empty result even when other dimensions are large. Failed jobs do not advance generator state.
 
 ### Measurements
 
