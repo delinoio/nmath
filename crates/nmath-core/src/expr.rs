@@ -560,7 +560,10 @@ impl JobEnv {
         {
             return Ok(Value::View(view));
         }
-        if matches!(expr.kind(), ExprKind::Transpose(..) | ExprKind::Reshape(..)) {
+        if matches!(
+            expr.kind(),
+            ExprKind::Transpose(..) | ExprKind::Reshape(..) | ExprKind::Index(..)
+        ) {
             return self.owned_layout(expr).map(Value::View);
         }
         self.eval_dense(expr).map(Value::Dense)

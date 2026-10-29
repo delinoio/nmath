@@ -191,3 +191,30 @@ fn forced_c_order_copy_of_transpose_is_contiguous() {
     next.freeze(&flat).unwrap();
     assert!(result(&mut next, &flat).shares_storage(&output));
 }
+
+#[test]
+fn basic_index_of_computed_transpose_retains_strides() {
+    let a = array();
+    let computed = Expr::binary(
+        nmath_core::BinaryOp::Add,
+        &Expr::input(&a),
+        &Expr::scalar(Scalar::Int(1)),
+    )
+    .unwrap();
+    let transposed = Expr::transpose(&computed, None).unwrap();
+    let sliced = Expr::index(
+        &transposed,
+        vec![Selector::Slice {
+            start: None,
+            stop: None,
+            step: None,
+        }],
+    )
+    .unwrap();
+    let mut job = env(4096);
+    job.freeze(&sliced).unwrap();
+    let output = result(&mut job, &sliced);
+    assert!(!output.shares_storage(&a));
+    assert_eq!(output.to_buffer(), Buffer::I32(vec![1, 4, 2, 5, 3, 6]));
+    assert!(Expr::reshape(&Expr::input(&output), &[6], CopyPolicy::Never).is_err());
+}
