@@ -219,7 +219,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
 | NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                                                                                | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                                    |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                            | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                             |
-| NumPy I/O            | NPY (C order, little endian; complex input also supports big endian and Fortran order)                                                                                  | NPZ; Fortran-order input for non-complex dtypes                                                                                                                  |
+| NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                       | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                                    |
 | pandas               | Numeric Series/DataFrame, basic labels, nullable filtering/sorting, single-key inner/left joins and grouped aggregates; CSV, records JSON, Parquet and Feather adapters | Full label alignment, nullable arithmetic, richer join/group options, pivots, windows, time series, string/categorical APIs and full file option/metadata parity |
 | Polars               | Numeric Series/DataFrame, lazy arithmetic/select/filter, single-key joins/groups, bounded internal pipelines and CSV/JSON/Parquet/IPC adapters                          | Full streaming, richer projections/joins/groups, windows, string/temporal namespaces and full file option/metadata parity                                        |
 | `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                                                                                   | Marketplace publication and editor acceptance                                                                                                                    |
@@ -344,6 +344,12 @@ string/datetime columns and full upstream read/write options remain unsupported.
 CSV empty cells and JSON null become invalid values. JSON non-finite floats become
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
+
+## Benchmark interpretation
+
+Performance evidence uses synthetic matrix multiplication, pandas/Polars group aggregation and a numerical algorithm compiled from `.nts`. Comparisons use fixed NumPy, pandas and Polars versions. Results must identify the hardware, software, seed, workloads and source revision, and separate startup/compilation from repeated execution. Compute time, memory and native-boundary overhead have different measurement boundaries. GPU timings include transfers unless a report explicitly provides isolated transfer measurements.
+
+These representative workloads are not a promise of a speedup or full numerical/platform acceptance. An exact result on bounded integer-valued float32 inputs does not establish correctness for arbitrary float32 inputs. GPU support and numerical acceptance require their separate validation evidence.
 
 ### Arrow IPC and Parquet local files
 

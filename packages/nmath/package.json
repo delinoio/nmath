@@ -58,7 +58,10 @@
     "test:compatibility": "node scripts/compatibility/check-native.mjs",
     "oracle:generate": "python3 scripts/compatibility/generate-fixtures.py",
     "oracle:inventory": "python3 scripts/compatibility/generate-inventory.py",
-    "oracle:check": "python3 scripts/compatibility/check-reproducibility.py"
+    "oracle:check": "python3 scripts/compatibility/check-reproducibility.py",
+    "benchmark": "node scripts/benchmarks/run.mjs",
+    "benchmark:originals": "python3 scripts/benchmarks/originals.py",
+    "test:benchmarks": "node --test test/benchmarks.test.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.9",

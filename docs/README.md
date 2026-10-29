@@ -25,6 +25,7 @@ Before implementing a new project, add `project-<id>.md`, at least one `<domain>
 - [Runtime crates contract](crates-nmath-runtime-contract.md)
 - [Compiler crates contract](crates-nmath-compiler-contract.md)
 - [npm package contract](packages-nmath-package-contract.md)
+- [Workflow benchmark protocol](packages-nmath-package-contract.md#workflow-benchmark-protocol)
 - [VS Code extension contract](apps-nmath-vscode-contract.md)
 - [Native distribution and release evidence](packages-nmath-distribution-contract.md)
 
