@@ -5,7 +5,7 @@ use tsrs_ast::{FunctionFlags, Kind, Node, NodeFlags, SourceFileParseOptions};
 use tsrs_core::{P, ScriptKind, tspath};
 
 use crate::{
-    RUNTIME_IMPORT, TransformOptions, TransformOutput,
+    RUNTIME_MODULE, RUNTIME_NAMESPACE, TransformOptions, TransformOutput,
     diagnostics::{Diagnostic, DiagnosticCode},
     span_map::{Segment, SegmentKind, SpanMap},
 };
@@ -98,6 +98,8 @@ fn is_string_literal_like(node: P<Node>) -> bool {
 
 struct Rewriter<'a> {
     text: &'a str,
+    /// The local name of the runtime namespace import.
+    namespace: String,
     options: TransformOptions,
     edits: Vec<Edit>,
     diagnostics: Vec<Diagnostic>,
@@ -252,7 +254,7 @@ impl Rewriter<'_> {
             let operator_range = (self.token_start(operator), end(operator));
             self.open(
                 start,
-                format!("__nmath.{helper}("),
+                format!("{}.{helper}(", self.namespace),
                 depth,
                 Some((start, end(node))),
             );
@@ -295,7 +297,7 @@ impl Rewriter<'_> {
         };
         self.open(
             target_start,
-            format!("{prefix}(await __nmath.set("),
+            format!("{prefix}(await {}.set(", self.namespace),
             depth,
             Some((target_start, end(node))),
         );
@@ -367,7 +369,7 @@ impl Rewriter<'_> {
         let start = self.token_start(node);
         self.open(
             start,
-            format!("__nmath.{helper}("),
+            format!("{}.{helper}(", self.namespace),
             depth,
             Some((start, end(node))),
         );
@@ -384,7 +386,7 @@ impl Rewriter<'_> {
         let bracket_end = self.open_bracket_end(end(element.expression));
         self.open(
             start,
-            "__nmath.get(".to_string(),
+            format!("{}.get(", self.namespace),
             depth,
             Some((start, end(node))),
         );
@@ -541,8 +543,10 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
         };
     }
 
+    let namespace = runtime_namespace(source_file.as_node());
     let mut rewriter = Rewriter {
         text: source,
+        namespace,
         options,
         edits: Vec::new(),
         diagnostics: Vec::new(),
@@ -552,10 +556,14 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
     }
 
     let import_at = runtime_import_offset(source);
+    let import = format!(
+        "import * as {} from \"{RUNTIME_MODULE}\";",
+        rewriter.namespace
+    );
     let import_text = if import_at as usize == source.len() && import_at != 0 {
-        format!("\n{RUNTIME_IMPORT}\n")
+        format!("\n{import}\n")
     } else {
-        format!("{RUNTIME_IMPORT}\n")
+        format!("{import}\n")
     };
     rewriter.open(import_at, import_text, 0, None);
 
@@ -570,6 +578,33 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
         text,
         span_map,
         diagnostics,
+    }
+}
+
+/// The local name for the runtime namespace: [`RUNTIME_NAMESPACE`], or the
+/// first of `__nmath_1`, `__nmath_2`, ... when the file already uses that
+/// identifier anywhere, so no local binding can capture generated helper calls.
+fn runtime_namespace(root: P<Node>) -> String {
+    let mut used = std::collections::HashSet::new();
+    collect_namespace_like_identifiers(root, &mut used);
+    std::iter::once(RUNTIME_NAMESPACE.to_string())
+        .chain((1..).map(|n| format!("{RUNTIME_NAMESPACE}_{n}")))
+        .find(|candidate| !used.contains(candidate.as_str()))
+        .expect("an unused namespace name exists")
+}
+
+fn collect_namespace_like_identifiers(
+    node: P<Node>,
+    used: &mut std::collections::HashSet<&'static str>,
+) {
+    if node.kind() == Kind::Identifier {
+        let text = node.text();
+        if text.starts_with(RUNTIME_NAMESPACE) {
+            used.insert(text);
+        }
+    }
+    for child in node.iter_children() {
+        collect_namespace_like_identifiers(child, used);
     }
 }
 

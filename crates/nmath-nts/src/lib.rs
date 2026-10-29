@@ -18,9 +18,12 @@ pub use span_map::{Segment, SegmentKind, SpanMap};
 /// The module specifier of the runtime helpers that lowered `.nts` output
 /// imports.
 pub const RUNTIME_MODULE: &str = "@delinoio/nmath/nts-runtime";
-/// The local namespace name of the runtime helpers in lowered output.
+/// The default local namespace name of the runtime helpers in lowered output.
+/// A file that already uses this identifier gets `__nmath_1`, `__nmath_2`, ...
+/// instead.
 pub const RUNTIME_NAMESPACE: &str = "__nmath";
-/// The import line inserted at the top of every lowered module.
+/// The import line inserted at the top of a lowered module that uses the
+/// default namespace name.
 pub const RUNTIME_IMPORT: &str = "import * as __nmath from \"@delinoio/nmath/nts-runtime\";";
 /// The source file extension handled by the transform.
 pub const NTS_EXTENSION: &str = ".nts";

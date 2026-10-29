@@ -88,6 +88,34 @@ fn keeps_triple_slash_directives_first() {
 }
 
 #[test]
+fn picks_a_runtime_alias_that_no_binding_can_capture() {
+    let source = "function sum(__nmath, a, b) { return a + b; }\n";
+    let output = transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    assert_eq!(
+        output.text,
+        "import * as __nmath_1 from \"@delinoio/nmath/nts-runtime\";\nfunction sum(__nmath, a, b) \
+         { return __nmath_1.add(a, b); }\n"
+    );
+
+    let source = "const __nmath_1 = 0;\nasync function f(__nmath) { a[i] = -x[j]; }\n";
+    let output = transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    assert_eq!(
+        output.text,
+        "import * as __nmath_2 from \"@delinoio/nmath/nts-runtime\";\nconst __nmath_1 = 0;\nasync \
+         function f(__nmath) { (await __nmath_2.set(a, i, __nmath_2.neg(__nmath_2.get(x, j)))); \
+         }\n"
+    );
+
+    // Identifiers that merely share the prefix do not force a new alias.
+    assert_eq!(
+        lower("const __nmathx = a + b;"),
+        "const __nmathx = __nmath.add(a, b);"
+    );
+}
+
+#[test]
 fn rewrites_every_binary_operator() {
     for (op, helper) in [
         ("+", "add"),
