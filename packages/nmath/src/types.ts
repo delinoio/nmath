@@ -434,31 +434,51 @@ export type ReduceShape<S extends Shape, A extends number | undefined> = [
         : number[]
       : number[];
 
-/** `matmul` result shape for 1-D and 2-D operands. */
-export type MatMulShape<A extends Shape, B extends Shape> = A extends readonly [
-  infer N extends number,
-  infer K extends number,
-]
-  ? B extends readonly [infer K2 extends number, infer M extends number]
-    ? Compatible<K, K2> extends true
-      ? [N, M]
-      : never
-    : B extends readonly [infer K2 extends number]
-      ? Compatible<K, K2> extends true
-        ? [N]
-        : never
-      : number[]
-  : A extends readonly [infer K extends number]
-    ? B extends readonly [infer K2 extends number, infer M extends number]
-      ? Compatible<K, K2> extends true
-        ? [M]
-        : never
-      : B extends readonly [infer K2 extends number]
-        ? Compatible<K, K2> extends true
-          ? []
-          : never
-        : number[]
-    : number[];
+/** Matrix product shape with broadcast batch axes and vector promotion. */
+export type MatMulShape<
+  A extends Shape,
+  B extends Shape,
+> = A extends readonly []
+  ? never
+  : B extends readonly []
+    ? never
+    : number[] extends A | B
+      ? number[]
+      : A extends readonly [
+            ...infer AB extends Shape,
+            infer N extends number,
+            infer K extends number,
+          ]
+        ? B extends readonly [
+            ...infer BB extends Shape,
+            infer K2 extends number,
+            infer M extends number,
+          ]
+          ? Compatible<K, K2> extends true
+            ? Broadcast<AB, BB> extends infer Batch extends Shape
+              ? [...Batch, N, M]
+              : never
+            : never
+          : B extends readonly [infer K2 extends number]
+            ? Compatible<K, K2> extends true
+              ? [...AB, N]
+              : never
+            : number[]
+        : A extends readonly [infer K extends number]
+          ? B extends readonly [
+              ...infer BB extends Shape,
+              infer K2 extends number,
+              infer M extends number,
+            ]
+            ? Compatible<K, K2> extends true
+              ? [...BB, M]
+              : never
+            : B extends readonly [infer K2 extends number]
+              ? Compatible<K, K2> extends true
+                ? []
+                : never
+              : number[]
+          : number[];
 
 type Compatible<A extends number, B extends number> =
   IsLiteral<A> extends true
@@ -470,9 +490,9 @@ type Compatible<A extends number, B extends number> =
     : true;
 
 export type MatMulCheck<A extends Shape, B extends Shape> = [
-  MatMulShape<A, B>,
+  MatMulShape<Readonly<A>, Readonly<B>>,
 ] extends [never]
-  ? { readonly "matmul core dimensions do not match": [A, B] }
+  ? { readonly "matmul dimensions do not match": [Readonly<A>, Readonly<B>] }
   : unknown;
 
 /** Shape after indexing: an integer drops an axis; other selectors keep a dynamic axis. */

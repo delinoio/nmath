@@ -217,7 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                                     |
 | NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                                                      | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                                                 |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
-| NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                                                                                | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                                    |
+| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion                                                                                                                 | full `linalg`/`fft` coverage, polynomials, masked arrays                                                                                                         |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                            | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                             |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                       | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                                    |
 | pandas               | Numeric Series/DataFrame, basic labels, nullable filtering/sorting, single-key inner/left joins and grouped aggregates; CSV, records JSON, Parquet and Feather adapters | Full label alignment, nullable arithmetic, richer join/group options, pivots, windows, time series, string/categorical APIs and full file option/metadata parity |
@@ -427,3 +427,18 @@ Strings use JS strings. Width counts Unicode scalar values; you can select it wi
 Temporal values preserve exact bigint ticks, units and NaT. Their unit defaults to `ns` unless selected explicitly. Use `toTypedArray()` to copy raw ticks, and retain the array's `unit` and `dtype` when transferring them. `toDate()` is explicit, supports datetime values only, and reduces precision to milliseconds. Implicit number conversion is rejected. NPY/NPZ files preserve string widths and temporal metadata.
 
 Current string operations include concatenation, indexing, copies and explicit width casts. Temporal operations include date/duration arithmetic, compatible-unit conversion and supported reductions. Unsupported operators and casts report errors. Byte-string and variable-width string dtypes, string processing APIs, date parsing/formatting, business calendars and richer time-series/table operations remain compatibility work; they are not new exclusions.
+
+### Batched matrix products
+
+`numpy.matmul(a, b)` and `a.matmul(b)` accept numeric or boolean lazy arrays with rank at least one. The last two axes are matrix axes; leading axes broadcast. A vector on either side is temporarily promoted and its added axis is removed from the result. Two vectors produce a scalar. Static shapes retain known batch and matrix dimensions; incompatible static dimensions are type errors. Dynamic dimensions are checked when constructing the expression.
+
+```ts
+import { matmul } from "@delinoio/nmath/numpy";
+
+const a = ctx.full([2, 1, 3, 4] as const, 1, "float32");
+const b = ctx.full([5, 4, 6] as const, 1, "float32");
+const result = await matmul(a, b).compute(); // shape [2, 5, 3, 6]
+result.dispose();
+```
+
+Matrix products execute through the context scheduler. CPU supports all current numeric and boolean dtypes; GPU retains its float32/int32/uint32 and platform restrictions. An empty contraction yields zeros. Incompatible batch axes fail with `NMATH_SHAPE_BROADCAST`; scalars or incompatible contraction axes fail with `NMATH_SHAPE_MISMATCH`. Ufunc keyword options, including `out`, remain compatibility targets.
