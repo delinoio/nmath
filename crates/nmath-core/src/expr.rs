@@ -1,7 +1,10 @@
 //! Immutable lazy expression graphs with construction-time shape and dtype
 //! inference.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{
     array::NdArray,
@@ -246,10 +249,16 @@ impl Expr {
     }
 
     fn visit(&self, f: &mut impl FnMut(&Expr)) {
-        f(self);
-        for child in self.children() {
-            child.visit(f);
+        fn walk(expr: &Expr, seen: &mut HashSet<*const Node>, f: &mut impl FnMut(&Expr)) {
+            if !seen.insert(Arc::as_ptr(&expr.0)) {
+                return;
+            }
+            f(expr);
+            for child in expr.children() {
+                walk(child, seen, f);
+            }
         }
+        walk(self, &mut HashSet::new(), f);
     }
 
     pub fn inputs(&self) -> Vec<NdArray> {
@@ -533,6 +542,97 @@ mod tests {
                 DenseArray::new(v.shape().to_vec(), v.to_buffer(), Reservation::none()).unwrap()
             }
         }
+    }
+
+    #[test]
+    fn shared_metadata_walk_visits_each_node_once() {
+        let mut expr = Expr::scalar(Scalar::Int(1));
+        for _ in 0..30 {
+            expr = Expr::binary(BinaryOp::Add, &expr, &expr).unwrap();
+        }
+        let mut visits = 0;
+        expr.visit(&mut |_| visits += 1);
+        assert_eq!(visits, 31);
+        assert!(expr.inputs().is_empty());
+        assert!(expr.generators().is_empty());
+
+        let mut env = JobEnv::new(
+            Device::Cpu,
+            MemoryBudget::new(Device::Cpu, 1024),
+            CancellationToken::new(),
+        );
+        env.freeze(&expr).unwrap();
+        assert!(env.snapshots.is_empty());
+    }
+
+    #[test]
+    fn shared_discovery_keeps_first_encounter_order() {
+        let first = arr(1, vec![1], Buffer::F64(vec![1.0]));
+        let second = arr(1, vec![1], Buffer::F64(vec![2.0]));
+        let input_first = Expr::input(&first);
+        let input_second = Expr::input(&second);
+        let generator_first = Generator::new(1);
+        let generator_second = Generator::new(2);
+        let random_first = Expr::random(1, &generator_first, vec![1]);
+        let random_second = Expr::random(1, &generator_second, vec![1]);
+        let left = Expr::binary(BinaryOp::Add, &input_first, &random_first).unwrap();
+        let right = Expr::binary(BinaryOp::Add, &input_second, &random_second).unwrap();
+        let shared = Expr::binary(BinaryOp::Add, &left, &right).unwrap();
+        let expr = Expr::binary(BinaryOp::Add, &shared, &shared).unwrap();
+
+        let inputs = expr.inputs();
+        assert_eq!(inputs.len(), 2);
+        assert!(inputs[0].shares_storage(&first));
+        assert!(inputs[1].shares_storage(&second));
+        let generators = expr.generators();
+        assert_eq!(generators.len(), 2);
+        assert!(generators[0].ptr_eq(&generator_first));
+        assert!(generators[1].ptr_eq(&generator_second));
+
+        let mut env = JobEnv::new(
+            Device::Cpu,
+            MemoryBudget::new(Device::Cpu, 1024),
+            CancellationToken::new(),
+        );
+        env.freeze(&expr).unwrap();
+        assert_eq!(env.snapshots.len(), 2);
+        assert_eq!(env.rng.len(), 2);
+        assert!(env.rng[0].0.ptr_eq(&generator_first));
+        assert!(env.rng[1].0.ptr_eq(&generator_second));
+    }
+
+    #[test]
+    fn shared_input_freeze_keeps_the_execution_snapshot() {
+        let array = arr(1, vec![1], Buffer::F64(vec![3.0]));
+        let input = Expr::input(&array);
+        let expr = Expr::binary(BinaryOp::Add, &input, &input).unwrap();
+        let budget = MemoryBudget::new(Device::Cpu, 1024);
+        let token = CancellationToken::new();
+        let mut frozen = JobEnv::new(Device::Cpu, budget.clone(), token.clone());
+        frozen.freeze(&expr).unwrap();
+
+        let turn = array.write_ticket().wait(&token).unwrap();
+        let replacement =
+            DenseArray::new(vec![1], Buffer::F64(vec![5.0]), Reservation::none()).unwrap();
+        array.assign(&turn, &[], &replacement, &token).unwrap();
+        drop(turn);
+
+        assert_eq!(
+            match frozen.eval(&expr).unwrap() {
+                Value::Dense(value) => value.buffer,
+                Value::View(_) => panic!("binary expression must produce a dense value"),
+            },
+            Buffer::F64(vec![6.0])
+        );
+        let mut later = JobEnv::new(Device::Cpu, budget, token);
+        later.freeze(&expr).unwrap();
+        assert_eq!(
+            match later.eval(&expr).unwrap() {
+                Value::Dense(value) => value.buffer,
+                Value::View(_) => panic!("binary expression must produce a dense value"),
+            },
+            Buffer::F64(vec![10.0])
+        );
     }
 
     #[test]

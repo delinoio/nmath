@@ -44,6 +44,7 @@ Boolean remainder and power use the NumPy `int8` result loop. Boolean addition a
 ### Lazy expressions
 
 - `Expr` is an immutable graph node. Constructors: `Input(array)`, `Scalar(value)`, `Unary(op, expr)`, `Binary(op, lhs, rhs)`, `Reduce(op, expr, axes)`, `MatMul(lhs, rhs)`, `Index(expr, selectors)`, `Cast(expr, dtype)`.
+- Metadata discovery and input freezing visit each distinct expression node once per traversal, in first-encounter order. A shared node keeps its identity across incoming edges. Numerical evaluation remains a separate operation.
 - Binary operator IDs: `add`, `sub`, `mul`, `div`, `mod`, `pow`. Unary operator IDs: `pos`, `neg`. Reduction IDs: `sum`, `mean`, `min`, `max`.
 - Shape and dtype of every node are inferred at construction. Invalid broadcasting fails at construction with `NMATH_SHAPE_BROADCAST`.
 - Indexing selectors: integer, `Slice { start, stop, step }` with `stop` excluded and `None` for an omitted bound, integer-array selection and boolean-mask selection. Negative indexes count from the end; out-of-range integers fail with `NMATH_INDEX_OUT_OF_BOUNDS`.
