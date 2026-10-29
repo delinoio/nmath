@@ -522,6 +522,29 @@ impl ToNapiValue for NativeResult {
     }
 }
 
+/// Retains archive metadata until conversion has created all JS entries.
+struct NativeNpzResult(nmath_core::io_npz::NpzArrays);
+
+impl ToNapiValue for NativeNpzResult {
+    unsafe fn to_napi_value(
+        env: napi::sys::napi_env,
+        mut val: Self,
+    ) -> Result<napi::sys::napi_value> {
+        let entries = std::mem::take(&mut val.0.arrays)
+            .into_iter()
+            .map(|(name, array)| NativeNpzEntry {
+                name,
+                array: NativeArray { inner: Some(array) },
+            })
+            .collect::<Vec<_>>();
+        // SAFETY: forwards to generated entry conversions in the same N-API
+        // environment. The archive still owns its metadata reservation.
+        let result = unsafe { Vec::<NativeNpzEntry>::to_napi_value(env, entries) };
+        drop(val);
+        result
+    }
+}
+
 impl NativeContext {
     /// Admits a job and returns its Promise. Admission errors reject
     /// synchronously-created promises so callers always receive a Promise.
@@ -804,8 +827,8 @@ impl NativeContext {
         path: String,
         signal: Option<&NativeCancellation>,
     ) -> Result<Object<'env>> {
-        type ArchiveResolver = Box<dyn FnOnce(Env) -> Result<Vec<NativeNpzEntry>> + Send>;
-        let (deferred, promise) = env.create_deferred::<Vec<NativeNpzEntry>, ArchiveResolver>()?;
+        type ArchiveResolver = Box<dyn FnOnce(Env) -> Result<NativeNpzResult> + Send>;
+        let (deferred, promise) = env.create_deferred::<NativeNpzResult, ArchiveResolver>()?;
         let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(deferred)));
         let job_slot = slot.clone();
         let done = Box::new(
@@ -814,19 +837,9 @@ impl NativeContext {
                     return;
                 };
                 match result {
-                    Ok(archive) => deferred.resolve(Box::new(move |_| {
-                        // Keep the metadata charge until the resolver converts
-                        // the archive.
-                        let archive = archive;
-                        Ok(archive
-                            .arrays
-                            .into_iter()
-                            .map(|(name, array)| NativeNpzEntry {
-                                name,
-                                array: NativeArray { inner: Some(array) },
-                            })
-                            .collect())
-                    })),
+                    Ok(archive) => {
+                        deferred.resolve(Box::new(move |_| Ok(NativeNpzResult(archive))))
+                    }
                     Err(error) => deferred.reject(to_napi(error)),
                 }
             },
