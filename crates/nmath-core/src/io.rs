@@ -48,6 +48,7 @@ fn descr(dtype: DType) -> Result<&'static str> {
         DType::UInt16 => "<u2",
         DType::UInt32 => "<u4",
         DType::UInt64 => "<u8",
+        DType::Float16 => "<f2",
         DType::Float32 => "<f4",
         DType::Float64 => "<f8",
         DType::Complex64 => "<c8",
@@ -115,6 +116,9 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
         Buffer::U64(v) => v
+            .iter()
+            .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+        Buffer::F16(v) => v
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
         Buffer::F32(v) => v
@@ -199,6 +203,7 @@ fn decode_npy_with<R>(
         "<u2" => DType::UInt16,
         "<u4" => DType::UInt32,
         "<u8" => DType::UInt64,
+        "<f2" | ">f2" => DType::Float16,
         "<f4" => DType::Float32,
         "<f8" => DType::Float64,
         "<c8" | ">c8" => DType::Complex64,
@@ -212,7 +217,7 @@ fn decode_npy_with<R>(
     };
     let fortran = header_value(header, "fortran_order")?.starts_with("True");
     if (!fortran && !header_value(header, "fortran_order")?.starts_with("False"))
-        || (fortran && !matches!(dtype, DType::Complex64 | DType::Complex128))
+        || (fortran && !matches!(dtype, DType::Float16 | DType::Complex64 | DType::Complex128))
     {
         return Err(format_error(
             "Fortran-order data is not supported in this build",
@@ -284,6 +289,18 @@ fn decode_npy_with<R>(
         DType::UInt16 => read_le!(u16, 2),
         DType::UInt32 => read_le!(u32, 4),
         DType::UInt64 => read_le!(u64, 8),
+        DType::Float16 => Buffer::F16(
+            (0..count)
+                .map(|i| {
+                    let bytes = complex_chunk(i).try_into().unwrap();
+                    if descr_text.starts_with('>') {
+                        crate::buffer::Float16::from_be_bytes(bytes)
+                    } else {
+                        crate::buffer::Float16::from_le_bytes(bytes)
+                    }
+                })
+                .collect(),
+        ),
         DType::Float32 => read_le!(f32, 4),
         DType::Float64 => read_le!(f64, 8),
         DType::Complex64 => Buffer::C64(

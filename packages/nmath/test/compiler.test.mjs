@@ -143,3 +143,37 @@ test(
     void pathToFileURL;
   },
 );
+
+test("float16 .nts preserves dtype inference and rejects known invalid shapes", async () => {
+  const source = `import { createContext, type Expr } from "@delinoio/nmath";
+const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 1, cpuMemoryBudget: 1024, gpuMemoryBudget: 0 });
+const a = ctx.array([1, 2], { dtype: "float16", shape: [2] });
+const sum: Expr<"float16", readonly [2]> = a + 1;
+const promoted: Expr<"float32", [2]> = a + ctx.zeros([2], "int16");
+console.log(JSON.stringify((await sum.compute()).toArray()));
+await ctx.close();
+`;
+  const dir = project({ "main.nts": source });
+  try {
+    const tsconfig = join(dir, "tsconfig.json");
+    const result = await build({ tsconfig });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    assert.equal(
+      execFileSync(process.execPath, [join(dir, "out", "main.js")], {
+        encoding: "utf8",
+      }).trim(),
+      "[2,3]",
+    );
+    writeFileSync(
+      join(dir, "src", "main.nts"),
+      source.replace("a + 1", 'a + ctx.zeros([3], "float16")'),
+    );
+    const invalid = await check({ tsconfig });
+    assert.equal(invalid.ok, false);
+    assert.ok(
+      invalid.diagnostics.some((d) => d.code === "NMATH_COMPILER_TYPE_ERROR"),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

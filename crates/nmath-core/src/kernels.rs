@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    buffer::{Buffer, DenseArray},
+    buffer::{Buffer, DenseArray, Float16},
     dtype::{DType, DTypeKind},
     error::{Error, ErrorCode, Result},
     memory::MemoryBudget,
@@ -282,6 +282,78 @@ impl Num for f32 {
     fn neg(a: Self) -> Self {
         -a
     }
+}
+
+// NumPy's half loops compute in binary32 and round each element to binary16.
+impl Num for Float16 {
+    fn nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn take_equal() -> bool {
+        false
+    }
+
+    fn mean(self, count: usize) -> Self {
+        Self::from_f32(self.to_f32() / count as f32)
+    }
+
+    fn add(a: Self, b: Self) -> Self {
+        Self::from_f32(a.to_f32() + b.to_f32())
+    }
+
+    fn sub(a: Self, b: Self) -> Self {
+        Self::from_f32(a.to_f32() - b.to_f32())
+    }
+
+    fn mul(a: Self, b: Self) -> Self {
+        Self::from_f32(a.to_f32() * b.to_f32())
+    }
+
+    fn div(a: Self, b: Self) -> Self {
+        Self::from_f32(a.to_f32() / b.to_f32())
+    }
+
+    fn rem(a: Self, b: Self) -> Self {
+        Self::from_f32(<f32 as Num>::rem(a.to_f32(), b.to_f32()))
+    }
+
+    fn pow(a: Self, b: Self) -> Result<Self> {
+        Ok(Self::from_f32(a.to_f32().powf(b.to_f32())))
+    }
+
+    fn neg(a: Self) -> Self {
+        -a
+    }
+}
+
+// Match the eight-lane binary32 accumulation order of NumPy's half reduction.
+fn half_pairwise(values: &[Float16], token: &CancellationToken) -> Result<f32> {
+    token.check()?;
+    let n = values.len();
+    if n < 8 {
+        return Ok(values.iter().fold(-0.0, |a, b| a + b.to_f32()));
+    }
+    if n > 128 {
+        let mid = (n / 2) / 8 * 8;
+        return Ok(half_pairwise(&values[..mid], token)? + half_pairwise(&values[mid..], token)?);
+    }
+    let mut lanes = [0.0f32; 8];
+    for i in 0..8 {
+        lanes[i] = values[i].to_f32();
+    }
+    let end = n / 8 * 8;
+    for i in (8..end).step_by(8) {
+        for j in 0..8 {
+            lanes[j] += values[i + j].to_f32();
+        }
+    }
+    let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+        + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+    for value in &values[end..] {
+        total += value.to_f32();
+    }
+    Ok(total)
 }
 
 // Complex operations keep component precision. Division uses a ratio to avoid
@@ -582,6 +654,7 @@ pub fn binary(
         (Buffer::U16(x), Buffer::U16(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::U32(x), Buffer::U32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::U64(x), Buffer::U64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::F16(x), Buffer::F16(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::F32(x), Buffer::F32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::F64(x), Buffer::F64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::C64(x), Buffer::C64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
@@ -616,6 +689,7 @@ pub fn unary(
             Buffer::U16(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
             Buffer::U32(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
             Buffer::U64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::F16(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
             Buffer::F32(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
             Buffer::F64(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
             Buffer::C64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
@@ -829,6 +903,45 @@ pub fn reduce(
         Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F16(x) if matches!(op, ReduceOp::Sum | ReduceOp::Mean) => {
+            let mut out = vec![Float16::ZERO; out_len];
+            if contiguous && count > 0 {
+                for (i, chunk) in x.chunks_exact(count).enumerate() {
+                    let total = 0.0 + half_pairwise(chunk, token)?;
+                    out[i] = Float16::from_f32(if op == ReduceOp::Mean {
+                        total / count as f32
+                    } else {
+                        total
+                    });
+                }
+            } else if op == ReduceOp::Mean {
+                // Mean retains binary32 accumulators until division, including
+                // non-contiguous axes. Charge scratch before allocating it.
+                let _scratch = reserve_for(budget, DType::Float32, out_len)?;
+                let mut totals = vec![0.0f32; out_len];
+                for (i, (slot, _)) in slots.enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    totals[slot] += x[i].to_f32();
+                }
+                for (i, value) in totals.into_iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    out[i] = Float16::from_f32(value / count as f32);
+                }
+            } else {
+                for (i, (slot, _)) in slots.enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    out[slot] = <Float16 as Num>::add(out[slot], x[i]);
+                }
+            }
+            Buffer::F16(out)
+        }
+        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
@@ -908,6 +1021,23 @@ pub fn matmul(
         (Buffer::U16(x), Buffer::U16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::U32(x), Buffer::U32(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::U64(x), Buffer::U64(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::F16(x), Buffer::F16(y)) => {
+            let mut out = vec![Float16::ZERO; n * m];
+            for i in 0..n {
+                for j in 0..m {
+                    token.check()?;
+                    let mut total = 0.0f32;
+                    for p in 0..k {
+                        if p % CHUNK == 0 {
+                            token.check()?;
+                        }
+                        total += x[i * k + p].to_f32() * y[p * m + j].to_f32();
+                    }
+                    out[i * m + j] = Float16::from_f32(total);
+                }
+            }
+            Buffer::F16(out)
+        }
         (Buffer::F32(x), Buffer::F32(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::F64(x), Buffer::F64(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::C64(x), Buffer::C64(y)) => mm(x, y, n, k, m, token)?.into(),
@@ -967,6 +1097,51 @@ mod tests {
             MemoryBudget::new(Device::Cpu, u64::MAX),
             CancellationToken::new(),
         )
+    }
+
+    #[test]
+    fn half_mean_scratch_is_charged_and_released() {
+        let input = dense(vec![2, 2], Buffer::F16(vec![Float16::from_f32(0.5); 4]));
+        let token = CancellationToken::new();
+        let tight = MemoryBudget::new(Device::Cpu, 11);
+        assert_eq!(
+            reduce(ReduceOp::Mean, &input, Some(&[0]), &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+        let fits = MemoryBudget::new(Device::Cpu, 12);
+        let result = reduce(ReduceOp::Mean, &input, Some(&[0]), &fits, &token).unwrap();
+        assert_eq!(result.buffer, Buffer::F16(vec![Float16::from_f32(0.5); 2]));
+        assert_eq!(fits.usage().peak, 12);
+        assert_eq!(fits.usage().used, 4);
+        drop(result);
+        assert_eq!(fits.usage().used, 0);
+        token.cancel();
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, None, &fits, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(fits.usage().used, 0);
+    }
+
+    #[test]
+    fn half_accumulation_does_not_round_each_contiguous_addition() {
+        let input = dense(
+            vec![3],
+            Buffer::F16(vec![Float16::MAX, Float16::ONE, -Float16::MAX]),
+        );
+        let (budget, token) = env();
+        let sum = reduce(ReduceOp::Sum, &input, None, &budget, &token).unwrap();
+        assert_eq!(sum.buffer, Buffer::F16(vec![Float16::ONE]));
+        let ones = dense(vec![3], Buffer::F16(vec![Float16::ONE; 3]));
+        let dot = matmul(&input, &ones, DType::Float16, &budget, &token).unwrap();
+        assert_eq!(dot.buffer, Buffer::F16(vec![Float16::ONE]));
+        let unchanged = reduce(ReduceOp::Mean, &input, Some(&[]), &budget, &token).unwrap();
+        assert_eq!(unchanged.buffer, input.buffer);
     }
 
     #[test]

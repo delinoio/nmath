@@ -1,3 +1,4 @@
+/// <reference lib="esnext.float16" preserve="true" />
 import type { Complex } from "./core.js";
 // SPDX-License-Identifier: Apache-2.0
 // Type-level dtype promotion and shape inference. Static rules mirror the native runtime;
@@ -14,6 +15,7 @@ export type DType =
   | "uint16"
   | "uint32"
   | "uint64"
+  | "float16"
   | "float32"
   | "float64"
   | "complex64"
@@ -33,6 +35,7 @@ export type ComputableDType =
   | "int64"
   | "uint32"
   | "uint64"
+  | "float16"
   | "float32"
   | "float64"
   | "complex64"
@@ -40,7 +43,7 @@ export type ComputableDType =
 
 export type ComplexDType = "complex64" | "complex128";
 
-export type FloatDType = "float32" | "float64";
+export type FloatDType = "float16" | "float32" | "float64";
 export type IntDType =
   | "int8"
   | "int16"
@@ -63,29 +66,46 @@ export type ScalarOf<D extends DType> = D extends ComplexDType
       : number;
 
 /** Typed array used to exchange data of dtype `D`. */
-export type TypedArrayOf<D extends ComputableDType> = D extends "int8"
-  ? Int8Array
-  : D extends "int16"
-    ? Int16Array
-    : D extends "uint16"
-      ? Uint16Array
-      : D extends "bool" | "uint8"
-        ? Uint8Array
-        : D extends "int32"
-          ? Int32Array
-          : D extends "int64"
-            ? BigInt64Array
-            : D extends "uint32"
-              ? Uint32Array
-              : D extends "uint64"
-                ? BigUint64Array
-                : D extends "float32" | "complex64"
-                  ? Float32Array
-                  : Float64Array;
+export type TypedArrayOf<D extends ComputableDType> = D extends "float16"
+  ? Float16Array
+  : D extends "int8"
+    ? Int8Array
+    : D extends "int16"
+      ? Int16Array
+      : D extends "uint16"
+        ? Uint16Array
+        : D extends "bool" | "uint8"
+          ? Uint8Array
+          : D extends "int32"
+            ? Int32Array
+            : D extends "int64"
+              ? BigInt64Array
+              : D extends "uint32"
+                ? Uint32Array
+                : D extends "uint64"
+                  ? BigUint64Array
+                  : D extends "float32" | "complex64"
+                    ? Float32Array
+                    : Float64Array;
 
 // NumPy 2.5.4 result_type; tested against the recorded integer dtype fixture.
 type PromoteTable = {
+  float16: {
+    bool: "float16";
+    int8: "float16";
+    uint8: "float16";
+    int16: "float32";
+    uint16: "float32";
+    int32: "float64";
+    uint32: "float64";
+    int64: "float64";
+    uint64: "float64";
+    float16: "float16";
+    float32: "float32";
+    float64: "float64";
+  };
   bool: {
+    float16: "float16";
     bool: "bool";
     int8: "int8";
     int16: "int16";
@@ -99,6 +119,7 @@ type PromoteTable = {
     float64: "float64";
   };
   int8: {
+    float16: "float16";
     bool: "int8";
     int8: "int8";
     int16: "int16";
@@ -112,6 +133,7 @@ type PromoteTable = {
     float64: "float64";
   };
   int16: {
+    float16: "float32";
     bool: "int16";
     int8: "int16";
     int16: "int16";
@@ -125,6 +147,7 @@ type PromoteTable = {
     float64: "float64";
   };
   int32: {
+    float16: "float64";
     bool: "int32";
     int8: "int32";
     int16: "int32";
@@ -138,6 +161,7 @@ type PromoteTable = {
     float64: "float64";
   };
   int64: {
+    float16: "float64";
     bool: "int64";
     int8: "int64";
     int16: "int64";
@@ -151,6 +175,7 @@ type PromoteTable = {
     float64: "float64";
   };
   uint8: {
+    float16: "float16";
     bool: "uint8";
     int8: "int16";
     int16: "int16";
@@ -164,6 +189,7 @@ type PromoteTable = {
     float64: "float64";
   };
   uint16: {
+    float16: "float32";
     bool: "uint16";
     int8: "int32";
     int16: "int32";
@@ -177,6 +203,7 @@ type PromoteTable = {
     float64: "float64";
   };
   uint32: {
+    float16: "float64";
     bool: "uint32";
     int8: "int64";
     int16: "int64";
@@ -190,6 +217,7 @@ type PromoteTable = {
     float64: "float64";
   };
   uint64: {
+    float16: "float64";
     bool: "uint64";
     int8: "float64";
     int16: "float64";
@@ -203,6 +231,7 @@ type PromoteTable = {
     float64: "float64";
   };
   float32: {
+    float16: "float32";
     bool: "float32";
     int8: "float32";
     int16: "float32";
@@ -216,6 +245,7 @@ type PromoteTable = {
     float64: "float64";
   };
   float64: {
+    float16: "float64";
     bool: "float64";
     int8: "float64";
     int16: "float64";
@@ -262,7 +292,7 @@ export type PromoteWeak<
 > = S extends Complex
   ? D extends ComplexDType
     ? D
-    : D extends "float32"
+    : D extends "float16" | "float32"
       ? "complex64"
       : "complex128"
   : S extends number
