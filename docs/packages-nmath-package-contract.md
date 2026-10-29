@@ -16,6 +16,8 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 - JavaScript and TypeScript developers who use NMath from Node.js 24.
 - `.nts` output produced by `nmath-compiler`, which imports `@delinoio/nmath/nts-runtime`.
 
+When the `.nts` transform's extension-rewriting option is enabled, source-relative `.nts` specifiers in quoted imports and static template dynamic imports become `.js` specifiers. The [compiler contract](crates-nmath-compiler-contract.md) owns this behavior and its span mapping.
+
 ## Interfaces and Contracts
 
 ### Entry points
@@ -43,6 +45,7 @@ const ctx = createContext({
 ```
 
 All four options are required. `ctx.close(): Promise<void>` follows the runtime close contract. `ctx.metrics()` returns measurement snapshots. Contexts and arrays implement `dispose()` and `Symbol.dispose` for `using`.
+Native jobs release their execution slot before they settle their result Promise. Promise handlers can close the context or submit another job under the normal admission rules.
 
 Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
 

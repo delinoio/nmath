@@ -387,7 +387,7 @@ impl Rewriter<'_> {
         if !self.options.rewrite_import_extensions {
             return;
         }
-        let Some(specifier) = specifier.filter(|s| s.kind() == Kind::StringLiteral) else {
+        let Some(specifier) = specifier.filter(|s| is_string_literal_like(*s)) else {
             return;
         };
         let start = self.token_start(specifier) as usize;

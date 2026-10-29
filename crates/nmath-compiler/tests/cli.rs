@@ -204,6 +204,93 @@ fn build_writes_javascript_declarations_and_source_maps() {
 }
 
 #[test]
+fn build_rewrites_mixed_module_imports_for_every_user_setting() {
+    for setting in [None, Some(false), Some(true)] {
+        let fixture = Fixture::new("mixed-imports");
+        let rewrite_setting = setting.map_or(String::new(), |enabled| {
+            format!(", \"rewriteRelativeImportExtensions\": {enabled}")
+        });
+        let config = format!(
+            "{{\"compilerOptions\": {{\"strict\": true, \"module\": \"NodeNext\", \
+             \"moduleResolution\": \"NodeNext\", \"target\": \"ES2022\", \"outDir\": \"dist\", \
+             \"rootDir\": \"src\", \"types\": []{rewrite_setting}}}, \"include\": [\"src\"]}}\n"
+        );
+        fixture.write("tsconfig.json", &config);
+        fixture.write("package.json", r#"{"type":"module"}"#);
+        fixture.write("src/helper.ts", "export const value = 40;\n");
+        fixture.write("src/extra.nts", "export const extra = 1;\n");
+        fixture.write(
+            "src/main.nts",
+            "import { value } from './helper.ts';\nimport { extra } from './extra.nts';\nimport { \
+             marker } from 'fixture-bare';\nexport const answer = value + extra + marker;\n",
+        );
+        fixture.write(
+            "node_modules/fixture-bare/package.json",
+            r#"{"name":"fixture-bare","type":"module","exports":{".":{"types":"./index.d.ts","default":"./index.js"}}}"#,
+        );
+        fixture.write(
+            "node_modules/fixture-bare/index.d.ts",
+            "export const marker: number;\n",
+        );
+        fixture.write(
+            "node_modules/fixture-bare/index.js",
+            "export const marker = 1;\n",
+        );
+
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "setting={setting:?}: {result:#}");
+        assert_eq!(fixture.read("tsconfig.json"), config);
+        assert!(fixture.path("dist/helper.js").exists());
+        assert!(fixture.path("dist/extra.js").exists());
+        let output = fixture.read("dist/main.js");
+        assert!(output.contains("'./helper.js'"), "{output}");
+        assert!(output.contains("'./extra.js'"), "{output}");
+        assert!(output.contains("'fixture-bare'"), "{output}");
+        assert!(!output.contains(".ts'"), "{output}");
+
+        std::fs::remove_dir_all(fixture.path("src")).unwrap();
+        let loaded = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import { pathToFileURL } from 'node:url'; const module = await \
+                 import(pathToFileURL(process.argv[1]).href); if (module.answer !== 42) \
+                 process.exit(1);",
+                fixture.path("dist/main.js").to_str().unwrap(),
+            ])
+            .output()
+            .expect("Node.js runs the emitted ESM graph");
+        assert!(
+            loaded.status.success(),
+            "setting={setting:?}: {}",
+            String::from_utf8_lossy(&loaded.stderr)
+        );
+    }
+}
+
+#[test]
+fn failed_mixed_module_build_preserves_output_and_config() {
+    for source in [
+        "import { value } from './helper.ts'; export const answer: string = value;\n",
+        "import { value } from './helper.ts'; export const answer = ;\n",
+    ] {
+        let fixture = Fixture::new("mixed-import-fail");
+        fixture.write("src/helper.ts", "export const value = 42;\n");
+        fixture.write("src/main.nts", source);
+        fixture.write("dist/main.js", "// previous output\n");
+        let config = fixture.read("tsconfig.json");
+
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 1, "{result:#}");
+        assert_eq!(result["outputFiles"], Value::Array(Vec::new()));
+        assert_eq!(fixture.read("dist/main.js"), "// previous output\n");
+        assert!(!fixture.path("dist/helper.js").exists());
+        assert_eq!(std::fs::read_dir(fixture.path("dist")).unwrap().count(), 1);
+        assert_eq!(fixture.read("tsconfig.json"), config);
+    }
+}
+
+#[test]
 fn failed_build_keeps_existing_outputs() {
     let fixture = Fixture::new("build-fail");
     fixture.write("src/lib.nts", LIB);

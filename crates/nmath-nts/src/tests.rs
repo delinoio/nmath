@@ -429,6 +429,10 @@ fn rewrites_relative_nts_specifiers() {
         lower("const m = await import('./m.nts');"),
         "const m = await import('./m.js');"
     );
+    assert_eq!(
+        lower("const m = await import(\"../m.nts\");"),
+        "const m = await import(\"../m.js\");"
+    );
     // Bare and non-.nts specifiers are untouched.
     assert_eq!(
         lower("import x from 'pkg/x.nts';"),
@@ -439,15 +443,68 @@ fn rewrites_relative_nts_specifiers() {
 }
 
 #[test]
-fn import_rewriting_can_be_disabled() {
-    let output = transform_with_options(
-        "a.nts",
-        "import { a } from './a.nts';",
-        TransformOptions {
-            rewrite_import_extensions: false,
-        },
+fn rewrites_static_template_import_specifiers() {
+    assert_eq!(
+        lower("const m = await import(`./m.nts`);"),
+        "const m = await import(`./m.js`);"
     );
-    assert!(output.text.ends_with("import { a } from './a.nts';"));
+    assert_eq!(
+        lower("const m = await import(`../m.nts`);"),
+        "const m = await import(`../m.js`);"
+    );
+    for source in [
+        "const m = import(`pkg/m.nts`);",
+        "const m = import(`./m.ts`);",
+        "const m = import(`./${name}.nts`);",
+    ] {
+        assert_eq!(lower(source), source);
+    }
+}
+
+#[test]
+fn static_template_import_extension_maps_to_original_suffix() {
+    let source = "const m = await import(`./m.nts`);";
+    let output = fixture_transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    let original_extension = source.find(".nts").unwrap() as u32;
+    let virtual_extension = output.text.find(".js").unwrap() as u32;
+    let extension = output
+        .span_map
+        .segments()
+        .iter()
+        .find(|segment| segment.virtual_start == virtual_extension)
+        .expect("rewritten extension has a mapped segment");
+    assert_eq!(extension.virtual_end, virtual_extension + 3);
+    assert_eq!(extension.original_start, original_extension);
+    assert_eq!(extension.original_end, original_extension + 4);
+    assert_eq!(extension.kind, SegmentKind::Atom);
+    for (virtual_pos, original_pos) in [
+        (virtual_extension - 1, original_extension - 1),
+        (virtual_extension + 3, original_extension + 4),
+    ] {
+        assert_eq!(
+            output.span_map.virtual_to_original(virtual_pos),
+            Some(original_pos)
+        );
+    }
+}
+
+#[test]
+fn import_rewriting_can_be_disabled() {
+    for source in [
+        "import { a } from './a.nts';",
+        "const m = await import(`./m.nts`);",
+    ] {
+        let output = transform_with_options(
+            "a.nts",
+            source,
+            TransformOptions {
+                rewrite_import_extensions: false,
+            },
+        );
+        assert_valid_span_map(source, &output);
+        assert!(output.text.ends_with(source));
+    }
 }
 
 #[test]
