@@ -369,6 +369,12 @@ pub fn save_npz(
     token: &CancellationToken,
 ) -> Result<()> {
     let (bytes, _encoded) = encode_npz(arrays, compression, budget, token)?;
+    // The common publisher allocates a temporary pathname and formatting
+    // strings. Keep that workspace charged while the encoded buffer is live.
+    let _publication = budget.reserve(checked_add(
+        4096,
+        checked_mul(path.as_os_str().len() as u64, 8)?,
+    )?)?;
     write_atomic(path, &bytes, mode, token)
 }
 
