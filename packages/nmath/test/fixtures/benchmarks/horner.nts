@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+import type { NMathArray } from "@delinoio/nmath";
+
+// Exact integer-valued float32 arithmetic; no relaxed tolerance is needed.
+export function polynomial(x: NMathArray<"float32", readonly [number]>) {
+  return (x * 2 + 3) * x + 1;
+}

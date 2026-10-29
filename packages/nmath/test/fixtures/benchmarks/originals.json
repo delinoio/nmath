@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "versions": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "polars": "2.1.0"
+  },
+  "workload": {
+    "seed": 20261029,
+    "matrixSize": 128,
+    "rows": 32768,
+    "groups": 64,
+    "algorithmSize": 8192
+  },
+  "criterion": "Exact full-output equality for bounded integer-valued inputs; no general floating-point tolerance claim.",
+  "provenance": {
+    "generatorSha256": "1d9b89f9c45dd86f0d3aaf501ec13cd9888c12e11778113538d5b907bfe3851e",
+    "python": "3.14.8",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "cases": {
+    "matrix": {
+      "digest": "0aaa6a14053e92143ecb990de90359b9ceda64aff72cbac08bf417d7ff79253e",
+      "shape": [
+        128,
+        128
+      ],
+      "dtype": "float32",
+      "original": "numpy",
+      "missingValues": 0
+    },
+    "tabular-pandas": {
+      "digest": "479a79dc9e8da0c2b388ab857b3930aff0f892dfec6dd8018a86b9fded9753a5",
+      "shape": [
+        64,
+        2
+      ],
+      "dtype": "int64",
+      "original": "pandas",
+      "missingValues": 0
+    },
+    "tabular-polars": {
+      "digest": "479a79dc9e8da0c2b388ab857b3930aff0f892dfec6dd8018a86b9fded9753a5",
+      "shape": [
+        64,
+        2
+      ],
+      "dtype": "int64",
+      "original": "polars",
+      "missingValues": 0
+    },
+    "algorithm-nts": {
+      "digest": "fc625331a6ec84e328a946fa45d8203638ccaa31fd06cfbc3e7cee3b62c49a7f",
+      "shape": [
+        8192
+      ],
+      "dtype": "float32",
+      "original": "numpy",
+      "missingValues": 0
+    }
+  }
+}
