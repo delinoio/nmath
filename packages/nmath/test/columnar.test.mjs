@@ -113,3 +113,37 @@ for (const format of ["arrow", "parquet"]) {
     }
   });
 }
+
+for (const read of [
+  pandas.read_feather,
+  pandas.read_parquet,
+  polars.read_ipc,
+  polars.read_parquet,
+]) {
+  test(`${read.name}: rejects loss of nonempty zero-column rows`, async () => {
+    const context = {
+      nativeContext: {
+        readColumnar: async () => ({
+          names: [],
+          values: [],
+          valid: [],
+          nullable: [],
+          rows: 3,
+        }),
+      },
+    };
+    await assert.rejects(read(context, "unused"), {
+      code: "NMATH_DTYPE_UNSUPPORTED",
+    });
+    const { readColumnar } = await import("../dist/columnar.js");
+    assert.equal((await readColumnar(context, "unused", "arrow")).rows, 3);
+    context.nativeContext.readColumnar = async () => ({
+      names: [],
+      values: [],
+      valid: [],
+      nullable: [],
+      rows: 0,
+    });
+    await read(context, "unused");
+  });
+}
