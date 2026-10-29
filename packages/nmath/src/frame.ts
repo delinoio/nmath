@@ -194,35 +194,47 @@ export class TablePlan {
       );
     if (options.how && options.how !== "inner" && options.how !== "left")
       throw tableError();
+    const leftKey = this.position(key);
+    const rightKey = other.position(options.rightKey ?? key);
     const right = other.names.map((n) =>
       this.names.includes(n) ? n + (options.suffix ?? "_right") : n,
     );
-    const names = [...this.names, ...right];
+    const coalesce = (options.rightKey ?? key) === key;
+    const positions = [
+      ...this.names.map((_, i) => i),
+      ...other.names.flatMap((_, i) =>
+        coalesce && i === rightKey ? [] : [this.names.length + i],
+      ),
+    ];
+    const names = positions.map((i) =>
+      i < this.names.length ? this.names[i] : right[i - this.names.length],
+    );
     if (!names.length || new Set(names).size !== names.length)
       throw tableError();
-    const joined = new TablePlan(
-      native(() =>
-        this.plan.join(
+    return new TablePlan(
+      native(() => {
+        const joined = this.plan.join(
           other.plan,
-          this.position(key),
-          other.position(options.rightKey ?? key),
+          leftKey,
+          rightKey,
           options.how === "left",
           options.nullsEqual ?? false,
-        ),
-      ),
+        );
+        return coalesce ? joined.select(positions) : joined;
+      }),
       names,
       this.context,
       new Set([
         ...this.nullable,
-        ...right.filter(
-          (_, i) =>
-            options.how === "left" || other.nullable.has(other.names[i]),
+        ...other.names.flatMap((name, i) =>
+          coalesce && i === rightKey
+            ? []
+            : options.how === "left" || other.nullable.has(name)
+              ? [right[i]]
+              : [],
         ),
       ]),
     );
-    return (options.rightKey ?? key) === key
-      ? joined.select(names.filter((n) => n !== right[other.position(key)]))
-      : joined;
   }
   group(
     key: string,
