@@ -88,6 +88,14 @@ A dimension typed as `number` is dynamic. The runtime validates it, and the dtyp
 | `@delinoio/nmath/pandas` | pandas-style `Series` and `DataFrame` (subset).                                                                      |
 | `@delinoio/nmath/polars` | Polars-style `Series`, `DataFrame`, `col` and `LazyFrame` (subset).                                                  |
 
+## `.nts` projects and editor support
+
+Use `nmath-compiler check -p tsconfig.json` to check a project, or `nmath-compiler build -p tsconfig.json` to emit ESM JavaScript, declarations and source maps. Keep source-relative imports ending in `.nts`; emitted imports use `.js`. Type or transformation errors preserve existing output.
+
+The `@delinoio/nmath/compiler` entry point exposes asynchronous `check({ tsconfig })` and `build({ tsconfig })` functions. Results contain `ok`, structured `diagnostics`, and `outputFiles`.
+
+`nmath-compiler lsp` serves type diagnostics, completion and definitions over standard input/output. Locations refer to original `.nts` sources, including unsaved editor changes. The NMath VS Code extension starts this server and uses standard editor UI. Automatic import suggestions are not available. Project references and `-b` builds are not supported.
+
 ## GPU
 
 GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmetic, broadcasting, `sum`, `mean`, `min`, `max` and `matmul` on macOS arm64 (Metal), Linux x64 glibc (Vulkan) and Windows x64 (DX12). NMath never falls back to the CPU, never lowers precision and never retries. Unsupported dtypes or operations reject with `NMATH_GPU_UNSUPPORTED_OPERATION` before the job is queued.
@@ -117,7 +125,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy I/O            | NPY (C order, little endian)                                                                                    | NPZ, Fortran order                                                                                                                            |
 | pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`          | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
 | Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                  | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
-| `.nts` compiler      | —                                                                                                               | `@delinoio/nmath/compiler` and `nmath-compiler`                                                                                               |
+| `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                           | Marketplace publication and editor acceptance                                                                                                 |
 | GPU                  | —                                                                                                               | GPU backend                                                                                                                                   |
 
 ## Build from source

@@ -62,7 +62,7 @@ Every diagnostic reports the original `.nts` file and 1-based line and column, a
 
 - `nmath-compiler check -p <tsconfig>`: type-check the project. Exit code 0 on success, 1 on diagnostics, 2 on usage or configuration errors.
 - `nmath-compiler build -p <tsconfig>`: emit ESM JavaScript, declaration files and source maps. On any type or transform error, write nothing and keep existing outputs.
-- `nmath-compiler lsp`: run a generic Language Server Protocol server over stdio with diagnostics, completion and go-to-definition for `.nts` files.
+- `nmath-compiler lsp`: run a generic Language Server Protocol server over stdio with semantic type diagnostics, completion and cross-file go-to-definition for `.nts` files. Locations use original-source UTF-16 coordinates. Full-document synchronization overlays unsaved buffers on disk content; changes refresh dependent diagnostics, and closing a document restores its disk content. Stale document versions do not replace newer buffers.
 - `nmath-compiler content-mapper`: internal tsrs content-mapper process. Not a public interface.
 - `--json` prints the structured result `{ ok, diagnostics: [{ code, file, line, column, message, recovery }], outputFiles: [] }`.
 
@@ -90,7 +90,7 @@ Use `tracing` with structured fields. `NMATH_LOG` enables logs on stderr; ANSI c
 ## Dependencies and Integrations
 
 - tsrs crates pinned to `77d3cddb44540734abc33a42ccca4d3f33bee527`. A pinned fork or patch is allowed only when an upstream change is essential; document its scope and removal condition next to the patch.
-- tsrs documents gaps in content-mapper support in its language server. `nmath-compiler lsp` therefore runs the NMath transform directly and does not depend on the tsrs language server for `.nts` features. Remove this workaround when tsrs ships language-server content-mapper support at a pinned commit.
+- The pinned tsrs LSP server lacks the mapper process hook required by NMath. `nmath-compiler lsp` uses the tsrs compiler and language-service crates directly with an in-process NMath mapper and an adapter for original protocol positions. Each request builds an immutable semantic snapshot; automatic import discovery is disabled. Remove this adapter when a pinned tsrs server supports the required content mapping end to end.
 - Downstream: [npm package contract](packages-nmath-package-contract.md) for `/compiler` and `nts-runtime`; [VS Code extension contract](apps-nmath-vscode-contract.md) for `lsp`.
 
 ### Integration workarounds
