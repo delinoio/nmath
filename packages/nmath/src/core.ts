@@ -373,7 +373,12 @@ function fromResult(
   context: NMathContext,
 ): NMathArray<ComputableDType, Shape> | WeakScalar {
   if (array.shape.length === 0) {
-    return array.item([]);
+    // Callers only receive the primitive, so release the reservation now.
+    try {
+      return native(() => array.item([]));
+    } finally {
+      array.dispose();
+    }
   }
   return new NMathArray(array, context);
 }

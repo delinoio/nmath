@@ -227,6 +227,15 @@ test("memory budgets reject before allocation", async () => {
   await ctx.close();
 });
 
+test("scalar results release their storage reservation", async () => {
+  const ctx = context();
+  const a = ctx.array([1, 2, 3], { dtype: "float64" });
+  const before = ctx.metrics().cpuMemory.used;
+  assert.equal(await a.sum().compute(), 6);
+  assert.equal(ctx.metrics().cpuMemory.used, before);
+  await ctx.close();
+});
+
 test("contexts do not mix; copies are explicit", async () => {
   const one = context();
   const two = context();
