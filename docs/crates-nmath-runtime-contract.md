@@ -52,7 +52,7 @@ Boolean remainder and power use the NumPy `int8` result loop. Boolean addition a
 
 - `Context::new(ContextOptions { max_concurrent_jobs, max_queue_length, cpu_memory_budget, gpu_memory_budget })`. All four fields are required. A zero concurrency limit fails with `NMATH_CONTEXT_INVALID_OPTIONS`.
 - Admission: if fewer than `max_concurrent_jobs` jobs run, the job starts. Otherwise it enters a FIFO queue. If the queue holds `max_queue_length` jobs, admission fails with `NMATH_SCHED_QUEUE_FULL`.
-- Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Kernels check the token between chunks; a cancelled running job never returns a computed result.
+- Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Workers check cancellation before starting work. Kernels check the token between chunks; a cancelled read or computation does not return its result. File writers check cancellation before atomic publication. Successful publication is terminal success: cancellation received after publication does not change the completion or metrics to cancelled.
 - `Context::close()` rejects new work with `NMATH_CONTEXT_CLOSED`, cancels queued work, cancels running work cooperatively and resolves after all jobs release their resources.
 - Jobs on one storage that write are serialized in request order. A write commits only after it fully succeeds.
 
@@ -109,10 +109,10 @@ GPU initialization occurs only on an execution worker after admission. Native ba
 ## Storage
 
 - Local files only: CSV, JSON, Parquet, Arrow IPC, NPY and NPZ. This deviates from the repository R2 default because NMath is a local library; see the [project index](project-nmath.md#deviations-from-repository-defaults).
-- Writers never overwrite an existing file unless the caller passes an explicit overwrite option. Output is written to a temporary file in the destination directory and published with an atomic rename. Cancellation or error removes the temporary file and preserves the original.
+- Writers never overwrite an existing file unless the caller passes an explicit overwrite option. Output is completed in a temporary file in the destination directory and published atomically. Create-new publication uses a hard link that fails if the destination exists; replacement uses an atomic rename. Cancellation or error before publication removes the temporary file and preserves the original. Once publication succeeds, the write completes successfully even if cancellation arrives before the scheduler delivers completion.
 - Readers record file size and modification time at job start and fail with `NMATH_IO_MODIFIED` when a change is detected. Detection is best effort.
 
-Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input accepts little- or big-endian components and C or Fortran order; the loader converts Fortran input to logical C order. Header, shape and payload-length validation applies before decoded allocation. These additions do not enable NPZ or Fortran-order input for other dtypes.
+Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input accepts little- or big-endian components and C or Fortran order; the loader converts Fortran input to logical C order. Header, shape and payload-length validation applies before decoded allocation. These complex input conversions do not enable Fortran-order input for other dtypes. NPZ members use the same NPY codec and inherit its dtype and layout support.
 
 ## Security
 
@@ -163,3 +163,15 @@ Plan nodes are source, named/positional projection, boolean-column filter, stabl
 All buffers for source snapshots, evaluated columns, row selection, sort scratch space, join row mappings, group representatives, aggregation intermediates and results are reserved against the CPU budget before allocation. Native table results retain their data and validity reservations until their array handles are released. Metadata bookkeeping is not a process-wide memory cap. Integer key comparisons preserve all 64 bits.
 
 Stable sorting uses an iterative merge sort with cooperative cancellation. Join matching and group discovery currently use repeated scans. The executor materializes intermediates; it is not the required internal streaming engine or a query optimizer. More scalable algorithms remain implementation targets.
+
+### NPZ archives
+
+`Context::save_npz` admits one file-write job with ordered `(name, array)` entries, `NpzCompression::Stored` or `NpzCompression::Deflated`, a `WriteMode`, and a cancellation token. Every input must belong to that context. The worker snapshots inputs at actual execution start. Empty archives are valid. `Context::load_npz` admits one file-read job and returns ordered contextual arrays; rank-zero members remain arrays. Loading completes eagerly through this file job and does not construct a lazy multi-result expression.
+
+Members contain NPY data. Writers append `.npy` to each member name; readers remove that suffix once. Names must be nonempty UTF-8 components, must not be `.` or `..`, and must not contain `/`, `\`, `:`, or control characters. A name is limited to 65,531 UTF-8 bytes before its `.npy` suffix. Duplicate names, non-NPY members, encryption, pickle/object data, and unsupported compression methods fail with `NMATH_IO_FORMAT`. Members are never extracted to disk.
+
+The codec supports stored and deflated ZIP members, including NumPy ZIP64 local member headers. It currently rejects multi-disk archives, ZIP64 central directories, 65,535 or more entries, and output capacity bounds at or above 4 GiB. Conservative output bounds can reject inputs before their actual compressed size reaches this limit. These are implementation limits, not agreed exclusions from compatibility requirements.
+
+The reader validates central and local headers, member boundaries and overlap, lengths, CRC and decompression completion. It checks file size and modification time through decoding; modification detection remains best effort. The context charges input archives, member metadata, decompression buffers, codec workspace, decoded arrays, execution snapshots, output archives and publication pathname workspace before their allocations. Metadata stays charged until native results are converted to JS entries. Codec workspace reservations are conservative bounds for the pinned ZIP/DEFLATE versions. Cancellation is cooperative around shared NPY codec passes and between compressed I/O chunks; one NPY encode/decode pass is not internally interruptible.
+
+NPZ supports the numeric and boolean types accepted by the shared NPY codec, including `complex64` and `complex128`. Complex output is little-endian C order. Complex input may be little- or big-endian and C or Fortran order and is converted to logical C order without changing component precision. Unsupported noncomplex endian/layout combinations, strings, datetime/timedelta, structured and extended dtypes remain compatibility gaps.

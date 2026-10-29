@@ -522,6 +522,29 @@ impl ToNapiValue for NativeResult {
     }
 }
 
+/// Retains archive metadata until conversion has created all JS entries.
+struct NativeNpzResult(nmath_core::io_npz::NpzArrays);
+
+impl ToNapiValue for NativeNpzResult {
+    unsafe fn to_napi_value(
+        env: napi::sys::napi_env,
+        mut val: Self,
+    ) -> Result<napi::sys::napi_value> {
+        let entries = std::mem::take(&mut val.0.arrays)
+            .into_iter()
+            .map(|(name, array)| NativeNpzEntry {
+                name,
+                array: NativeArray { inner: Some(array) },
+            })
+            .collect::<Vec<_>>();
+        // SAFETY: forwards to generated entry conversions in the same N-API
+        // environment. The archive still owns its metadata reservation.
+        let result = unsafe { Vec::<NativeNpzEntry>::to_napi_value(env, entries) };
+        drop(val);
+        result
+    }
+}
+
 impl NativeContext {
     /// Admits a job and returns its Promise. Admission errors reject
     /// synchronously-created promises so callers always receive a Promise.
@@ -759,6 +782,78 @@ impl NativeContext {
         })
     }
 
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn save_npz<'env>(
+        &self,
+        env: &'env Env,
+        names: Vec<String>,
+        arrays: Vec<&NativeArray>,
+        path: String,
+        compressed: bool,
+        overwrite: bool,
+        signal: Option<&NativeCancellation>,
+    ) -> Result<Object<'env>> {
+        if names.len() != arrays.len() {
+            return Err(core_err(
+                ErrorCode::IoFormat,
+                "NPZ names and arrays must have equal lengths.",
+            ));
+        }
+        let arrays = names
+            .into_iter()
+            .zip(arrays)
+            .map(|(name, array)| Ok((name, array.get()?.clone())))
+            .collect::<Result<Vec<_>>>()?;
+        let token = token_of(signal);
+        let compression = if compressed {
+            nmath_core::io_npz::NpzCompression::Deflated
+        } else {
+            nmath_core::io_npz::NpzCompression::Stored
+        };
+        let mode = if overwrite {
+            WriteMode::Overwrite
+        } else {
+            WriteMode::CreateNew
+        };
+        self.promise(env, move |ctx, done| {
+            ctx.save_npz(arrays, PathBuf::from(path), compression, mode, token, done)
+        })
+    }
+
+    #[napi(ts_return_type = "Promise<Array<{ name: string; array: NativeArray }>>")]
+    pub fn load_npz<'env>(
+        &self,
+        env: &'env Env,
+        path: String,
+        signal: Option<&NativeCancellation>,
+    ) -> Result<Object<'env>> {
+        type ArchiveResolver = Box<dyn FnOnce(Env) -> Result<NativeNpzResult> + Send>;
+        let (deferred, promise) = env.create_deferred::<NativeNpzResult, ArchiveResolver>()?;
+        let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(deferred)));
+        let job_slot = slot.clone();
+        let done = Box::new(
+            move |result: nmath_core::Result<nmath_core::io_npz::NpzArrays>| {
+                let Some(deferred) = job_slot.lock().unwrap().take() else {
+                    return;
+                };
+                match result {
+                    Ok(archive) => {
+                        deferred.resolve(Box::new(move |_| Ok(NativeNpzResult(archive))))
+                    }
+                    Err(error) => deferred.reject(to_napi(error)),
+                }
+            },
+        );
+        if let Err(error) = self
+            .inner
+            .load_npz(PathBuf::from(path), token_of(signal), done)
+            && let Some(deferred) = slot.lock().unwrap().take()
+        {
+            deferred.reject(to_napi(error));
+        }
+        Ok(promise)
+    }
+
     /// Closes the context on a helper thread and resolves when cleanup
     /// finishes.
     #[napi(ts_return_type = "Promise<void>")]
@@ -802,3 +897,9 @@ impl NativeContext {
 }
 
 mod table;
+
+#[napi(object, object_from_js = false)]
+pub struct NativeNpzEntry {
+    pub name: String,
+    pub array: NativeArray,
+}

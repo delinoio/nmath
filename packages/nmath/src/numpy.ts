@@ -138,3 +138,59 @@ export const random = {
 };
 
 export type { Operand };
+
+/** Explicit JS adaptation of NumPy positional and keyword archive members. */
+export interface NpzInputs {
+  positional?: readonly NMathArray<any, any>[];
+  named?: ReadonlyMap<string, NMathArray<any, any>>;
+}
+
+function saveArchive(
+  context: NMathContext,
+  path: string,
+  inputs: NpzInputs,
+  compressed: boolean,
+  options: { overwrite?: boolean; signal?: AbortSignal },
+): Promise<void> {
+  const arrays = new Map(inputs.named);
+  for (const [i, array] of (inputs.positional ?? []).entries()) {
+    const name = `arr_${i}`;
+    if (arrays.has(name)) {
+      return Promise.reject(
+        new TypeError(`Duplicate NPZ member name: ${name}.`),
+      );
+    }
+    arrays.set(name, array);
+  }
+  return context.saveNpz(path.endsWith(".npz") ? path : `${path}.npz`, arrays, {
+    ...options,
+    compressed,
+  });
+}
+
+export function savez(
+  context: NMathContext,
+  path: string,
+  inputs: NpzInputs = {},
+  options: { overwrite?: boolean; signal?: AbortSignal } = {},
+): Promise<void> {
+  return saveArchive(context, path, inputs, false, options);
+}
+
+export function savez_compressed(
+  context: NMathContext,
+  path: string,
+  inputs: NpzInputs = {},
+  options: { overwrite?: boolean; signal?: AbortSignal } = {},
+): Promise<void> {
+  return saveArchive(context, path, inputs, true, options);
+}
+
+/** Explicit NPZ load; preserves names safely in a Map and scalars as arrays. */
+export function loadNpz(
+  context: NMathContext,
+  path: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return context.loadNpz(path, options);
+}

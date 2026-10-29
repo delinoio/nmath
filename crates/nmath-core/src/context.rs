@@ -435,7 +435,7 @@ impl Context {
             let done = done.clone();
             Box::new(move || {
                 if let Some(inner) = weak.upgrade() {
-                    run_job(inner, id, device, token, work, done);
+                    run_job(inner, id, kind, device, token, work, done);
                 }
             })
         };
@@ -570,6 +570,7 @@ type SharedDone = Arc<Mutex<Option<Done>>>;
 fn run_job(
     inner: Arc<Inner>,
     id: u64,
+    kind: OperationKind,
     device: Device,
     token: CancellationToken,
     work: Work,
@@ -596,10 +597,13 @@ fn run_job(
             // jobs.
             let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
             env.gpu_budget = Some(inner.gpu.clone());
-            let mut result = work(&mut env);
+            let mut result = token.check().and_then(|()| work(&mut env));
             drop(env);
-            // A cancelled job never returns a computed result.
-            if result.is_ok() && token.is_cancelled() {
+            // FileWrite work returns success only after atomic publication. The
+            // writer checks cancellation before publication; a late token
+            // cannot undo that commit. Reads and computations
+            // retain the final check.
+            if kind != OperationKind::FileWrite && result.is_ok() && token.is_cancelled() {
                 result = Err(Error::new(
                     ErrorCode::Cancelled,
                     "The computation was cancelled.",
@@ -639,4 +643,233 @@ fn run_job(
             }
         })
         .expect("failed to spawn an NMath worker thread");
+}
+
+#[path = "io_npz_context.rs"]
+mod io_npz_context;
+
+#[cfg(test)]
+mod publication_tests {
+    use std::{fs, sync::mpsc, time::Duration};
+
+    use super::*;
+
+    fn context() -> Context {
+        Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 4,
+            cpu_memory_budget: 128 << 20,
+            gpu_memory_budget: 0,
+        })
+        .unwrap()
+    }
+
+    fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
+        let (tx, rx) = mpsc::channel();
+        (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn published_file_success_survives_late_cancellation() {
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            let ctx = context();
+            let dir = std::env::temp_dir().join(format!(
+                "nmath-publication-{}-{}",
+                std::process::id(),
+                ctx.id()
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("output.npy");
+            if mode == WriteMode::Overwrite {
+                fs::write(&path, b"original").unwrap();
+            }
+            let output = path.clone();
+            let token = CancellationToken::new();
+            let (done, rx) = completion();
+            ctx.submit(
+                OperationKind::FileWrite,
+                "publication_test",
+                Device::Cpu,
+                token,
+                Box::new(move |env| {
+                    io::write_atomic(&output, b"committed", mode, &env.token)?;
+                    // Deterministically cancel between publication and the
+                    // scheduler's completion check, without
+                    // sleeps or a timing-dependent race.
+                    env.token.cancel();
+                    Ok(JobOutput::Unit)
+                }),
+                done,
+            )
+            .unwrap();
+            assert!(matches!(
+                rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+                Ok(JobOutput::Unit)
+            ));
+            ctx.close();
+            assert_eq!(fs::read(&path).unwrap(), b"committed");
+            assert_eq!(ctx.metrics().total_succeeded, 1);
+            assert_eq!(ctx.metrics().total_cancelled, 0);
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn published_npz_success_survives_late_cancellation() {
+        use crate::io_npz::{self, NpzCompression};
+        for compression in [NpzCompression::Stored, NpzCompression::Deflated] {
+            let ctx = context();
+            let dir = std::env::temp_dir().join(format!(
+                "nmath-npz-publication-{}-{}",
+                std::process::id(),
+                ctx.id()
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("output.npz");
+            fs::write(&path, b"original").unwrap();
+            let output = path.clone();
+            let (done, rx) = completion();
+            ctx.submit(
+                OperationKind::FileWrite,
+                "npz_publication_test",
+                Device::Cpu,
+                CancellationToken::new(),
+                Box::new(move |env| {
+                    io_npz::save_npz(
+                        &output,
+                        &[],
+                        compression,
+                        WriteMode::Overwrite,
+                        &env.budget,
+                        &env.token,
+                    )?;
+                    env.token.cancel();
+                    Ok(JobOutput::Unit)
+                }),
+                done,
+            )
+            .unwrap();
+            assert!(matches!(
+                rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+                Ok(JobOutput::Unit)
+            ));
+            ctx.close();
+            assert!(
+                io_npz::load_npz(&path, &ctx.inner.cpu, &CancellationToken::new())
+                    .unwrap()
+                    .arrays
+                    .is_empty()
+            );
+            assert_eq!(ctx.metrics().total_succeeded, 1);
+            assert_eq!(ctx.metrics().total_cancelled, 0);
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn prepublication_and_queued_cancellation_preserve_output() {
+        let ctx = context();
+        let dir = std::env::temp_dir().join(format!(
+            "nmath-prepublication-{}-{}",
+            std::process::id(),
+            ctx.id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("output.npy");
+        fs::write(&path, b"original").unwrap();
+        let output = path.clone();
+        let (done, rx) = completion();
+        ctx.submit(
+            OperationKind::FileWrite,
+            "prepublication_test",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |env| {
+                env.token.cancel();
+                io::write_atomic(&output, b"replacement", WriteMode::Overwrite, &env.token)?;
+                Ok(JobOutput::Unit)
+            }),
+            done,
+        )
+        .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (done, blocker) = completion();
+        ctx.submit(
+            OperationKind::FileRead,
+            "blocker",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |_| {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(JobOutput::Unit)
+            }),
+            done,
+        )
+        .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let array = ctx.array(vec![1], crate::Buffer::I32(vec![42])).unwrap();
+        let token = CancellationToken::new();
+        let (done, rx) = completion();
+        ctx.save_npy(
+            &array,
+            path.clone(),
+            WriteMode::Overwrite,
+            token.clone(),
+            done,
+        )
+        .unwrap();
+        token.cancel();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        release_tx.send(()).unwrap();
+        blocker
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        ctx.close();
+        assert_eq!(fs::read(path).unwrap(), b"original");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn late_cancellation_still_discards_uncommitted_results() {
+        let ctx = context();
+        let (done, rx) = completion();
+        ctx.submit(
+            OperationKind::FileRead,
+            "cancelled_read",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(|env| {
+                env.token.cancel();
+                Ok(JobOutput::Unit)
+            }),
+            done,
+        )
+        .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        ctx.close();
+        assert_eq!(ctx.metrics().total_cancelled, 1);
+    }
 }
