@@ -10,7 +10,7 @@ import {
   realpathSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import pathApi, { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -29,6 +29,19 @@ const noticeName =
   /(?:^|[/_.-])(licen[cs]es?|copying|copyright|notices?|authors|patents)(?:$|[/_.-])/i;
 const termName = /licen[cs]e|copying|copyright/i;
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+// Classify canonical filesystem paths, then normalize only archive member names.
+export function bundleRelativePath(directory, file, paths = pathApi) {
+  const relative = paths.relative(directory, file);
+  if (
+    !relative ||
+    relative === ".." ||
+    relative.startsWith(`..${paths.sep}`) ||
+    paths.isAbsolute(relative)
+  )
+    return null;
+  return relative.split(paths.sep).join("/");
+}
 
 export function checkDigest(bytes, expected) {
   if (hash(bytes) !== expected)
@@ -355,11 +368,14 @@ export async function prepare(stage, cache, fetchSources = false) {
   const bundleInputs = [];
   for (const input of sorted(Object.keys(bundled.metafile.inputs))) {
     const path = realpathSync(resolve(root, input));
-    const owner = [...npmArchives.keys()].find((dir) =>
-      path.startsWith(`${dir}/`),
+    const owner = [...npmArchives.keys()].find(
+      (dir) => bundleRelativePath(dir, path) !== null,
     );
     if (!owner) {
-      if (!path.startsWith(`${extensionRoot}/src/`))
+      if (
+        bundleRelativePath(realpathSync(join(extensionRoot, "src")), path) ===
+        null
+      )
         throw new Error(`Uninventoried VSIX input: ${input}`);
       bundleInputs.push({
         path: input,
@@ -367,7 +383,7 @@ export async function prepare(stage, cache, fetchSources = false) {
         sha256: hash(readFileSync(path)),
       });
     } else {
-      const relative = path.slice(owner.length + 1);
+      const relative = bundleRelativePath(owner, path);
       const original = execFileSync("tar", [
         "-xOf",
         npmArchives.get(owner),

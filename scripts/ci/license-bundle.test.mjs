@@ -10,10 +10,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import test from "node:test";
 import {
   archiveNotices,
+  bundleRelativePath,
   render,
   verifyBundle,
 } from "../../packages/nmath/scripts/license-bundle.mjs";
@@ -119,4 +120,57 @@ test("synthetic archives: preserve nested notices; refuse absent full terms and 
   writeFileSync(join(source, "LICENSE"), Buffer.from([0xff]));
   pack();
   assert.throws(() => archiveNotices(archive), /encoded data/);
+});
+
+for (const [paths, root] of [
+  [posix, "/work/package"],
+  [win32, "C:\\work\\package"],
+]) {
+  test(`bundle input containment uses ${paths.sep} and portable archive members`, () => {
+    assert.equal(
+      bundleRelativePath(root, paths.join(root, "lib", "index.js"), paths),
+      "lib/index.js",
+    );
+    assert.equal(bundleRelativePath(root, root, paths), null);
+    assert.equal(
+      bundleRelativePath(root, paths.join(root, "..", "outside.js"), paths),
+      null,
+    );
+    assert.equal(
+      bundleRelativePath(root, root + "-other" + paths.sep + "index.js", paths),
+      null,
+    );
+    const src = paths.join(root, "src");
+    assert.equal(
+      bundleRelativePath(src, paths.join(src, "nested", "extension.ts"), paths),
+      "nested/extension.ts",
+    );
+    assert.equal(
+      bundleRelativePath(
+        src,
+        paths.join(root, "src-other", "extension.ts"),
+        paths,
+      ),
+      null,
+    );
+  });
+}
+test("Windows bundle containment rejects a different drive or UNC share", () => {
+  assert.equal(bundleRelativePath("C:/work", "D:/work/file.js", win32), null);
+  assert.equal(
+    bundleRelativePath(
+      "//server/share/pkg",
+      "//server/other/pkg/file.js",
+      win32,
+    ),
+    null,
+  );
+  assert.equal(
+    bundleRelativePath(
+      "//server/share/pkg",
+      "//server/share/pkg/lib/file.js",
+      win32,
+    ),
+    "lib/file.js",
+  );
 });
