@@ -295,6 +295,44 @@ fn context() -> Context {
     })
     .unwrap()
 }
+
+#[test]
+fn context_offset_budget_failure_preserves_destination() {
+    let ctx = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 1,
+        cpu_memory_budget: 6_000,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let input = ctx.array(vec![1024], Buffer::U8(vec![3; 1024])).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("out.npz");
+    fs::write(&path, b"original").unwrap();
+    let before = ctx.metrics().cpu_memory.used;
+    let (callback, rx) = done();
+    ctx.save_npz(
+        vec![("a".into(), input.clone())],
+        path.clone(),
+        NpzCompression::Stored,
+        WriteMode::Overwrite,
+        token(),
+        callback,
+    )
+    .unwrap();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap_err()
+            .code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    assert_eq!(fs::read(&path).unwrap(), b"original");
+    assert_eq!(ctx.metrics().cpu_memory.used, before);
+    drop(input);
+    ctx.close();
+    assert_eq!(ctx.metrics().cpu_memory.used, 0);
+}
 fn done() -> (
     nmath_core::context::Done,
     mpsc::Receiver<nmath_core::Result<JobOutput>>,
