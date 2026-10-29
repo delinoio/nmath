@@ -81,12 +81,82 @@ A dimension typed as `number` is dynamic. The runtime validates it, and the dtyp
 
 ## Entry points
 
-| Import                   | Purpose                                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `@delinoio/nmath`        | Contexts, arrays, expressions, selectors, errors.                                                                    |
-| `@delinoio/nmath/numpy`  | NumPy-style functions (`array`, `zeros`, `ones`, `arange`, `add`, `matmul`, `random.defaultRng`, `save`, `load`, …). |
-| `@delinoio/nmath/pandas` | pandas-style `Series` and `DataFrame` (subset).                                                                      |
-| `@delinoio/nmath/polars` | Polars-style `Series`, `DataFrame`, `col` and `LazyFrame` (subset).                                                  |
+| Import                     | Purpose                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@delinoio/nmath`          | Contexts, arrays, expressions, selectors, errors.                                                                    |
+| `@delinoio/nmath/numpy`    | NumPy-style functions (`array`, `zeros`, `ones`, `arange`, `add`, `matmul`, `random.defaultRng`, `save`, `load`, …). |
+| `@delinoio/nmath/pandas`   | pandas-style `Series` and `DataFrame` (subset).                                                                      |
+| `@delinoio/nmath/polars`   | Polars-style `Series`, `DataFrame`, `col` and `LazyFrame` (subset).                                                  |
+| `@delinoio/nmath/compiler` | Project `check` and `build` APIs for `.nts` files.                                                                   |
+
+## `.nts` compiler
+
+Use `.nts` files when you want arithmetic operators and bracket indexing on NMath values. Ordinary `.ts` files use the functions and methods shown above.
+
+```ts
+// main.nts
+import { createContext } from "@delinoio/nmath";
+
+const ctx = createContext({
+  maxConcurrentJobs: 1,
+  maxQueueLength: 4,
+  cpuMemoryBudget: 1n << 20n,
+  gpuMemoryBudget: 0n,
+});
+
+try {
+  const a = ctx.array([1, 2, 3], { dtype: "float64" });
+  const result = await (a * 2 + 1).compute();
+  console.log(result.toArray()); // [3, 5, 7]
+} finally {
+  await ctx.close();
+}
+```
+
+For a project with `main.nts` next to `tsconfig.json`, use:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "outDir": "out",
+    "types": ["node"],
+    "lib": ["es2024", "esnext.disposable"]
+  },
+  "include": ["*.nts"]
+}
+```
+
+The consuming project must use ESM (`"type": "module"` in `package.json`), resolve `@delinoio/nmath`, and have Node.js type declarations installed. After installing or building the compiler binary, run:
+
+```sh
+nmath-compiler check -p "tsconfig.json"
+nmath-compiler build -p "tsconfig.json"
+node "out/main.js"
+```
+
+The CLI is included in this package. When using a local installation with pnpm, invoke it with `pnpm exec nmath-compiler`. `check` reports diagnostics without emitting files. `build` emits ESM JavaScript, declarations and source maps; type or transform errors leave existing output unchanged. Add `--json` for structured diagnostics. Exit codes are 0 for success, 1 for diagnostics and 2 for usage or configuration errors.
+
+The programmatic API runs the same compiler:
+
+```ts
+import { check, build } from "@delinoio/nmath/compiler";
+
+const checked = await check({ tsconfig: "tsconfig.json" });
+if (checked.ok) {
+  const built = await build({ tsconfig: "tsconfig.json" });
+  console.log(built.outputFiles);
+} else {
+  console.error(checked.diagnostics);
+}
+```
+
+Arithmetic operators `+`, `-`, `*`, `/`, `%`, `**`, unary `+`/`-` and bracket reads lower to lazy NMath operations. Bracket writes require an async function body or module top level. Comparisons, bitwise operators and compound assignments are not NMath operator syntax. Project references and `-b` builds are not supported. Emitted source maps and diagnostics refer to original `.nts` positions.
+
+The NMath VS Code extension associates `.nts` files and starts the compiler language server in trusted workspaces. Set `nmath.compilerPath` to a compiler executable, or let the extension find `node_modules/.bin/nmath-compiler` in the workspace folder and then `nmath-compiler` on `PATH`. Use **NMath: Restart Language Server** after changing the executable. Server output appears in **NMath Language Server**.
 
 ## `.nts` projects and editor support
 
@@ -130,13 +200,12 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 
 ## Build from source
 
-Install Rust (the toolchain in `rust-toolchain`) and pnpm 10, then run:
+In a clone of the repository, install Node.js 24, Rust (the toolchain in `rust-toolchain`) and pnpm 10.26.2. Run from the repository root:
 
 ```sh
-pnpm install
-pnpm --filter @delinoio/nmath build:native
-pnpm --filter @delinoio/nmath build
-pnpm --filter @delinoio/nmath build:compiler
+pnpm install --frozen-lockfile
+pnpm exec turbo run build --filter=@delinoio/nmath
+pnpm exec turbo run build:compiler --filter=@delinoio/nmath
 ```
 
 `build:native` and `build:compiler` write the binaries for your platform to `native/`.
