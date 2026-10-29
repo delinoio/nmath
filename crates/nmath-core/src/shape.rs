@@ -156,10 +156,29 @@ pub fn resolve_slice(
     Ok((start as isize, step as isize, count as usize))
 }
 
+/// The axis of the integer-array or mask selector when NumPy moves its
+/// dimension to the front of the result.
+///
+/// With an array selector present, integer scalars also count as advanced
+/// indexes. When a slice or omitted axis separates the advanced indexes, NumPy
+/// places the advanced dimension first; otherwise it stays in place.
+fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
+    let array_axis = selectors.iter().position(|s| !s.is_basic())?;
+    let advanced: Vec<usize> = selectors
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !matches!(s, Selector::Slice { .. }))
+        .map(|(axis, _)| axis)
+        .collect();
+    let (first, last) = (advanced[0], advanced[advanced.len() - 1]);
+    (last - first + 1 != advanced.len()).then_some(array_axis)
+}
+
 /// Output shape of indexing `shape` with `selectors`. Supports any number of
 /// basic selectors and at most one integer-array or mask selector.
 pub fn index_shape(shape: &[usize], selectors: &[Selector]) -> Result<Vec<usize>> {
     validate_selectors(shape, selectors)?;
+    let separated = separated_advanced_axis(selectors);
     let mut out = Vec::new();
     for (axis, &len) in shape.iter().enumerate() {
         match selectors.get(axis) {
@@ -177,6 +196,10 @@ pub fn index_shape(shape: &[usize], selectors: &[Selector]) -> Result<Vec<usize>
                 out.push(ix.len());
             }
             Some(Selector::Mask(m)) => out.push(m.iter().filter(|&&b| b).count()),
+        }
+        if separated == Some(axis) {
+            let len = out.pop().expect("the advanced selector pushed a dimension");
+            out.insert(0, len);
         }
     }
     Ok(out)
@@ -230,33 +253,36 @@ pub fn index_offsets(
     selectors: &[Selector],
 ) -> Result<Vec<usize>> {
     validate_selectors(shape, selectors)?;
-    // Per axis, the list of source positions it contributes, or None for a
-    // dropped axis.
-    let mut axes: Vec<(Vec<isize>, bool)> = Vec::with_capacity(shape.len());
+    // Per axis, the source positions it contributes; a dropped integer axis
+    // contributes exactly one.
+    let separated = separated_advanced_axis(selectors);
+    let mut axes: Vec<(Vec<isize>, isize)> = Vec::with_capacity(shape.len());
     for (axis, &len) in shape.iter().enumerate() {
-        let positions: (Vec<isize>, bool) = match selectors.get(axis) {
-            None => ((0..len as isize).collect(), true),
-            Some(Selector::Index(i)) => (vec![normalize_index(*i, len, axis)? as isize], false),
+        let positions: Vec<isize> = match selectors.get(axis) {
+            None => (0..len as isize).collect(),
+            Some(Selector::Index(i)) => vec![normalize_index(*i, len, axis)? as isize],
             Some(Selector::Slice { start, stop, step }) => {
                 let (s, st, n) = resolve_slice(*start, *stop, *step, len)?;
-                ((0..n as isize).map(|k| s + k * st).collect(), true)
+                (0..n as isize).map(|k| s + k * st).collect()
             }
-            Some(Selector::Indices(ix)) => (
-                ix.iter()
-                    .map(|&i| normalize_index(i, len, axis).map(|v| v as isize))
-                    .collect::<Result<_>>()?,
-                true,
-            ),
-            Some(Selector::Mask(m)) => (
-                m.iter()
-                    .enumerate()
-                    .filter(|(_, b)| **b)
-                    .map(|(i, _)| i as isize)
-                    .collect(),
-                true,
-            ),
+            Some(Selector::Indices(ix)) => ix
+                .iter()
+                .map(|&i| normalize_index(i, len, axis).map(|v| v as isize))
+                .collect::<Result<_>>()?,
+            Some(Selector::Mask(m)) => m
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| **b)
+                .map(|(i, _)| i as isize)
+                .collect(),
         };
-        axes.push(positions);
+        let entry = (positions, strides[axis]);
+        // Traverse in output order: a separated advanced dimension comes first.
+        if separated == Some(axis) {
+            axes.insert(0, entry);
+        } else {
+            axes.push(entry);
+        }
     }
     let mut out = Vec::new();
     let mut cursor = vec![0usize; axes.len()];
@@ -268,8 +294,7 @@ pub fn index_offsets(
             + axes
                 .iter()
                 .zip(&cursor)
-                .zip(strides)
-                .map(|(((p, _), &c), &s)| p[c] * s)
+                .map(|((p, s), &c)| p[c] * s)
                 .sum::<isize>();
         out.push(offset as usize);
         let mut axis = axes.len();
@@ -353,6 +378,58 @@ mod tests {
         );
         let err = index_offsets(&shape, &strides, 0, &[Selector::Index(3)]).unwrap_err();
         assert_eq!(err.code, ErrorCode::IndexOutOfBounds);
+    }
+
+    #[test]
+    fn separated_advanced_indexes_move_to_the_front() {
+        // NumPy 2.5.4: a = np.arange(24).reshape(2, 3, 4)
+        let shape = [2, 3, 4];
+        let strides = contiguous_strides(&shape);
+        let all = Selector::Slice {
+            start: None,
+            stop: None,
+            step: None,
+        };
+        let check = |sel: Vec<Selector>, want_shape: Vec<usize>, want: Vec<usize>| {
+            assert_eq!(index_shape(&shape, &sel).unwrap(), want_shape);
+            assert_eq!(index_offsets(&shape, &strides, 0, &sel).unwrap(), want);
+        };
+        // a[0, :, [0, 1]] has shape (2, 3): the advanced dimension goes first.
+        check(
+            vec![
+                Selector::Index(0),
+                all.clone(),
+                Selector::Indices(vec![0, 1]),
+            ],
+            vec![2, 3],
+            vec![0, 4, 8, 1, 5, 9],
+        );
+        // a[[1, 0], :, 2] has shape (2, 3).
+        check(
+            vec![
+                Selector::Indices(vec![1, 0]),
+                all.clone(),
+                Selector::Index(2),
+            ],
+            vec![2, 3],
+            vec![14, 18, 22, 2, 6, 10],
+        );
+        // a[:, 1, [0, 3]] keeps adjacent advanced indexes in place: (2, 2).
+        check(
+            vec![
+                all.clone(),
+                Selector::Index(1),
+                Selector::Indices(vec![0, 3]),
+            ],
+            vec![2, 2],
+            vec![4, 7, 16, 19],
+        );
+        // a[0, :, 1] has no array selector, so integers stay basic: (3,).
+        check(
+            vec![Selector::Index(0), all, Selector::Index(1)],
+            vec![3],
+            vec![1, 5, 9],
+        );
     }
 
     #[test]
