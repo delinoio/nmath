@@ -185,6 +185,49 @@ fn budgets_contexts_exact_wide_keys_and_empty() {
     other.close();
 }
 #[test]
+fn pandas_group_excludes_nan_without_changing_polars_or_null_groups() {
+    let c = context(8192);
+    let keys = c
+        .array(vec![4], Buffer::F64(vec![2.0, f64::NAN, 1.0, 3.0]))
+        .unwrap();
+    let values = c.array(vec![4], Buffer::I32(vec![4, 20, 3, 100])).unwrap();
+    let mask = c
+        .array(vec![4], Buffer::Bool(vec![true, true, true, false]))
+        .unwrap();
+    let source = || {
+        Plan::Source(vec![
+            Column {
+                values: Expr::input(&keys),
+                valid: Some(Expr::input(&mask)),
+            },
+            Column {
+                values: Expr::input(&values),
+                valid: None,
+            },
+        ])
+    };
+    let run_group = |drop_nulls, flavor| {
+        run(
+            &c,
+            Plan::Group(Box::new(source()), 0, 1, Aggregate::Sum, drop_nulls, flavor),
+        )
+        .unwrap()
+    };
+    let pandas = run_group(true, Flavor::Pandas);
+    assert_eq!(pandas.columns[0].values.buffer, Buffer::F64(vec![2.0, 1.0]));
+    assert_eq!(pandas.columns[1].values.buffer, Buffer::I32(vec![4, 3]));
+    let retained = run_group(false, Flavor::Pandas);
+    assert_eq!(retained.rows, 4);
+    assert_eq!(
+        retained.columns[1].values.buffer,
+        Buffer::I32(vec![4, 20, 3, 100])
+    );
+    let polars = run_group(true, Flavor::Polars);
+    assert_eq!(polars.rows, 3);
+    assert_eq!(polars.columns[1].values.buffer, Buffer::I32(vec![4, 20, 3]));
+    c.close();
+}
+#[test]
 fn running_cancellation_releases_intermediates() {
     let c = context(2_000_000);
     let a = c
@@ -533,7 +576,10 @@ fn hash_index_budget_rejection_is_atomic() {
         valid: all_valid(&env, 100).unwrap(),
     };
     assert_eq!(
-        KeyIndex::new(&column, true, &env).err().unwrap().code,
+        KeyIndex::new(&column, true, false, &env)
+            .err()
+            .unwrap()
+            .code,
         ErrorCode::MemoryBudgetExceeded
     );
     assert_eq!(budget.usage().used, 900);
