@@ -55,10 +55,10 @@ export declare class NativeContext {
    */
   close(): Promise<void>
   metrics(): NativeMetrics
-  readText(path: string, kind: string, names: Array<string>, dtypes: Array<string>, signal?: NativeCancellation | undefined | null): Promise<NativeTextTable>
-  writeText(path: string, kind: string, names: Array<string>, values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
   readColumnar(path: string, fileFormat: string, signal?: NativeCancellation | undefined | null): Promise<NativeColumnarResult>
   writeColumnar(path: string, fileFormat: string, names: Array<string>, values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
+  readText(path: string, kind: string, names: Array<string>, dtypes: Array<string>, signal?: NativeCancellation | undefined | null): Promise<NativeTextTable>
+  writeText(path: string, kind: string, names: Array<string>, values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
 }
 
 export declare class NativeExpr {
