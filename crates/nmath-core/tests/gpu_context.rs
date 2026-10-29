@@ -52,3 +52,70 @@ fn actual_context_gpu_and_separate_budgets() {
         before.gpu_memory.cumulative_reserved
     );
 }
+
+#[test]
+#[ignore = "requires actual supported native GPU hardware"]
+fn actual_context_float32_preserves_underflow_and_executes_power() {
+    let ctx = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 4096,
+        gpu_memory_budget: 4096,
+    })
+    .unwrap();
+    let a = ctx
+        .array(
+            vec![2],
+            Buffer::F32(vec![f32::from_bits(1), f32::MIN_POSITIVE]),
+        )
+        .unwrap();
+    let b = ctx.array(vec![2], Buffer::F32(vec![2.0, 0.5])).unwrap();
+    let e = Expr::binary(BinaryOp::Mul, &Expr::input(&a), &Expr::input(&b)).unwrap();
+    let (tx, rx) = mpsc::channel();
+    ctx.compute(
+        &e,
+        Device::Gpu,
+        CancellationToken::new(),
+        Box::new(move |v| tx.send(v).unwrap()),
+    )
+    .unwrap();
+    let JobOutput::Value(Value::Dense(result)) = rx.recv().unwrap().unwrap() else {
+        panic!()
+    };
+    let Buffer::F32(words) = &result.buffer else {
+        panic!()
+    };
+    assert_eq!(
+        words.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        [2, 0x00400000]
+    );
+    assert_eq!(ctx.metrics().gpu_memory.used, 0);
+    assert_eq!(ctx.metrics().cpu_memory.used, 24);
+    drop(result);
+    assert_eq!(ctx.metrics().cpu_memory.used, 16);
+    let power = Expr::binary(BinaryOp::Pow, &Expr::input(&a), &Expr::input(&b)).unwrap();
+    let before = ctx.metrics();
+    let (tx, rx) = mpsc::channel();
+    ctx.compute(
+        &power,
+        Device::Gpu,
+        CancellationToken::new(),
+        Box::new(move |v| tx.send(v).unwrap()),
+    )
+    .unwrap();
+    let JobOutput::Value(Value::Dense(result)) = rx.recv().unwrap().unwrap() else {
+        panic!()
+    };
+    let Buffer::F32(words) = &result.buffer else {
+        panic!()
+    };
+    assert_eq!(
+        words.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        [0, 0x20000000]
+    );
+    assert_eq!(ctx.metrics().gpu_memory.used, 0);
+    assert!(ctx.metrics().gpu_memory.cumulative_reserved > before.gpu_memory.cumulative_reserved);
+    assert_eq!(ctx.metrics().cpu_memory.used, 24);
+    drop(result);
+    assert_eq!(ctx.metrics().cpu_memory.used, 16);
+}

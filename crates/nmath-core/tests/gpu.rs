@@ -328,3 +328,259 @@ fn native_integer_matmul_and_broadcast() {
         Buffer::I32(vec![1200])
     );
 }
+
+#[path = "gpu/float32_edges.rs"]
+mod float32_edges;
+
+fn assert_float_words(actual: Buffer, expected: &[u32], label: &str) {
+    let Buffer::F32(actual) = actual else {
+        panic!("Expected float32")
+    };
+    assert_eq!(actual.len(), expected.len());
+    for (i, (actual, &expected)) in actual.iter().zip(expected).enumerate() {
+        if f32::from_bits(expected).is_nan() {
+            assert!(actual.is_nan(), "{label} at {i}: {actual:?}");
+        } else {
+            assert_eq!(actual.to_bits(), expected, "{label} at {i}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_exact_edge_oracles() {
+    let cases = float32_edges::CASES;
+    let a = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[0])).collect()),
+    );
+    let b = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[1])).collect()),
+    );
+    for (column, op) in [
+        BinaryOp::Add,
+        BinaryOp::Sub,
+        BinaryOp::Mul,
+        BinaryOp::Div,
+        BinaryOp::Mod,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let result = execute(&Expr::binary(op, &a, &b).unwrap()).unwrap();
+        assert_float_words(
+            result.buffer,
+            &cases.iter().map(|r| r[column + 2]).collect::<Vec<_>>(),
+            &format!("{op:?}"),
+        );
+    }
+    for op in [UnaryOp::Pos, UnaryOp::Neg] {
+        let result = execute(&Expr::unary(op, &a).unwrap()).unwrap();
+        // Unary operations are bit operations, including NaN payloads.
+        let Buffer::F32(actual) = result.buffer else {
+            panic!()
+        };
+        for (v, row) in actual.iter().zip(cases) {
+            assert_eq!(
+                v.to_bits(),
+                row[0] ^ if op == UnaryOp::Neg { 0x80000000 } else { 0 }
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_subnormal_reductions_and_matmul() {
+    let a = input(vec![2, 600], Buffer::F32(vec![f32::from_bits(1); 1200]));
+    for (op, bits) in [
+        (ReduceOp::Sum, 600),
+        (ReduceOp::Mean, 1),
+        (ReduceOp::Min, 1),
+        (ReduceOp::Max, 1),
+    ] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, Some(vec![1])).unwrap())
+                .unwrap()
+                .buffer,
+            &[bits, bits],
+            &format!("{op:?}"),
+        );
+    }
+    let b = input(vec![600], Buffer::F32(vec![2.0; 600]));
+    assert_float_words(
+        execute(&Expr::matmul(&a, &b).unwrap()).unwrap().buffer,
+        &[1200, 1200],
+        "subnormal dot",
+    );
+    let a = input(
+        vec![2, 2],
+        Buffer::F32(vec![
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+        ]),
+    );
+    let b = input(vec![2, 2], Buffer::F32(vec![0.5, 0.0, 0.0, 0.5]));
+    assert_float_words(
+        execute(&Expr::matmul(&a, &b).unwrap()).unwrap().buffer,
+        &[0x00400000, 0x80400000, 0x00400000, 0x80400000],
+        "normal input underflow",
+    );
+    let a = input(
+        vec![4],
+        Buffer::F32(vec![
+            f32::from_bits(1),
+            f32::from_bits(0x80000001),
+            0.0,
+            -0.0,
+        ]),
+    );
+    for (op, bits) in [(ReduceOp::Min, 0x80000001), (ReduceOp::Max, 1)] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, None).unwrap())
+                .unwrap()
+                .buffer,
+            &[bits],
+            "subnormal order",
+        );
+    }
+}
+
+#[test]
+fn float32_power_validates_before_execution() {
+    let a = input(vec![1], Buffer::F32(vec![2.0]));
+    let power = Expr::binary(BinaryOp::Pow, &a, &a).unwrap();
+    gpu::validate(&power).unwrap();
+    gpu::validate(&Expr::unary(UnaryOp::Neg, &power).unwrap()).unwrap();
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_reduction_special_oracles() {
+    // NumPy 2.5.4, float32, axis=1. In particular min/max distinguish
+    // opposite signed zeros independently of their order in these rows.
+    let a = input(
+        vec![6, 2],
+        Buffer::F32(vec![
+            f32::NAN,
+            1.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            -0.0,
+            0.0,
+            0.0,
+            -0.0,
+            f32::from_bits(1),
+            f32::from_bits(0x80000001),
+            f32::MAX,
+            f32::MAX,
+        ]),
+    );
+    for (op, expected) in [
+        (ReduceOp::Sum, [0x7fc00000, 0x7fc00000, 0, 0, 0, 0x7f800000]),
+        (
+            ReduceOp::Mean,
+            [0x7fc00000, 0x7fc00000, 0, 0, 0, 0x7f800000],
+        ),
+        (
+            ReduceOp::Min,
+            [
+                0x7fc00000, 0xff800000, 0x80000000, 0x80000000, 0x80000001, 0x7f7fffff,
+            ],
+        ),
+        (ReduceOp::Max, [0x7fc00000, 0x7f800000, 0, 0, 1, 0x7f7fffff]),
+    ] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, Some(vec![1])).unwrap())
+                .unwrap()
+                .buffer,
+            &expected,
+            &format!("{op:?}"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_power_numpy_differential() {
+    power_differential(PowerOracle::Numpy);
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_power_rounded_reference() {
+    power_differential(PowerOracle::Rounded);
+}
+
+enum PowerOracle {
+    Numpy,
+    Rounded,
+}
+
+fn power_differential(oracle: PowerOracle) {
+    // NumPy 2.5.4, generated by gpu/generate_power.py. Compare exact words;
+    // no general power tolerance has been approved by the owning contract.
+    assert_eq!(include_bytes!("gpu/power.bin").len() % 12, 0);
+    assert_eq!(include_bytes!("gpu/power_rounded.bin").len() % 4, 0);
+    let cases: Vec<[u32; 3]> = include_bytes!("gpu/power.bin")
+        .chunks_exact(12)
+        .map(|row| {
+            std::array::from_fn(|i| u32::from_le_bytes(row[i * 4..i * 4 + 4].try_into().unwrap()))
+        })
+        .collect();
+    let a = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[0])).collect()),
+    );
+    let b = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[1])).collect()),
+    );
+    let actual = execute(&Expr::binary(BinaryOp::Pow, &a, &b).unwrap()).unwrap();
+    let Buffer::F32(values) = actual.buffer else {
+        panic!()
+    };
+    assert_eq!(values.len(), cases.len());
+    let mut mismatches = 0;
+    let mut max_ulp = 0;
+    let reference: Vec<u32> = include_bytes!("gpu/power_rounded.bin")
+        .chunks_exact(4)
+        .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+        .collect();
+    let label = match oracle {
+        PowerOracle::Rounded => "Decimal 100/160 digits and exact rational ties",
+        PowerOracle::Numpy => "NumPy 2.5.4",
+    };
+    assert_eq!(reference.len(), cases.len());
+    for (i, (&value, row)) in values.iter().zip(&cases).enumerate() {
+        let expected_word = match oracle {
+            PowerOracle::Rounded => reference[i],
+            PowerOracle::Numpy => row[2],
+        };
+        let expected = f32::from_bits(expected_word);
+        if (expected.is_nan() && value.is_nan()) || value.to_bits() == expected_word {
+            continue;
+        }
+        let ulp = value.to_bits().abs_diff(expected_word);
+        max_ulp = max_ulp.max(ulp);
+        if mismatches < 100 {
+            eprintln!(
+                "power case {i}: {:08x} ** {:08x}: actual {:08x}, {label} {:08x}, word distance \
+                 {ulp}",
+                row[0],
+                row[1],
+                value.to_bits(),
+                expected_word
+            );
+        }
+        mismatches += 1;
+    }
+    eprintln!(
+        "{label} power: {} cases, {mismatches} exact mismatches, maximum word distance {max_ulp}",
+        cases.len()
+    );
+    assert_eq!(mismatches, 0, "No general power tolerance is approved");
+}
