@@ -88,9 +88,9 @@ pub fn convert(tick: i64, from: TimeUnit, to: TimeUnit, datetime: bool) -> Resul
         month_from_days(ratio(value, from.scale(), day.scale())? as i128)
     };
     if to.calendar() {
-        return Ok(months
-            .div_euclid(to.step as i128 * if to.base == TimeBase::Year { 12 } else { 1 })
-            as i64);
+        let tick =
+            months.div_euclid(to.step as i128 * if to.base == TimeBase::Year { 12 } else { 1 });
+        return checked_tick(i64::try_from(tick).ok());
     }
     ratio(
         days_from_month(months),
@@ -162,6 +162,29 @@ mod tests {
         for s in ["0s", "-1s", "2147483648s", "nsx", ""] {
             assert!(TimeUnit::parse(s).is_err());
         }
+    }
+    #[test]
+    fn calendar_conversion_checks_tick_bounds_and_nat_collisions() {
+        for (from, to) in [("2Y", "Y"), ("2M", "M")] {
+            for tick in [i64::MAX, i64::MAX / 2 + 1, i64::MIN + 1, i64::MIN / 2] {
+                let error = convert(tick, unit(from), unit(to), true).unwrap_err();
+                assert_eq!(error.code, crate::ErrorCode::DTypeUnsupported);
+            }
+            assert_eq!(
+                convert(i64::MAX / 2, unit(from), unit(to), true).unwrap(),
+                i64::MAX - 1
+            );
+            assert_eq!(
+                convert(i64::MIN / 2 + 1, unit(from), unit(to), true).unwrap(),
+                i64::MIN + 2
+            );
+            assert_eq!(convert(NAT, unit(from), unit(to), true).unwrap(), NAT);
+            assert_eq!(convert(-1, unit(to), unit(from), true).unwrap(), -1);
+        }
+        assert_eq!(
+            convert(i64::MAX, unit("M"), unit("Y"), true).unwrap(),
+            i64::MAX / 12
+        );
     }
     #[test]
     fn metadata_and_unicode_storage_follow_view_lifetime_and_budget() {
