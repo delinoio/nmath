@@ -1,14 +1,7 @@
-//! `nmath-compiler lsp`: a minimal Language Server Protocol server over stdio
-//! for `.nts` files.
-//!
-//! Workaround: tsrs at the pinned commit does not run content mappers in its
-//! language server (its "phase 2"), so this server runs the NMath transform
-//! directly instead of hosting the tsrs language server. It reports transform
-//! diagnostics (syntax and async-assignment errors), completes the NMath
-//! indexing helpers and resolves definitions of declarations in the same
-//! document by name. It does not report type errors; `nmath-compiler check`
-//! does. Remove this workaround when tsrs ships language-server content-mapper
-//! support at a pinned commit.
+//! Generic LSP over stdio, backed by the pinned tsrs semantic language service.
+
+mod semantic;
+mod snapshot;
 
 use std::{
     collections::HashMap,
@@ -20,26 +13,6 @@ use serde_json::{Value, json};
 use crate::framing::{
     RpcErrorCode, error_response, notification, read_message, response, write_message,
 };
-
-/// NMath names offered by completion.
-const COMPLETIONS: [(&str, &str); 4] = [
-    (
-        "slice",
-        "slice(start?, stop?, step?): select a strided range along one axis",
-    ),
-    (
-        "indices",
-        "indices(list): select explicit positions along one axis",
-    ),
-    (
-        "mask",
-        "mask(booleans): select positions where a boolean array is true",
-    ),
-    (
-        "compute",
-        "expr.compute(options?): run a lazy expression and await its result",
-    ),
-];
 
 /// LSP methods this server handles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,6 +49,7 @@ impl Method {
 struct Server {
     documents: HashMap<String, String>,
     shutdown_requested: bool,
+    versions: HashMap<String, i64>,
 }
 
 /// Serves until `exit` or the end of input. Returns the process exit code (0
@@ -132,7 +106,8 @@ impl Server {
                 json!({
                     "capabilities": {
                         "textDocumentSync": 1,
-                        "completionProvider": { "triggerCharacters": [] },
+                        "positionEncoding": "utf-16",
+                        "completionProvider": { "triggerCharacters": ["."] },
                         "definitionProvider": true,
                     },
                     "serverInfo": { "name": "nmath-compiler", "version": env!("CARGO_PKG_VERSION") },
@@ -150,8 +125,19 @@ impl Server {
                 ) else {
                     return Vec::new();
                 };
+                if tsrs_lsproto::DocumentUri(uri.clone()).check().is_err() {
+                    return Vec::new();
+                }
+                let version = params
+                    .pointer("/textDocument/version")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                if self.versions.get(&uri).is_some_and(|old| version <= *old) {
+                    return Vec::new();
+                }
+                self.versions.insert(uri.clone(), version);
                 self.documents.insert(uri.clone(), text.to_string());
-                vec![self.publish_diagnostics(&uri)]
+                self.publish_all()
             }
             Method::DidChange => {
                 // Full document sync: the last change carries the whole text.
@@ -164,35 +150,68 @@ impl Server {
                 let (Some(uri), Some(text)) = (uri, text) else {
                     return Vec::new();
                 };
+                if tsrs_lsproto::DocumentUri(uri.clone()).check().is_err() {
+                    return Vec::new();
+                }
+                let version = params
+                    .pointer("/textDocument/version")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                if self.versions.get(&uri).is_some_and(|old| version <= *old) {
+                    return Vec::new();
+                }
+                self.versions.insert(uri.clone(), version);
                 self.documents.insert(uri.clone(), text.to_string());
-                vec![self.publish_diagnostics(&uri)]
+                self.publish_all()
             }
             Method::DidClose => {
                 let Some(uri) = uri else {
                     return Vec::new();
                 };
                 self.documents.remove(&uri);
-                vec![notification(
+                self.versions.remove(&uri);
+                let mut messages = vec![notification(
                     "textDocument/publishDiagnostics",
                     json!({ "uri": uri, "diagnostics": [] }),
-                )]
+                )];
+                messages.extend(self.publish_all());
+                messages
             }
-            Method::Completion => {
-                let items: Vec<Value> = COMPLETIONS
-                    .iter()
-                    .map(|(label, detail)| json!({ "label": label, "kind": 3, "detail": detail }))
-                    .collect();
-                reply(id, json!({ "isIncomplete": false, "items": items }))
-            }
-            Method::Definition => {
-                let result = uri
-                    .as_deref()
-                    .and_then(|uri| Some((uri, self.documents.get(uri)?)))
-                    .and_then(|(uri, text)| definition(uri, text, params.get("position")?))
-                    .unwrap_or(Value::Null);
-                reply(id, result)
+            Method::Completion | Method::Definition => {
+                let Some(uri) = uri else {
+                    return reply(id, Value::Null);
+                };
+                let position = tsrs_lsproto::Position {
+                    line: params
+                        .pointer("/position/line")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as u32,
+                    character: params
+                        .pointer("/position/character")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as u32,
+                };
+                let query = if method == Method::Completion {
+                    semantic::Query::Completion(position)
+                } else {
+                    semantic::Query::Definition(position)
+                };
+                match semantic::query(&self.documents, &uri, query) {
+                    Ok(result) => reply(id, result),
+                    Err(message) => id
+                        .map(|id| vec![error_response(id, RpcErrorCode::InvalidRequest, &message)])
+                        .unwrap_or_default(),
+                }
             }
         }
+    }
+
+    fn publish_all(&self) -> Vec<Value> {
+        let mut uris: Vec<_> = self.documents.keys().collect();
+        uris.sort();
+        uris.into_iter()
+            .map(|uri| self.publish_diagnostics(uri))
+            .collect()
     }
 
     fn publish_diagnostics(&self, uri: &str) -> Value {
@@ -202,9 +221,10 @@ impl Server {
             .map(String::as_str)
             .unwrap_or_default();
         let output = nmath_nts::transform(uri, text);
-        let diagnostics: Vec<Value> = output
+        let mut diagnostics: Vec<Value> = output
             .diagnostics
             .iter()
+            .filter(|_| nmath_nts::is_nts_file(&tsrs_lsproto::DocumentUri(uri.into()).file_name()))
             .map(|d| {
                 json!({
                     "range": range(text, d.start, d.start + d.length),
@@ -215,9 +235,29 @@ impl Server {
                 })
             })
             .collect();
+        match semantic::query(&self.documents, uri, semantic::Query::Diagnostics) {
+            Ok(report) => {
+                if let Some(items) = report.get("items").and_then(Value::as_array) {
+                    diagnostics.extend(
+                        items
+                            .iter()
+                            .filter(|d| {
+                                // Keep the transform diagnostics above, with
+                                // stable NMath codes and recovery guidance.
+                                d.get("source").and_then(Value::as_str) != Some("nmath")
+                            })
+                            .cloned(),
+                    );
+                }
+            }
+            Err(message) => diagnostics.push(json!({
+                "range": range(text, 0, 0), "severity": 1,
+                "code": "NMATH_COMPILER_CONFIG", "source": "nmath", "message": message,
+            })),
+        }
         notification(
             "textDocument/publishDiagnostics",
-            json!({ "uri": uri, "diagnostics": diagnostics }),
+            json!({ "uri": uri, "version": self.versions.get(uri), "diagnostics": diagnostics }),
         )
     }
 }
@@ -234,45 +274,4 @@ fn position(text: &str, offset: u32) -> Value {
 
 fn range(text: &str, start: u32, end: u32) -> Value {
     json!({ "start": position(text, start), "end": position(text, end) })
-}
-
-fn is_identifier_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
-}
-
-/// Best-effort go-to-definition: the identifier under the cursor resolves to a
-/// `function`, `class`, `const`, `let` or `var` declaration of the same name in
-/// the same document.
-fn definition(uri: &str, text: &str, position_param: &Value) -> Option<Value> {
-    let line = position_param.get("line")?.as_u64()? as u32;
-    let character = position_param.get("character")?.as_u64()? as u32;
-    let offset = nmath_nts::offset_of_line_character(text, line, character) as usize;
-    let bytes = text.as_bytes();
-    let mut start = offset.min(bytes.len());
-    while start > 0 && is_identifier_byte(bytes[start - 1]) {
-        start -= 1;
-    }
-    let mut end = offset.min(bytes.len());
-    while end < bytes.len() && is_identifier_byte(bytes[end]) {
-        end += 1;
-    }
-    let name = text.get(start..end).filter(|name| !name.is_empty())?;
-    for keyword in ["function", "class", "const", "let", "var"] {
-        let pattern = format!("{keyword} {name}");
-        let mut from = 0;
-        while let Some(found) = text[from..].find(&pattern) {
-            let at = from + found;
-            let name_start = at + keyword.len() + 1;
-            let name_end = name_start + name.len();
-            let boundary_before = at == 0 || !is_identifier_byte(bytes[at - 1]);
-            let boundary_after = name_end >= bytes.len() || !is_identifier_byte(bytes[name_end]);
-            if boundary_before && boundary_after {
-                return Some(
-                    json!({ "uri": uri, "range": range(text, name_start as u32, name_end as u32) }),
-                );
-            }
-            from = at + pattern.len();
-        }
-    }
-    None
 }

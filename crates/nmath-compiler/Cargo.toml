@@ -25,3 +25,7 @@ tsrs_ipc.workspace = true
 tsrs_spanmap.workspace = true
 tsrs_vfs.workspace = true
 tsrs_sourcemap = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_compiler = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_ls = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_lsproto = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_tsoptions = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
