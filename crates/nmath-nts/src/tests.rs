@@ -89,6 +89,8 @@ fn rewrites_element_reads() {
         "x = __nmath.get(a, [slice(1), indices([0, 2])]);"
     );
     assert_eq!(lower("x = a[mask(m)];"), "x = __nmath.get(a, mask(m));");
+    assert_eq!(lower("x = (a[i]);"), "x = (__nmath.get(a, i));");
+    assert_eq!(lower("x = f((a[i]));"), "x = f((__nmath.get(a, i)));");
     assert_eq!(
         lower("x = a[i][j];"),
         "x = __nmath.get(__nmath.get(a, i), j);"
@@ -192,6 +194,12 @@ fn preserves_ordinary_javascript() {
         "x = a?.b[i];",
         "a[i](x);",
         "delete a[i];",
+        "(a[i])(x);",
+        "(a[i]!)(x);",
+        "((a[i] as F))(x);",
+        "(a[i])`t`;",
+        "delete (a[i]);",
+        "delete ((a[i]));",
         "[a[0], a[1]] = pair;",
         "for (a[i] of xs) {}",
         "class C extends B { m() { return super[k]; } }",

@@ -378,14 +378,31 @@ fn is_rewritable_element_access(node: P<Node>) -> bool {
 /// Whether an element access is used as a reference rather than read as a
 /// value: an assignment target (plain, compound, `++`/`--`, destructuring,
 /// `for-in`/`for-of`), a `delete` operand, or a call or tagged-template callee
-/// (rewriting a callee would drop its `this` binding).
+/// (rewriting a callee would drop its `this` binding). Parentheses and
+/// type-only wrappers (`!`, `as`, `satisfies`, `<T>`) preserve the reference,
+/// so `(a[i])()` and `delete (a[i])` are reference positions too.
 fn is_reference_position(node: P<Node>) -> bool {
     if tsrs_ast::is_assignment_target(node) {
         return true;
     }
-    let Some(parent) = node.parent() else {
+    let mut node = node;
+    let Some(mut parent) = node.parent() else {
         return false;
     };
+    while matches!(
+        parent.kind(),
+        Kind::ParenthesizedExpression
+            | Kind::NonNullExpression
+            | Kind::AsExpression
+            | Kind::SatisfiesExpression
+            | Kind::TypeAssertionExpression
+    ) {
+        node = parent;
+        let Some(next) = parent.parent() else {
+            return false;
+        };
+        parent = next;
+    }
     match parent.kind() {
         Kind::DeleteExpression => true,
         Kind::CallExpression => parent.as_call_expression().expression == node,
