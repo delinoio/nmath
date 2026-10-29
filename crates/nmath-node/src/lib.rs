@@ -479,6 +479,26 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn transpose(input: &NativeExpr, axes: Option<Vec<i64>>) -> Result<Self> {
+        Ok(Self {
+            inner: Expr::transpose(&input.inner, axes.as_deref()).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn reshape(input: &NativeExpr, shape: Vec<i64>, copy: Option<bool>) -> Result<Self> {
+        use nmath_core::layout::CopyPolicy;
+        let copy = match copy {
+            None => CopyPolicy::IfNeeded,
+            Some(true) => CopyPolicy::Always,
+            Some(false) => CopyPolicy::Never,
+        };
+        Ok(Self {
+            inner: Expr::reshape(&input.inner, &shape, copy).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn matmul(lhs: &NativeExpr, rhs: &NativeExpr) -> Result<Self> {
         Ok(Self {
             inner: Expr::matmul(&lhs.inner, &rhs.inner).map_err(to_napi)?,

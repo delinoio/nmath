@@ -5,6 +5,7 @@
 
 import {
   type ArrayOptions,
+  type ReshapeOptions,
   Expr,
   Lazy,
   type NMathArray,
@@ -30,6 +31,34 @@ import type {
 } from "./types.js";
 
 export { indices, mask, slice } from "./core.js";
+import type {
+  ReshapeShape,
+  ReshapeCheck,
+  TransposeShape,
+  TransposeCheck,
+} from "./layout-types.js";
+
+export function reshape<
+  D extends ComputableDType,
+  S extends Shape,
+  const R extends Shape,
+>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  shape: R & ReshapeCheck<S, R>,
+  options: ReshapeOptions = {},
+): Expr<D, ReshapeShape<S, R>> {
+  return input.reshape<R>(shape, options);
+}
+export function transpose<
+  D extends ComputableDType,
+  S extends Shape,
+  const A extends Shape | undefined = undefined,
+>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axes?: A & TransposeCheck<S, A>,
+): Expr<D, TransposeShape<S, A>> {
+  return input.transpose<A>(axes);
+}
 
 type Nested<T> = T | readonly Nested<T>[];
 

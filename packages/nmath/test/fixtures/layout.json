@@ -1,0 +1,9874 @@
+{
+  "numpy": "2.5.4",
+  "criterion": "exact-values-and-sharing",
+  "environment": {
+    "python": "3.13.7",
+    "system": "Darwin",
+    "machine": "arm64",
+    "byteorder": "little"
+  },
+  "cases": [
+    {
+      "id": "bool/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "bool/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "bool/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "bool/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          true,
+          false,
+          false,
+          true
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          false,
+          true,
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "bool/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "bool/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "bool",
+        "values": [
+          false
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "bool",
+        "values": [
+          false
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          2,
+          1,
+          -1,
+          -2,
+          3,
+          -2,
+          3,
+          2,
+          0,
+          -1,
+          -3,
+          -1,
+          -3,
+          3,
+          1,
+          0,
+          -2,
+          0,
+          -2,
+          -3,
+          2,
+          1,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          1,
+          -2,
+          2,
+          -1,
+          3,
+          -2,
+          2,
+          -1,
+          3,
+          0,
+          -3,
+          -1,
+          3,
+          0,
+          -3,
+          1,
+          -2,
+          0,
+          -3,
+          1,
+          -2,
+          2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int8/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int8/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int8/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -1,
+          1,
+          3,
+          -2,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          1,
+          0,
+          -1,
+          -2,
+          -3,
+          3,
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int8",
+        "values": [
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int8/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "int8/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "int8",
+        "values": [
+          -3
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "int8",
+        "values": [
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          5,
+          4,
+          2,
+          1,
+          6,
+          1,
+          6,
+          5,
+          3,
+          2,
+          0,
+          2,
+          0,
+          6,
+          4,
+          3,
+          1,
+          3,
+          1,
+          0,
+          5,
+          4,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          1,
+          5,
+          2,
+          6,
+          3,
+          0,
+          2,
+          6,
+          3,
+          0,
+          4,
+          1,
+          3,
+          0,
+          4,
+          1,
+          5,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint8/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint8/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint8/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          2,
+          4,
+          6,
+          1,
+          3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          4,
+          3,
+          2,
+          1,
+          0,
+          6,
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint8",
+        "values": [
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint8/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "uint8/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "uint8",
+        "values": [
+          0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "uint8",
+        "values": [
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          2,
+          1,
+          -1,
+          -2,
+          3,
+          -2,
+          3,
+          2,
+          0,
+          -1,
+          -3,
+          -1,
+          -3,
+          3,
+          1,
+          0,
+          -2,
+          0,
+          -2,
+          -3,
+          2,
+          1,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          1,
+          -2,
+          2,
+          -1,
+          3,
+          -2,
+          2,
+          -1,
+          3,
+          0,
+          -3,
+          -1,
+          3,
+          0,
+          -3,
+          1,
+          -2,
+          0,
+          -3,
+          1,
+          -2,
+          2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int16/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int16/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int16/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -1,
+          1,
+          3,
+          -2,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          1,
+          0,
+          -1,
+          -2,
+          -3,
+          3,
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int16",
+        "values": [
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int16/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "int16/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "int16",
+        "values": [
+          -3
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "int16",
+        "values": [
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          5,
+          4,
+          2,
+          1,
+          6,
+          1,
+          6,
+          5,
+          3,
+          2,
+          0,
+          2,
+          0,
+          6,
+          4,
+          3,
+          1,
+          3,
+          1,
+          0,
+          5,
+          4,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          1,
+          5,
+          2,
+          6,
+          3,
+          0,
+          2,
+          6,
+          3,
+          0,
+          4,
+          1,
+          3,
+          0,
+          4,
+          1,
+          5,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint16/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint16/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint16/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          2,
+          4,
+          6,
+          1,
+          3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          4,
+          3,
+          2,
+          1,
+          0,
+          6,
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint16",
+        "values": [
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint16/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "uint16/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "uint16",
+        "values": [
+          0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "uint16",
+        "values": [
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          2,
+          1,
+          -1,
+          -2,
+          3,
+          -2,
+          3,
+          2,
+          0,
+          -1,
+          -3,
+          -1,
+          -3,
+          3,
+          1,
+          0,
+          -2,
+          0,
+          -2,
+          -3,
+          2,
+          1,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          1,
+          -2,
+          2,
+          -1,
+          3,
+          -2,
+          2,
+          -1,
+          3,
+          0,
+          -3,
+          -1,
+          3,
+          0,
+          -3,
+          1,
+          -2,
+          0,
+          -3,
+          1,
+          -2,
+          2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int32/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int32/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          0,
+          -2,
+          1,
+          -1,
+          2
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int32/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -1,
+          1,
+          3,
+          -2,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          1,
+          0,
+          -1,
+          -2,
+          -3,
+          3,
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int32",
+        "values": [
+          2,
+          1,
+          0,
+          -1,
+          -2,
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int32/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "int32/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "int32",
+        "values": [
+          -3
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "int32",
+        "values": [
+          -3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          5,
+          4,
+          2,
+          1,
+          6,
+          1,
+          6,
+          5,
+          3,
+          2,
+          0,
+          2,
+          0,
+          6,
+          4,
+          3,
+          1,
+          3,
+          1,
+          0,
+          5,
+          4,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          4,
+          1,
+          5,
+          2,
+          6,
+          1,
+          5,
+          2,
+          6,
+          3,
+          0,
+          2,
+          6,
+          3,
+          0,
+          4,
+          1,
+          3,
+          0,
+          4,
+          1,
+          5,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint32/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint32/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          3,
+          1,
+          4,
+          2,
+          5
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint32/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          2,
+          4,
+          6,
+          1,
+          3
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          4,
+          3,
+          2,
+          1,
+          0,
+          6,
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint32",
+        "values": [
+          5,
+          4,
+          3,
+          2,
+          1,
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint32/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "uint32/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "uint32",
+        "values": [
+          0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "uint32",
+        "values": [
+          0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "2",
+          "1",
+          "-1",
+          "-2",
+          "3",
+          "-2",
+          "3",
+          "2",
+          "0",
+          "-1",
+          "-3",
+          "-1",
+          "-3",
+          "3",
+          "1",
+          "0",
+          "-2",
+          "0",
+          "-2",
+          "-3",
+          "2",
+          "1",
+          "-1"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "1",
+          "-2",
+          "2",
+          "-1",
+          "3",
+          "-2",
+          "2",
+          "-1",
+          "3",
+          "0",
+          "-3",
+          "-1",
+          "3",
+          "0",
+          "-3",
+          "1",
+          "-2",
+          "0",
+          "-3",
+          "1",
+          "-2",
+          "2",
+          "-1"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int64/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "0",
+          "-2",
+          "1",
+          "-1",
+          "2"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int64/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "0",
+          "-2",
+          "1",
+          "-1",
+          "2"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "int64/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-1",
+          "1",
+          "3",
+          "-2",
+          "0"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "1",
+          "0",
+          "-1",
+          "-2",
+          "-3",
+          "3",
+          "2",
+          "1",
+          "0",
+          "-1",
+          "-2",
+          "-3"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int64",
+        "values": [
+          "2",
+          "1",
+          "0",
+          "-1",
+          "-2",
+          "-3"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "int64/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "int64/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "int64",
+        "values": [
+          "-3"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "5",
+          "4",
+          "2",
+          "1",
+          "6",
+          "1",
+          "6",
+          "5",
+          "3",
+          "2",
+          "0",
+          "2",
+          "0",
+          "6",
+          "4",
+          "3",
+          "1",
+          "3",
+          "1",
+          "0",
+          "5",
+          "4",
+          "2"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "4",
+          "1",
+          "5",
+          "2",
+          "6",
+          "1",
+          "5",
+          "2",
+          "6",
+          "3",
+          "0",
+          "2",
+          "6",
+          "3",
+          "0",
+          "4",
+          "1",
+          "3",
+          "0",
+          "4",
+          "1",
+          "5",
+          "2"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint64/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "3",
+          "1",
+          "4",
+          "2",
+          "5"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint64/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "3",
+          "1",
+          "4",
+          "2",
+          "5"
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "uint64/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "2",
+          "4",
+          "6",
+          "1",
+          "3"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "4",
+          "3",
+          "2",
+          "1",
+          "0",
+          "6",
+          "5",
+          "4",
+          "3",
+          "2",
+          "1",
+          "0"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint64",
+        "values": [
+          "5",
+          "4",
+          "3",
+          "2",
+          "1",
+          "0"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "uint64/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "uint64/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "uint64",
+        "values": [
+          "0"
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0"
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          2.0,
+          1.0,
+          -1.0,
+          -2.0,
+          3.0,
+          -2.0,
+          3.0,
+          2.0,
+          0.0,
+          -1.0,
+          -3.0,
+          -1.0,
+          -3.0,
+          3.0,
+          1.0,
+          0.0,
+          -2.0,
+          0.0,
+          -2.0,
+          -3.0,
+          2.0,
+          1.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float16/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float16/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float16/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -1.0,
+          1.0,
+          3.0,
+          -2.0,
+          0.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0,
+          3.0,
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float16",
+        "values": [
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float16/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "float16/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "float16",
+        "values": [
+          -3.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          2.0,
+          1.0,
+          -1.0,
+          -2.0,
+          3.0,
+          -2.0,
+          3.0,
+          2.0,
+          0.0,
+          -1.0,
+          -3.0,
+          -1.0,
+          -3.0,
+          3.0,
+          1.0,
+          0.0,
+          -2.0,
+          0.0,
+          -2.0,
+          -3.0,
+          2.0,
+          1.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float32/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float32/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float32/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -1.0,
+          1.0,
+          3.0,
+          -2.0,
+          0.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0,
+          3.0,
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float32",
+        "values": [
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float32/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "float32/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "float32",
+        "values": [
+          -3.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          2.0,
+          1.0,
+          -1.0,
+          -2.0,
+          3.0,
+          -2.0,
+          3.0,
+          2.0,
+          0.0,
+          -1.0,
+          -3.0,
+          -1.0,
+          -3.0,
+          3.0,
+          1.0,
+          0.0,
+          -2.0,
+          0.0,
+          -2.0,
+          -3.0,
+          2.0,
+          1.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          -2.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float64/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float64/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "float64/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -1.0,
+          1.0,
+          3.0,
+          -2.0,
+          0.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0,
+          3.0,
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float64",
+        "values": [
+          2.0,
+          1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "float64/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "float64/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "float64",
+        "values": [
+          -3.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          2.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          0.0,
+          -2.0,
+          1.0,
+          3.0,
+          1.0,
+          -2.0,
+          0.0,
+          3.0,
+          0.0,
+          2.0,
+          1.0,
+          0.0,
+          1.0,
+          -1.0,
+          -1.0,
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -3.0,
+          1.0,
+          3.0,
+          -1.0,
+          1.0,
+          -1.0,
+          0.0,
+          0.0,
+          -2.0,
+          0.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -1.0,
+          -3.0,
+          0.0,
+          2.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          1.0,
+          0.0,
+          -2.0,
+          1.0,
+          2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          3.0,
+          1.0,
+          -2.0,
+          0.0,
+          2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          3.0,
+          0.0,
+          0.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          3.0,
+          -1.0,
+          0.0,
+          0.0,
+          -3.0,
+          1.0,
+          1.0,
+          -1.0,
+          -2.0,
+          0.0,
+          0.0,
+          -1.0,
+          -3.0,
+          0.0,
+          1.0,
+          1.0,
+          -2.0,
+          -1.0,
+          2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex64/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          0.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex64/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          0.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex64/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          0.0,
+          3.0,
+          -1.0,
+          -2.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          -2.0,
+          1.0,
+          -3.0,
+          0.0,
+          3.0,
+          -1.0,
+          2.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex64",
+        "values": [
+          2.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex64/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "complex64/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/transpose-default",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          2.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          0.0,
+          -2.0,
+          1.0,
+          3.0,
+          1.0,
+          -2.0,
+          0.0,
+          3.0,
+          0.0,
+          2.0,
+          1.0,
+          0.0,
+          1.0,
+          -1.0,
+          -1.0,
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -3.0,
+          1.0,
+          3.0,
+          -1.0,
+          1.0,
+          -1.0,
+          0.0,
+          0.0,
+          -2.0,
+          0.0,
+          0.0,
+          -1.0,
+          -2.0,
+          -1.0,
+          -3.0,
+          0.0,
+          2.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/transpose-negative",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            -1,
+            0,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          4,
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          1.0,
+          0.0,
+          -2.0,
+          1.0,
+          2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          3.0,
+          1.0,
+          -2.0,
+          0.0,
+          2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          3.0,
+          0.0,
+          0.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          3.0,
+          -1.0,
+          0.0,
+          0.0,
+          -3.0,
+          1.0,
+          1.0,
+          -1.0,
+          -2.0,
+          0.0,
+          0.0,
+          -1.0,
+          -3.0,
+          0.0,
+          1.0,
+          1.0,
+          -2.0,
+          -1.0,
+          2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/reshape-inferred",
+      "input": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            6,
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/reshape-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex128/transpose-copy",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            2
+          ],
+          "copy": true
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          0.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex128/transpose-flat",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose"
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            -1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          0.0,
+          -1.0,
+          -2.0,
+          0.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": false
+    },
+    {
+      "id": "complex128/regular-step",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              2
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            2,
+            3
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          0.0,
+          3.0,
+          -1.0,
+          -2.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/reverse",
+      "input": {
+        "shape": [
+          12
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            3,
+            -1
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          -2.0,
+          1.0,
+          -3.0,
+          0.0,
+          3.0,
+          -1.0,
+          2.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/reverse-matrix",
+      "input": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "slice",
+          "selectors": [
+            [
+              null,
+              null,
+              -1
+            ],
+            [
+              null,
+              null,
+              -1
+            ]
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex128",
+        "values": [
+          2.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -2.0,
+          0.0,
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/singleton",
+      "input": {
+        "shape": [
+          2,
+          1,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": [
+            1,
+            0,
+            2
+          ]
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            6
+          ],
+          "copy": false
+        }
+      ],
+      "expected": {
+        "shape": [
+          6
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "sharesMemory": true
+    },
+    {
+      "id": "complex128/empty",
+      "input": {
+        "shape": [
+          0,
+          3
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "operations": [
+        {
+          "kind": "reshape",
+          "shape": [
+            -1,
+            2
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          0,
+          2
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "sharesMemory": null
+    },
+    {
+      "id": "complex128/scalar",
+      "input": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0
+        ]
+      },
+      "operations": [
+        {
+          "kind": "transpose",
+          "axes": []
+        },
+        {
+          "kind": "reshape",
+          "shape": [
+            1,
+            1
+          ]
+        }
+      ],
+      "expected": {
+        "shape": [
+          1,
+          1
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0
+        ]
+      },
+      "sharesMemory": true
+    }
+  ]
+}

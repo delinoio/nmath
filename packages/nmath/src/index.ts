@@ -43,6 +43,7 @@ export type {
   DTypeMetadata,
   NMathValue,
   ArrayOptions,
+  ReshapeOptions,
   BinaryOperator,
   ComputeOptions,
   ComputeResult,
@@ -126,3 +127,10 @@ function binary(op: BinaryOperator, a: Operand, b: Operand): Expr<any, any> {
     "At least one operand must be an NMath array or expression.",
   );
 }
+
+export type {
+  ReshapeShape,
+  ReshapeCheck,
+  TransposeShape,
+  TransposeCheck,
+} from "./layout-types.js";
