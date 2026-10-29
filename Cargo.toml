@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/nmath-core", "crates/nmath-node"]
+members = ["crates/nmath-core", "crates/nmath-node", "crates/nmath-nts"]
 
 [workspace.package]
 version = "0.0.0"
@@ -12,3 +12,9 @@ publish = false
 [workspace.dependencies]
 nmath-core = { path = "crates/nmath-core" }
 tracing = "0.1"
+# tsrs is pinned to one commit; see docs/crates-nmath-compiler-contract.md before changing it.
+tsrs_ast = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_core = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_parser = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_scanner = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_spanmap = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
