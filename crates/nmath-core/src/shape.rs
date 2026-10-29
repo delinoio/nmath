@@ -26,6 +26,43 @@ pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
     Ok(out)
 }
 
+/// NumPy matrix product shape: broadcast leading axes and remove only the
+/// axes introduced to promote vector operands. Scalars are never accepted.
+pub fn matmul_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
+    let Some(&k) = a.last() else {
+        return Err(matmul_scalar_error());
+    };
+    let k2 = match b {
+        [] => return Err(matmul_scalar_error()),
+        [k] => *k,
+        _ => b[b.len() - 2],
+    };
+    if k != k2 {
+        return Err(Error::new(
+            ErrorCode::ShapeMismatch,
+            "matmul core dimensions do not match. Use operands with equal contraction dimensions.",
+        ));
+    }
+    let mut shape = broadcast_shapes(
+        &a[..a.len().saturating_sub(2)],
+        &b[..b.len().saturating_sub(2)],
+    )?;
+    if a.len() > 1 {
+        shape.push(a[a.len() - 2]);
+    }
+    if b.len() > 1 {
+        shape.push(b[b.len() - 1]);
+    }
+    Ok(shape)
+}
+
+fn matmul_scalar_error() -> Error {
+    Error::new(
+        ErrorCode::ShapeMismatch,
+        "matmul does not accept scalar operands. Use arrays with rank at least one.",
+    )
+}
+
 fn dim_from_end(shape: &[usize], from_end: usize) -> usize {
     if from_end < shape.len() {
         shape[shape.len() - 1 - from_end]

@@ -1015,7 +1015,7 @@ pub fn reduce(
     DenseArray::new(out_shape, buffer, reservation)
 }
 
-/// `matmul` for 1-D and 2-D operands, following NumPy's 1-D promotion rules.
+/// Matrix products with broadcast leading axes and NumPy vector promotion.
 pub fn matmul(
     lhs: &DenseArray,
     rhs: &DenseArray,
@@ -1029,95 +1029,155 @@ pub fn matmul(
     {
         return Err(crate::dtype::unsupported());
     }
-    let (n, k, out_shape_rows) = match lhs.shape.as_slice() {
-        [k] => (1, *k, false),
-        [n, k] => (*n, *k, true),
-        other => return Err(matmul_rank_error(other)),
+    let out_shape = crate::shape::matmul_shape(&lhs.shape, &rhs.shape)?;
+    // Check zero axes first: an empty result needs no matrix offsets, even
+    // when multiplication of its other dimensions would overflow.
+    let count = if out_shape.contains(&0) {
+        0
+    } else {
+        out_shape.iter().try_fold(1usize, |n, &d| {
+            n.checked_mul(d).ok_or_else(crate::numerical::overflow)
+        })?
     };
-    let (k2, m, out_shape_cols) = match rhs.shape.as_slice() {
-        [k] => (*k, 1, false),
-        [k, m] => (*k, *m, true),
-        other => return Err(matmul_rank_error(other)),
-    };
-    if k != k2 {
-        return Err(Error::new(
-            ErrorCode::ShapeMismatch,
-            format!(
-                "matmul: the core dimension of shape {:?} ({k}) does not match shape {:?} ({k2}).",
-                lhs.shape, rhs.shape
-            ),
-        ));
-    }
-    let mut out_shape = Vec::new();
-    if out_shape_rows {
-        out_shape.push(n);
-    }
-    if out_shape_cols {
-        out_shape.push(m);
-    }
-    let reservation = reserve_for(budget, dtype, n * m)?;
+    let reservation = reserve_for(budget, dtype, count)?;
     token.check()?;
+    if count == 0 {
+        return DenseArray::new(
+            out_shape,
+            Buffer::filled(dtype, 0, crate::Scalar::Int(0))?,
+            reservation,
+        );
+    }
+    let k = *lhs.shape.last().unwrap();
+    let n = if lhs.shape.len() > 1 {
+        lhs.shape[lhs.shape.len() - 2]
+    } else {
+        1
+    };
+    let m = if rhs.shape.len() > 1 {
+        *rhs.shape.last().unwrap()
+    } else {
+        1
+    };
+    // A nonempty result guarantees n*m fits, but an empty contraction can
+    // still have huge logical operand dimensions. Check before indexing.
+    let matrix_len = n.checked_mul(m).ok_or_else(crate::numerical::overflow)?;
+    let batch = &out_shape
+        [..out_shape.len() - usize::from(lhs.shape.len() > 1) - usize::from(rhs.shape.len() > 1)];
+    let left_batch = &lhs.shape[..lhs.shape.len().saturating_sub(2)];
+    let right_batch = &rhs.shape[..rhs.shape.len().saturating_sub(2)];
     let (a, _a_reservation) = cast_operand(&lhs.buffer, dtype, budget, token)?;
     let (b, _b_reservation) = cast_operand(&rhs.buffer, dtype, budget, token)?;
-    fn mm<T: Num + Default>(
-        a: &[T],
-        b: &[T],
-        n: usize,
-        k: usize,
-        m: usize,
-        token: &CancellationToken,
-    ) -> Result<Vec<T>> {
-        let mut out = vec![T::default(); n * m];
-        for i in 0..n {
+
+    // Walk broadcast batch coordinates without expanded operands, offset
+    // vectors, or per-batch result allocations. All output is reserved once.
+    let fill = |run: &mut dyn FnMut(usize, usize, usize) -> Result<()>| -> Result<()> {
+        for i in 0..count / matrix_len {
             token.check()?;
-            for p in 0..k {
-                let x = a[i * k + p];
-                for j in 0..m {
-                    if (p * m + j) % CHUNK == 0 {
-                        token.check()?;
-                    }
-                    out[i * m + j] = T::add(out[i * m + j], T::mul(x, b[p * m + j]));
-                }
-            }
+            let ao = matmul_batch_offset(i, left_batch, batch) * n * k;
+            let bo = matmul_batch_offset(i, right_batch, batch) * k * m;
+            run(ao, bo, i * matrix_len)?;
         }
-        Ok(out)
+        Ok(())
+    };
+    macro_rules! numeric {
+        ($x:expr, $y:expr, $t:ty) => {{
+            let mut out = vec![<$t>::default(); count];
+            fill(&mut |ao, bo, start| {
+                let out = &mut out[start..start + matrix_len];
+                for i in 0..n {
+                    token.check()?;
+                    for p in 0..k {
+                        let x = $x[ao + i * k + p];
+                        for j in 0..m {
+                            if (p * m + j) % CHUNK == 0 {
+                                token.check()?;
+                            }
+                            out[i * m + j] = <$t as Num>::add(
+                                out[i * m + j],
+                                <$t as Num>::mul(x, $y[bo + p * m + j]),
+                            );
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+            out.into()
+        }};
     }
     let buffer = match (a.as_ref(), b.as_ref()) {
-        (Buffer::Bool(x), Buffer::Bool(y)) => boolean_matmul(x, y, n, k, m, token, || {})?.into(),
-        (Buffer::I8(x), Buffer::I8(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::I16(x), Buffer::I16(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::I32(x), Buffer::I32(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::I64(x), Buffer::I64(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::U8(x), Buffer::U8(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::U16(x), Buffer::U16(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::U32(x), Buffer::U32(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::U64(x), Buffer::U64(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::Bool(x), Buffer::Bool(y)) => {
+            let mut out = vec![false; count];
+            fill(&mut |ao, bo, start| {
+                boolean_matmul_into(
+                    &x[ao..ao + n * k],
+                    &y[bo..bo + k * m],
+                    &mut out[start..start + matrix_len],
+                    n,
+                    k,
+                    m,
+                    token,
+                    || {},
+                )
+            })?;
+            Buffer::Bool(out)
+        }
+        (Buffer::I8(x), Buffer::I8(y)) => numeric!(x, y, i8),
+        (Buffer::I16(x), Buffer::I16(y)) => numeric!(x, y, i16),
+        (Buffer::I32(x), Buffer::I32(y)) => numeric!(x, y, i32),
+        (Buffer::I64(x), Buffer::I64(y)) => numeric!(x, y, i64),
+        (Buffer::U8(x), Buffer::U8(y)) => numeric!(x, y, u8),
+        (Buffer::U16(x), Buffer::U16(y)) => numeric!(x, y, u16),
+        (Buffer::U32(x), Buffer::U32(y)) => numeric!(x, y, u32),
+        (Buffer::U64(x), Buffer::U64(y)) => numeric!(x, y, u64),
         (Buffer::F16(x), Buffer::F16(y)) => {
-            let mut out = vec![Float16::ZERO; n * m];
-            for i in 0..n {
-                for j in 0..m {
-                    token.check()?;
-                    let mut total = 0.0f32;
-                    for p in 0..k {
-                        if p % CHUNK == 0 {
-                            token.check()?;
+            let mut out = vec![Float16::ZERO; count];
+            fill(&mut |ao, bo, start| {
+                for i in 0..n {
+                    for j in 0..m {
+                        token.check()?;
+                        let mut total = 0.0f32;
+                        for p in 0..k {
+                            if p % CHUNK == 0 {
+                                token.check()?;
+                            }
+                            total += x[ao + i * k + p].to_f32() * y[bo + p * m + j].to_f32();
                         }
-                        total += x[i * k + p].to_f32() * y[p * m + j].to_f32();
+                        out[start + i * m + j] = Float16::from_f32(total);
                     }
-                    out[i * m + j] = Float16::from_f32(total);
                 }
-            }
+                Ok(())
+            })?;
             Buffer::F16(out)
         }
-        (Buffer::F32(x), Buffer::F32(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::F64(x), Buffer::F64(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::C64(x), Buffer::C64(y)) => mm(x, y, n, k, m, token)?.into(),
-        (Buffer::C128(x), Buffer::C128(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::F32(x), Buffer::F32(y)) => numeric!(x, y, f32),
+        (Buffer::F64(x), Buffer::F64(y)) => numeric!(x, y, f64),
+        (Buffer::C64(x), Buffer::C64(y)) => numeric!(x, y, [f32; 2]),
+        (Buffer::C128(x), Buffer::C128(y)) => numeric!(x, y, [f64; 2]),
         _ => unreachable!(),
     };
     DenseArray::new(out_shape, buffer, reservation)
 }
 
+/// Map a linear output batch index to an operand's broadcast batch index.
+/// The output is nonempty, so every divisor is positive.
+fn matmul_batch_offset(mut index: usize, source: &[usize], output: &[usize]) -> usize {
+    let mut offset = 0;
+    let mut stride = 1;
+    for axis in (0..output.len()).rev() {
+        let coordinate = index % output[axis];
+        index /= output[axis];
+        if let Some(i) = axis.checked_sub(output.len() - source.len()) {
+            if source[i] != 1 {
+                offset += coordinate * stride;
+            }
+            stride *= source[i];
+        }
+    }
+    offset
+}
+
+#[cfg(test)]
 fn boolean_matmul(
     a: &[bool],
     b: &[bool],
@@ -1125,9 +1185,24 @@ fn boolean_matmul(
     k: usize,
     m: usize,
     token: &CancellationToken,
-    mut visit_product: impl FnMut(),
+    visit_product: impl FnMut(),
 ) -> Result<Vec<bool>> {
     let mut out = vec![false; n * m];
+    boolean_matmul_into(a, b, &mut out, n, k, m, token, visit_product)?;
+    Ok(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn boolean_matmul_into(
+    a: &[bool],
+    b: &[bool],
+    out: &mut [bool],
+    n: usize,
+    k: usize,
+    m: usize,
+    token: &CancellationToken,
+    mut visit_product: impl FnMut(),
+) -> Result<()> {
     for i in 0..n {
         for j in 0..m {
             token.check()?;
@@ -1143,15 +1218,7 @@ fn boolean_matmul(
             }
         }
     }
-    Ok(out)
-}
-
-fn matmul_rank_error(shape: &[usize]) -> Error {
-    // Gap: NumPy also supports stacked (batched) matmul for rank > 2.
-    Error::new(
-        ErrorCode::ShapeMismatch,
-        format!("matmul in this build supports 1-D and 2-D operands; got shape {shape:?}."),
-    )
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1626,6 +1693,122 @@ mod tests {
         let ints = dense(vec![0, 2], Buffer::I32(vec![]));
         let r = reduce(ReduceOp::Max, &ints, Some(&[-1]), &b, &t).unwrap();
         assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::I32(vec![])));
+    }
+
+    #[test]
+    fn batched_matmul_broadcasts_without_materializing_repeated_operands() {
+        let a = dense(vec![2, 1, 2, 2], Buffer::I32((1..=8).collect()));
+        let b = dense(vec![3, 2, 1], Buffer::I32(vec![1, 2, 3, 4, 5, 6]));
+        // Exactly the output bytes fit. Any expanded operand or per-batch
+        // temporary would exceed this budget.
+        let budget = MemoryBudget::new(Device::Cpu, 48);
+        let out = matmul(&a, &b, DType::Int32, &budget, &CancellationToken::new()).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 2, 1]);
+        assert_eq!(
+            out.buffer,
+            Buffer::I32(vec![5, 11, 11, 25, 17, 39, 17, 23, 39, 53, 61, 83])
+        );
+        assert_eq!(budget.usage().peak, 48);
+        drop(out);
+        assert_eq!(budget.usage().used, 0);
+        let tight = MemoryBudget::new(Device::Cpu, 47);
+        assert_eq!(
+            matmul(&a, &b, DType::Int32, &tight, &CancellationToken::new())
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+    }
+
+    #[test]
+    fn batched_matmul_vectors_booleans_half_and_complex() {
+        let (budget, token) = env();
+        let a = dense(vec![2, 2, 2], Buffer::I32((1..=8).collect()));
+        let v = dense(vec![2], Buffer::I32(vec![1, 2]));
+        let out = matmul(&a, &v, DType::Int32, &budget, &token).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+        assert_eq!(out.buffer, Buffer::I32(vec![5, 11, 17, 23]));
+        let out = matmul(&v, &a, DType::Int32, &budget, &token).unwrap();
+        assert_eq!(out.shape, vec![2, 2]);
+        assert_eq!(out.buffer, Buffer::I32(vec![7, 10, 19, 22]));
+        let a = dense(vec![2, 1, 2], Buffer::Bool(vec![true, false, false, true]));
+        let b = dense(vec![2], Buffer::Bool(vec![false, true]));
+        assert_eq!(
+            matmul(&a, &b, DType::Bool, &budget, &token).unwrap().buffer,
+            Buffer::Bool(vec![false, true])
+        );
+        let a = dense(
+            vec![2, 1, 3],
+            Buffer::F16(vec![
+                Float16::MAX,
+                Float16::ONE,
+                -Float16::MAX,
+                Float16::ONE,
+                Float16::ONE,
+                Float16::ONE,
+            ]),
+        );
+        let b = dense(vec![3], Buffer::F16(vec![Float16::ONE; 3]));
+        assert_eq!(
+            matmul(&a, &b, DType::Float16, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::F16(vec![Float16::ONE, Float16::from_f32(3.0)])
+        );
+        let a = dense(vec![2, 1, 1], Buffer::C128(vec![[1.0, 2.0], [3.0, -1.0]]));
+        let b = dense(vec![1], Buffer::C128(vec![[2.0, 1.0]]));
+        assert_eq!(
+            matmul(&a, &b, DType::Complex128, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::C128(vec![[0.0, 5.0], [7.0, 1.0]])
+        );
+    }
+
+    #[test]
+    fn batched_matmul_empty_axes_errors_and_cancellation() {
+        let (budget, token) = env();
+        let a = dense(vec![2, 3, 0], Buffer::I32(vec![]));
+        let b = dense(vec![1, 0, 4], Buffer::I32(vec![]));
+        let out = matmul(&a, &b, DType::Int32, &budget, &token).unwrap();
+        assert_eq!(out.shape, vec![2, 3, 4]);
+        assert_eq!(out.buffer, Buffer::I32(vec![0; 24]));
+        let a = dense(vec![0, 3, 2], Buffer::I32(vec![]));
+        let b = dense(vec![1, 2, 4], Buffer::I32(vec![1; 8]));
+        assert_eq!(
+            matmul(&a, &b, DType::Int32, &budget, &token).unwrap().shape,
+            vec![0, 3, 4]
+        );
+        for (a, b, code) in [
+            (vec![], vec![1], ErrorCode::ShapeMismatch),
+            (vec![1], vec![], ErrorCode::ShapeMismatch),
+            (vec![2, 3, 4], vec![2, 5, 6], ErrorCode::ShapeMismatch),
+            (vec![2, 3, 4], vec![3, 4, 6], ErrorCode::ShapeBroadcast),
+        ] {
+            assert_eq!(crate::shape::matmul_shape(&a, &b).unwrap_err().code, code);
+        }
+        let overflow_left = dense(vec![usize::MAX, 0], Buffer::I32(vec![]));
+        let overflow_right = dense(vec![0, 2], Buffer::I32(vec![]));
+        assert_eq!(
+            matmul(
+                &overflow_left,
+                &overflow_right,
+                DType::Int32,
+                &budget,
+                &token
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        token.cancel();
+        assert_eq!(
+            matmul(&a, &b, DType::Int32, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
     }
 
     #[test]

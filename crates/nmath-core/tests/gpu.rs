@@ -584,3 +584,52 @@ fn power_differential(oracle: PowerOracle) {
     );
     assert_eq!(mismatches, 0, "No general power tolerance is approved");
 }
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_batched_matmul_broadcasts_and_promotes_vectors() {
+    // Exact small-integer products exercise address calculation independently
+    // of floating-point tolerance decisions.
+    for dtype in [DType::Int32, DType::UInt32, DType::Float32] {
+        for (a_shape, a, b_shape, b, shape, expected) in [
+            (
+                vec![2, 1, 2, 2],
+                vec![1, 2, 3, 4, 5, 6, 7, 8],
+                vec![3, 2, 1],
+                vec![1, 2, 3, 4, 5, 6],
+                vec![2, 3, 2, 1],
+                vec![5, 11, 11, 25, 17, 39, 17, 23, 39, 53, 61, 83],
+            ),
+            (
+                vec![2],
+                vec![1, 2],
+                vec![2, 2, 2],
+                vec![1, 2, 3, 4, 5, 6, 7, 8],
+                vec![2, 2],
+                vec![7, 10, 19, 22],
+            ),
+            (
+                vec![2, 2, 2],
+                vec![1, 2, 3, 4, 5, 6, 7, 8],
+                vec![2],
+                vec![1, 2],
+                vec![2, 2],
+                vec![5, 11, 17, 23],
+            ),
+            (
+                vec![2, 3, 0],
+                vec![],
+                vec![1, 0, 4],
+                vec![],
+                vec![2, 3, 4],
+                vec![0; 24],
+            ),
+        ] {
+            let a = input(a_shape, Buffer::I32(a).cast(dtype).unwrap());
+            let b = input(b_shape, Buffer::I32(b).cast(dtype).unwrap());
+            let out = execute(&Expr::matmul(&a, &b).unwrap()).unwrap();
+            assert_eq!(out.shape, shape);
+            assert_eq!(out.buffer, Buffer::I32(expected).cast(dtype).unwrap());
+        }
+    }
+}
