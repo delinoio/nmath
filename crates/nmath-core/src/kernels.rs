@@ -205,7 +205,84 @@ macro_rules! float_num {
         }
     )*};
 }
-float_num!(f32, f64);
+float_num!(f64);
+
+impl Num for f32 {
+    fn nan(self) -> bool {
+        self.is_nan()
+    }
+
+    fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+        fn sum(values: &[f32], token: &CancellationToken) -> Result<f32> {
+            token.check()?;
+            let n = values.len();
+            if n < 8 {
+                return Ok(values.iter().fold(-0.0_f32, |total, &value| total + value));
+            }
+            if n <= 128 {
+                // Match NumPy 2.5.4's eight-lane real pairwise block order.
+                let mut lanes: [f32; 8] = values[..8].try_into().unwrap();
+                let end = n - n % 8;
+                for block in values[8..end].chunks_exact(8) {
+                    for lane in 0..8 {
+                        lanes[lane] += block[lane];
+                    }
+                }
+                let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+                for &value in &values[end..] {
+                    total += value;
+                }
+                return Ok(total);
+            }
+            let mid = (n / 2) / 8 * 8;
+            Ok(sum(&values[..mid], token)? + sum(&values[mid..], token)?)
+        }
+        Ok(Some(sum(values, token)?))
+    }
+
+    fn mean(self, count: usize) -> Self {
+        self / count as f32
+    }
+
+    fn add(a: Self, b: Self) -> Self {
+        a + b
+    }
+
+    fn sub(a: Self, b: Self) -> Self {
+        a - b
+    }
+
+    fn mul(a: Self, b: Self) -> Self {
+        a * b
+    }
+
+    fn div(a: Self, b: Self) -> Self {
+        a / b
+    }
+
+    fn rem(a: Self, b: Self) -> Self {
+        if b == 0.0 {
+            return f32::NAN;
+        }
+        let r = a % b;
+        if r != 0.0 && ((r < 0.0) != (b < 0.0)) {
+            r + b
+        } else if r == 0.0 {
+            0.0_f32.copysign(b)
+        } else {
+            r
+        }
+    }
+
+    fn pow(a: Self, b: Self) -> Result<Self> {
+        Ok(a.powf(b))
+    }
+
+    fn neg(a: Self) -> Self {
+        -a
+    }
+}
 
 // NumPy's half loops compute in binary32 and round each element to binary16.
 impl Num for Float16 {
@@ -493,7 +570,19 @@ fn reserve_for(
     dtype: DType,
     len: usize,
 ) -> Result<crate::memory::Reservation> {
-    budget.reserve((len * dtype.item_size()) as u64)
+    budget.reserve(checked_reduction_bytes(len, dtype.item_size())?)
+}
+
+fn checked_reduction_bytes(len: usize, item_size: usize) -> Result<u64> {
+    len.checked_mul(item_size)
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .filter(|&bytes| bytes <= isize::MAX as u64)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "Reduction allocation size exceeds the supported vector capacity.",
+            )
+        })
 }
 
 /// Casts an operand to `dtype`. A matching buffer is borrowed; a converted
@@ -612,9 +701,16 @@ pub fn unary(
 }
 
 /// Normalizes reduction axes; `None` reduces every axis.
-pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+fn reduce_axes_with_check(
+    rank: usize,
+    axes: Option<&[i64]>,
+    mut check: impl FnMut() -> Result<()>,
+) -> Result<Vec<bool>> {
     let mut reduced = vec![axes.is_none(); rank];
-    for &axis in axes.unwrap_or(&[]) {
+    for (position, &axis) in axes.unwrap_or(&[]).iter().enumerate() {
+        if position % CHUNK == 0 {
+            check()?;
+        }
         let a = if axis < 0 { axis + rank as i64 } else { axis };
         if a < 0 || a >= rank as i64 {
             return Err(Error::new(
@@ -630,16 +726,30 @@ pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
         }
         reduced[a as usize] = true;
     }
+    check()?;
     Ok(reduced)
 }
 
+pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || Ok(()))
+}
+
+fn reduce_axes_cancellable(
+    rank: usize,
+    axes: Option<&[i64]>,
+    token: &CancellationToken,
+) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || token.check())
+}
+
 pub fn reduce_shape(shape: &[usize], reduced: &[bool]) -> Vec<usize> {
-    shape
-        .iter()
-        .zip(reduced)
-        .filter(|(_, r)| !**r)
-        .map(|(d, _)| *d)
-        .collect()
+    let mut result = Vec::with_capacity(reduced.iter().filter(|&&r| !r).count());
+    for (&dimension, &is_reduced) in shape.iter().zip(reduced) {
+        if !is_reduced {
+            result.push(dimension);
+        }
+    }
+    result
 }
 
 pub fn reduce(
@@ -649,13 +759,10 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
-    let reduced = reduce_axes(input.shape.len(), axes)?;
-    let out_shape = reduce_shape(&input.shape, &reduced);
-    let out_len: usize = out_shape.iter().product();
-    let in_dtype = input.dtype();
-    let dtype = op.result_dtype(in_dtype);
-    // Only an empty reduced dimension lacks an identity; empty kept dimensions
-    // simply produce an empty result.
+    let rank = input.shape.len();
+    let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
+    // An empty reduced dimension has no min/max identity, regardless of the
+    // available budget.
     let empty_reduction = input
         .shape
         .iter()
@@ -670,7 +777,35 @@ pub fn reduce(
             ),
         ));
     }
-    let reservation = reserve_for(budget, dtype, out_len)?;
+    // Reduced flags and the four rank-sized vectors in BroadcastPairs and
+    // its stride input all remain live until the reduction buffer is built.
+    let metadata_bytes = checked_reduction_bytes(rank, 1 + 4 * std::mem::size_of::<usize>())?;
+    let _metadata_reservation = budget.reserve(metadata_bytes)?;
+    let kept = reduced.iter().filter(|&&is_reduced| !is_reduced).count();
+    let shape_bytes = checked_reduction_bytes(kept, std::mem::size_of::<usize>())?;
+    let out_len: usize = input
+        .shape
+        .iter()
+        .zip(&reduced)
+        .filter(|(_, is_reduced)| !**is_reduced)
+        .map(|(dimension, _)| *dimension)
+        .try_fold(1usize, |product, dimension| product.checked_mul(dimension))
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "Reduction result size overflows.",
+            )
+        })?;
+    let data_bytes = checked_reduction_bytes(out_len, op.result_dtype(input.dtype()).item_size())?;
+    let reservation = budget.reserve(data_bytes.checked_add(shape_bytes).ok_or_else(|| {
+        Error::new(
+            ErrorCode::MemoryBudgetExceeded,
+            "Reduction result size overflows.",
+        )
+    })?)?;
+    let out_shape = reduce_shape(&input.shape, &reduced);
+    let in_dtype = input.dtype();
+    let dtype = op.result_dtype(in_dtype);
     // Map each input element to its output slot.
     let mut out_strides = vec![0isize; input.shape.len()];
     let mut acc = 1isize;
@@ -877,7 +1012,7 @@ pub fn matmul(
         Ok(out)
     }
     let buffer = match (a.as_ref(), b.as_ref()) {
-        (Buffer::Bool(x), Buffer::Bool(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::Bool(x), Buffer::Bool(y)) => boolean_matmul(x, y, n, k, m, token, || {})?.into(),
         (Buffer::I8(x), Buffer::I8(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I16(x), Buffer::I16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I32(x), Buffer::I32(y)) => mm(x, y, n, k, m, token)?.into(),
@@ -912,6 +1047,34 @@ pub fn matmul(
     DenseArray::new(out_shape, buffer, reservation)
 }
 
+fn boolean_matmul(
+    a: &[bool],
+    b: &[bool],
+    n: usize,
+    k: usize,
+    m: usize,
+    token: &CancellationToken,
+    mut visit_product: impl FnMut(),
+) -> Result<Vec<bool>> {
+    let mut out = vec![false; n * m];
+    for i in 0..n {
+        for j in 0..m {
+            token.check()?;
+            for p in 0..k {
+                if p % CHUNK == 0 {
+                    token.check()?;
+                }
+                visit_product();
+                if a[i * k + p] && b[p * m + j] {
+                    out[i * m + j] = true;
+                    break;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn matmul_rank_error(shape: &[usize]) -> Error {
     // Gap: NumPy also supports stacked (batched) matmul for rank > 2.
     Error::new(
@@ -940,7 +1103,12 @@ mod tests {
     fn half_mean_scratch_is_charged_and_released() {
         let input = dense(vec![2, 2], Buffer::F16(vec![Float16::from_f32(0.5); 4]));
         let token = CancellationToken::new();
-        let tight = MemoryBudget::new(Device::Cpu, 11);
+        // Rank metadata, retained result shape/data, and two float32 scratch
+        // values.
+        let metadata = (2 * (1 + 4 * std::mem::size_of::<usize>())) as u64;
+        let retained = 4 + std::mem::size_of::<usize>() as u64;
+        let peak = metadata + retained + 8;
+        let tight = MemoryBudget::new(Device::Cpu, peak - 1);
         assert_eq!(
             reduce(ReduceOp::Mean, &input, Some(&[0]), &tight, &token)
                 .unwrap_err()
@@ -948,11 +1116,11 @@ mod tests {
             ErrorCode::MemoryBudgetExceeded
         );
         assert_eq!(tight.usage().used, 0);
-        let fits = MemoryBudget::new(Device::Cpu, 12);
+        let fits = MemoryBudget::new(Device::Cpu, peak);
         let result = reduce(ReduceOp::Mean, &input, Some(&[0]), &fits, &token).unwrap();
         assert_eq!(result.buffer, Buffer::F16(vec![Float16::from_f32(0.5); 2]));
-        assert_eq!(fits.usage().peak, 12);
-        assert_eq!(fits.usage().used, 4);
+        assert_eq!(fits.usage().peak, peak);
+        assert_eq!(fits.usage().used, retained);
         drop(result);
         assert_eq!(fits.usage().used, 0);
         token.cancel();
@@ -983,28 +1151,36 @@ mod tests {
 
     #[test]
     fn reductions_reserve_casts_and_release_scratch() {
+        assert_eq!(
+            checked_reduction_bytes(usize::MAX, std::mem::size_of::<i64>())
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
         let input = dense(vec![2, 2], Buffer::I32(vec![1, 2, 3, 4]));
         let token = CancellationToken::new();
         for op in [ReduceOp::Sum, ReduceOp::Mean] {
-            // Two 64-bit outputs plus four widened inputs: 16 + 32 bytes.
-            let tight = MemoryBudget::new(Device::Cpu, 47);
-            assert_eq!(
-                reduce(op, &input, Some(&[0]), &tight, &token)
-                    .unwrap_err()
-                    .code,
-                ErrorCode::MemoryBudgetExceeded
-            );
-            assert_eq!(tight.usage().used, 0);
-            let fits = MemoryBudget::new(Device::Cpu, 48);
+            // Rank metadata (66), output data and shape (24), and cast (32).
+            for limit in [65, 89, 121] {
+                let tight = MemoryBudget::new(Device::Cpu, limit);
+                assert_eq!(
+                    reduce(op, &input, Some(&[0]), &tight, &token)
+                        .unwrap_err()
+                        .code,
+                    ErrorCode::MemoryBudgetExceeded
+                );
+                assert_eq!(tight.usage().used, 0);
+            }
+            let fits = MemoryBudget::new(Device::Cpu, 122);
             let result = reduce(op, &input, Some(&[0]), &fits, &token).unwrap();
-            assert_eq!(fits.usage().peak, 48);
-            assert_eq!(fits.usage().used, 16);
+            assert_eq!(fits.usage().peak, 122);
+            assert_eq!(fits.usage().used, 24);
             drop(result);
             assert_eq!(fits.usage().used, 0);
         }
         // Min/max borrow the input, with one byte per output for
         // initialization.
-        let tight = MemoryBudget::new(Device::Cpu, 9);
+        let tight = MemoryBudget::new(Device::Cpu, 83);
         assert_eq!(
             reduce(ReduceOp::Min, &input, Some(&[0]), &tight, &token)
                 .unwrap_err()
@@ -1012,18 +1188,28 @@ mod tests {
             ErrorCode::MemoryBudgetExceeded
         );
         assert_eq!(tight.usage().used, 0);
-        let fits = MemoryBudget::new(Device::Cpu, 10);
+        let fits = MemoryBudget::new(Device::Cpu, 84);
         let result = reduce(ReduceOp::Max, &input, Some(&[0]), &fits, &token).unwrap();
-        assert_eq!(fits.usage().peak, 10);
-        assert_eq!(fits.usage().used, 8);
+        assert_eq!(fits.usage().peak, 84);
+        assert_eq!(fits.usage().used, 16);
         drop(result);
         assert_eq!(fits.usage().used, 0);
+
+        let large = dense(vec![100_000], Buffer::I32(vec![1; 100_000]));
+        let tiny = MemoryBudget::new(Device::Cpu, 8);
+        assert_eq!(
+            reduce(ReduceOp::Sum, &large, None, &tiny, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tiny.usage().used, 0);
     }
 
     #[test]
     fn complex_reduction_borrows_without_input_sized_scratch() {
         let input = dense(vec![100_000], Buffer::C64(vec![[1.0, 2.0]; 100_000]));
-        let budget = MemoryBudget::new(Device::Cpu, 8);
+        let budget = MemoryBudget::new(Device::Cpu, 41);
         let result = reduce(
             ReduceOp::Sum,
             &input,
@@ -1033,9 +1219,130 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.buffer, Buffer::C64(vec![[100_000.0, 200_000.0]]));
-        assert_eq!(budget.usage().peak, 8);
+        assert_eq!(budget.usage().peak, 41);
         drop(result);
         assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn float32_pairwise_sum_and_mean_preserve_precision_and_budget() {
+        let values = vec![0.1_f32; 1_000_000];
+        let input = dense(vec![1_000_000], Buffer::F32(values.clone()));
+        let budget = MemoryBudget::new(Device::Cpu, 4);
+        let token = CancellationToken::new();
+        let sum = reduce(ReduceOp::Sum, &input, None, &budget, &token).unwrap();
+        let Buffer::F32(sums) = &sum.buffer else {
+            panic!("Expected float32 sum")
+        };
+        assert_eq!(sums[0], 100_000.007_812_5); // NumPy 2.5.4, float32 sum.
+        assert!((sums[0] - 100_000.0).abs() < 1.0);
+        assert_ne!(sums[0], 100_958.343_75);
+        assert_eq!(budget.usage().peak, 4);
+        drop(sum);
+        let mean = reduce(ReduceOp::Mean, &input, None, &budget, &token).unwrap();
+        let Buffer::F32(means) = &mean.buffer else {
+            panic!("Expected float32 mean")
+        };
+        assert_eq!(means[0], 0.100_000_008_940_696_72); // NumPy 2.5.4, float32 mean.
+        assert!((means[0] - 0.1).abs() < 0.000_001);
+        assert_ne!(means[0], 0.100_958_347_320_556_64);
+        drop(mean);
+        assert_eq!(budget.usage().used, 0);
+
+        let rows = dense(
+            vec![2, 1_000_000],
+            Buffer::F32([values.clone(), values].concat()),
+        );
+        let budget = MemoryBudget::new(Device::Cpu, 8);
+        for op in [ReduceOp::Sum, ReduceOp::Mean] {
+            let result = reduce(op, &rows, Some(&[1]), &budget, &token).unwrap();
+            assert_eq!(result.shape, vec![2]);
+            let Buffer::F32(actual) = &result.buffer else {
+                panic!("Expected float32 rows")
+            };
+            let target = if op == ReduceOp::Sum { 100_000.0 } else { 0.1 };
+            let tolerance = if op == ReduceOp::Sum { 1.0 } else { 0.000_001 };
+            assert!(
+                actual
+                    .iter()
+                    .all(|&value| (value - target).abs() < tolerance)
+            );
+            let reference = if op == ReduceOp::Sum {
+                100_000.007_812_5
+            } else {
+                0.100_000_008_940_696_72
+            };
+            assert_eq!(actual, &vec![reference; 2]);
+            assert_eq!(budget.usage().peak, 8);
+            drop(result);
+        }
+    }
+
+    #[test]
+    fn float32_pairwise_matches_numpy_at_block_boundaries() {
+        // NumPy 2.5.4 float32 sums for [1e8, 1, ..., 1, -1e8].
+        let (budget, token) = env();
+        for (len, expected) in [
+            (7, 0.0),
+            (8, 0.0),
+            (9, 0.0),
+            (127, 112.0),
+            (128, 112.0),
+            (129, 120.0),
+            (256, 240.0),
+            (257, 240.0),
+        ] {
+            let mut values = vec![1.0_f32; len];
+            values[0] = 100_000_000.0;
+            values[len - 1] = -100_000_000.0;
+            let input = dense(vec![len], Buffer::F32(values));
+            assert_eq!(
+                reduce(ReduceOp::Sum, &input, None, &budget, &token)
+                    .unwrap()
+                    .buffer,
+                Buffer::F32(vec![expected])
+            );
+        }
+        token.cancel();
+        let input = dense(vec![129], Buffer::F32(vec![1.0; 129]));
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, None, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+    }
+
+    #[test]
+    fn float32_mean_keeps_float32_overflow_and_axis_shape() {
+        let (budget, token) = env();
+        let max = f32::MAX;
+        let pair = dense(vec![2], Buffer::F32(vec![max, max]));
+        for op in [ReduceOp::Sum, ReduceOp::Mean] {
+            let result = reduce(op, &pair, None, &budget, &token).unwrap();
+            assert_eq!(result.shape, Vec::<usize>::new());
+            assert_eq!(result.buffer, Buffer::F32(vec![f32::INFINITY]));
+        }
+        let rows = dense(vec![2, 2], Buffer::F32(vec![max, max, 2.0, 4.0]));
+        let mean = reduce(ReduceOp::Mean, &rows, Some(&[1]), &budget, &token).unwrap();
+        assert_eq!(
+            (mean.shape, mean.buffer),
+            (vec![2], Buffer::F32(vec![f32::INFINITY, 3.0]))
+        );
+        let doubles = dense(vec![2], Buffer::F64(vec![max as f64, max as f64]));
+        assert_eq!(
+            reduce(ReduceOp::Mean, &doubles, None, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::F64(vec![max as f64])
+        );
+        let ints = dense(vec![2], Buffer::I32(vec![2, 4]));
+        assert_eq!(
+            reduce(ReduceOp::Mean, &ints, None, &budget, &token)
+                .unwrap()
+                .buffer,
+            Buffer::F64(vec![3.0])
+        );
     }
 
     #[test]
@@ -1091,6 +1398,27 @@ mod tests {
                 .unwrap_err()
                 .code,
             ErrorCode::Cancelled
+        );
+    }
+
+    #[test]
+    fn reduction_axis_validation_honors_cancellation() {
+        let rank = 100_000;
+        let input = dense(vec![1; rank], Buffer::I32(vec![1]));
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let token = CancellationToken::new();
+        token.cancel();
+        let axes: Vec<i64> = (0..rank as i64).collect();
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, Some(&axes), &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+        assert_eq!(
+            reduce_axes(3, Some(&[0, -3])).unwrap_err().code,
+            ErrorCode::IndexInvalid
         );
     }
 
@@ -1203,6 +1531,17 @@ mod tests {
         // np.zeros((0, 2)).max(axis=0) raises ValueError.
         let (b, t) = env();
         let empty = dense(vec![0, 2], Buffer::F64(vec![]));
+        let zero_budget = MemoryBudget::new(Device::Cpu, 0);
+        let empty_vector = dense(vec![0], Buffer::F64(vec![]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            assert_eq!(
+                reduce(op, &empty_vector, None, &zero_budget, &t)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ShapeMismatch
+            );
+            assert_eq!(zero_budget.usage().used, 0);
+        }
         for op in [ReduceOp::Min, ReduceOp::Max] {
             let r = reduce(op, &empty, Some(&[1]), &b, &t).unwrap();
             assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::F64(vec![])));
@@ -1233,6 +1572,126 @@ mod tests {
             matmul(&a, &bad, DType::Float64, &b, &t).unwrap_err().code,
             ErrorCode::ShapeMismatch
         );
+    }
+
+    #[test]
+    fn boolean_matmul_stops_at_each_first_true_product() {
+        let token = CancellationToken::new();
+        for first_true in [0, 3, 7] {
+            let mut lhs = vec![false; 8];
+            lhs[first_true] = true;
+            let rhs = vec![true; 8];
+            let mut evaluated = 0;
+            let result = boolean_matmul(&lhs, &rhs, 1, 8, 1, &token, || evaluated += 1).unwrap();
+            assert_eq!(result, vec![true]);
+            assert_eq!(evaluated, first_true + 1);
+        }
+        let mut evaluated = 0;
+        let result =
+            boolean_matmul(&[false; 8], &[true; 8], 1, 8, 1, &token, || evaluated += 1).unwrap();
+        assert_eq!(result, vec![false]);
+        assert_eq!(evaluated, 8);
+    }
+
+    #[test]
+    fn all_true_boolean_matmul_evaluates_one_product_per_output() {
+        let (budget, token) = env();
+        let lhs = dense(vec![128, 4096], Buffer::Bool(vec![true; 128 * 4096]));
+        let rhs = dense(vec![4096, 128], Buffer::Bool(vec![true; 4096 * 128]));
+        let mut evaluated = 0;
+        let Buffer::Bool(lhs_values) = &lhs.buffer else {
+            unreachable!()
+        };
+        let Buffer::Bool(rhs_values) = &rhs.buffer else {
+            unreachable!()
+        };
+        let values = boolean_matmul(lhs_values, rhs_values, 128, 4096, 128, &token, || {
+            evaluated += 1
+        })
+        .unwrap();
+        assert_eq!(values, vec![true; 128 * 128]);
+        assert_eq!(evaluated, 128 * 128);
+
+        let result = matmul(&lhs, &rhs, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![128, 128]);
+        assert_eq!(result.dtype(), DType::Bool);
+        assert_eq!(result.buffer, Buffer::Bool(values));
+    }
+
+    #[test]
+    fn boolean_matmul_preserves_shapes_and_strict_result_budget() {
+        let token = CancellationToken::new();
+        let vector = dense(vec![2], Buffer::Bool(vec![true, false]));
+        let matrix = dense(vec![2, 2], Buffer::Bool(vec![true, false, false, true]));
+        for (lhs, rhs, shape, values) in [
+            (&vector, &vector, vec![], vec![true]),
+            (&vector, &matrix, vec![2], vec![true, false]),
+            (&matrix, &vector, vec![2], vec![true, false]),
+            (&matrix, &matrix, vec![2, 2], vec![true, false, false, true]),
+        ] {
+            let budget = MemoryBudget::new(Device::Cpu, values.len() as u64);
+            let result = matmul(lhs, rhs, DType::Bool, &budget, &token).unwrap();
+            assert_eq!(result.shape, shape);
+            assert_eq!(result.dtype(), DType::Bool);
+            assert_eq!(result.buffer, Buffer::Bool(values));
+            assert_eq!(budget.usage().peak, budget.usage().used);
+            drop(result);
+            assert_eq!(budget.usage().used, 0);
+        }
+        let tight = MemoryBudget::new(Device::Cpu, 3);
+        assert_eq!(
+            matmul(&matrix, &matrix, DType::Bool, &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+
+        let empty_inner = dense(vec![2, 0], Buffer::Bool(vec![]));
+        let empty_inner_rhs = dense(vec![0, 3], Buffer::Bool(vec![]));
+        let budget = MemoryBudget::new(Device::Cpu, 6);
+        let result = matmul(&empty_inner, &empty_inner_rhs, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![2, 3]);
+        assert_eq!(result.buffer, Buffer::Bool(vec![false; 6]));
+        let empty_rows = dense(vec![0, 2], Buffer::Bool(vec![]));
+        let result = matmul(&empty_rows, &matrix, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![0, 2]);
+        assert_eq!(result.buffer, Buffer::Bool(vec![]));
+    }
+
+    #[test]
+    fn boolean_matmul_cancels_during_an_unsuccessful_dot_product() {
+        let token = CancellationToken::new();
+        let budget = MemoryBudget::new(Device::Cpu, 1);
+        let k = CHUNK * 3;
+        let lhs = dense(vec![1, k], Buffer::Bool(vec![false; k]));
+        let rhs = dense(vec![k, 1], Buffer::Bool(vec![true; k]));
+        token.cancel();
+        assert_eq!(
+            matmul(&lhs, &rhs, DType::Bool, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        let mut evaluated = 0;
+        let Buffer::Bool(lhs_values) = &lhs.buffer else {
+            unreachable!()
+        };
+        let Buffer::Bool(rhs_values) = &rhs.buffer else {
+            unreachable!()
+        };
+        let result = boolean_matmul(lhs_values, rhs_values, 1, k, 1, &token, || {
+            evaluated += 1;
+            if evaluated == CHUNK + 1 {
+                cancel.cancel();
+            }
+        });
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        assert!(evaluated <= 2 * CHUNK);
     }
 
     #[test]

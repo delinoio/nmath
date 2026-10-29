@@ -231,10 +231,7 @@ test("memory budgets reject before allocation", async () => {
 test("creation helpers reject over-budget input before building buffers", async () => {
   const ctx = context({ cpuMemoryBudget: 0 });
   // A typed array this large would exhaust memory if it were materialized.
-  throwsWith(
-    () => ctx.zeros([2 ** 40], "float64"),
-    "NMATH_MEMORY_BUDGET_EXCEEDED",
-  );
+  throwsWith(() => ctx.zeros([2 ** 40], "float64"), "NMATH_SHAPE_MISMATCH");
   throwsWith(
     () => ctx.array([[1, 2]], { dtype: "float64" }),
     "NMATH_MEMORY_BUDGET_EXCEEDED",
@@ -255,6 +252,73 @@ test("creation helpers reject over-budget input before building buffers", async 
     "NMATH_SHAPE_MISMATCH",
   );
   await roomy.close();
+});
+
+test("creation rejects invalid dimensions before allocation or native conversion", async () => {
+  const ctx = context({ cpuMemoryBudget: 0 });
+  const rng = ctx.generator(42);
+  const invalid = [1.5, -1, NaN, Infinity, -Infinity, 2 ** 32];
+  const creators = [
+    (shape) => ctx.arrayFromFloat16Bits(new Uint16Array([0x3c00]), { shape }),
+    (shape) => ctx.array([7], { dtype: "int32", shape }),
+    (shape) => ctx.array(new Int32Array([7]), { dtype: "int32", shape }),
+    (shape) => ctx.full(shape, 1, "int32"),
+    (shape) => ctx.zeros(shape, "int32"),
+    (shape) => rng.random(shape),
+    (shape) => np.array(ctx, [7], { dtype: "int32", shape }),
+    (shape) => np.zeros(ctx, shape, "int32"),
+    (shape) => np.ones(ctx, shape, "int32"),
+    (shape) => np.full(ctx, shape, 1, "int32"),
+    (shape) => np.random.defaultRng(ctx, 42).random(shape),
+  ];
+  for (const dimension of invalid) {
+    for (const shape of [[dimension], [0, dimension]]) {
+      for (const create of creators) {
+        throwsWith(() => create(shape), "NMATH_SHAPE_MISMATCH");
+        assert.equal(ctx.metrics().cpuMemory.used, 0n);
+      }
+    }
+  }
+  throwsWith(
+    () => ctx.array([], { dtype: "int32", shape: [2 ** 32] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  throwsWith(
+    () => ctx.array([7], { dtype: "int32", shape: [2] }),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  await ctx.close();
+});
+
+test("valid dimensions retain shape and length checks", async () => {
+  const ctx = context();
+  const arrays = [
+    ctx.array([7], { dtype: "int32", shape: [1] }),
+    ctx.array(new Int32Array([7]), { dtype: "int32", shape: [1] }),
+    ctx.array([], { dtype: "int32", shape: [0] }),
+    ctx.array([], { dtype: "int32", shape: [0, 0xffff_ffff] }),
+    ctx.array(7, { dtype: "int32", shape: [] }),
+    ctx.zeros([0, 0xffff_ffff], "int32"),
+    np.zeros(ctx, [0], "int32"),
+  ];
+  assert.deepEqual(
+    arrays.map((array) => array.shape),
+    [[1], [1], [0], [0, 0xffff_ffff], [], [0, 0xffff_ffff], [0]],
+  );
+  assert.equal(arrays[0].item(0), 7);
+  assert.equal(arrays[4].item(), 7);
+  throwsWith(
+    () => ctx.array([7], { dtype: "int32", shape: [2] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  throwsWith(
+    () => np.array(ctx, [7], { dtype: "int32", shape: [2] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  const random = ctx.generator(42).random([0, 0xffff_ffff]);
+  assert.deepEqual(random.shape, [0, 0xffff_ffff]);
+  for (const array of arrays) array.dispose();
+  await ctx.close();
 });
 
 test("ragged nested input is rejected", async () => {

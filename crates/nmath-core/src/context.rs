@@ -441,7 +441,8 @@ impl Context {
             let cancel: Cancel = {
                 let done = done.clone();
                 Box::new(move |err| {
-                    if let Some(done) = done.lock().unwrap().take() {
+                    let callback = done.lock().unwrap().take();
+                    if let Some(done) = callback {
                         done(Err(err));
                     }
                 })
@@ -626,9 +627,6 @@ fn run_job(
                 execution = id,
                 status = status.id()
             );
-            if let Some(done) = done.lock().unwrap().take() {
-                done(result);
-            }
             let next = {
                 let mut sched = inner.sched.lock().unwrap();
                 sched.running.remove(&id);
@@ -645,6 +643,10 @@ fn run_job(
             };
             if let Some(job) = next {
                 (job.start)();
+            }
+            let callback = done.lock().unwrap().take();
+            if let Some(done) = callback {
+                done(result);
             }
         })
         .expect("failed to spawn an NMath worker thread");
@@ -672,6 +674,127 @@ mod publication_tests {
     fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
         let (tx, rx) = mpsc::channel();
         (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn completion_callback_reentrancy_is_bounded() {
+        use std::{process::Command, sync::atomic::AtomicUsize};
+
+        const CASE_ENV: &str = "NMATH_COMPLETION_TEST_CASE";
+        if let Ok(case) = std::env::var(CASE_ENV) {
+            let ctx = context();
+            let (tx, rx) = mpsc::channel();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let callback_ctx = ctx.clone();
+            let callback_calls = calls.clone();
+            let callback_case = case.clone();
+            ctx.submit(
+                OperationKind::Compute,
+                "callback_reentrancy_test",
+                Device::Cpu,
+                CancellationToken::new(),
+                Box::new(|env| {
+                    let _reservation = env.budget.reserve(64)?;
+                    match std::env::var(CASE_ENV).unwrap().as_str() {
+                        "failed" => Err(Error::new(ErrorCode::ShapeBroadcast, "Test failure.")),
+                        "cancelled" => {
+                            env.token.cancel();
+                            Ok(JobOutput::Unit)
+                        }
+                        _ => Ok(JobOutput::Unit),
+                    }
+                }),
+                Box::new(move |result| {
+                    callback_calls.fetch_add(1, Ordering::SeqCst);
+                    let expected = match callback_case.as_str() {
+                        "failed" => ExecutionStatus::Failed,
+                        "cancelled" => ExecutionStatus::Cancelled,
+                        _ => ExecutionStatus::Succeeded,
+                    };
+                    assert_eq!(callback_ctx.metrics().executions[0].status, expected);
+                    if callback_case == "submit" {
+                        let (done, second) = completion();
+                        callback_ctx
+                            .compute(
+                                &Expr::scalar(crate::Scalar::Float(2.0)),
+                                Device::Cpu,
+                                CancellationToken::new(),
+                                done,
+                            )
+                            .unwrap();
+                        assert!(second.recv_timeout(Duration::from_secs(5)).unwrap().is_ok());
+                    } else {
+                        callback_ctx.close();
+                        let (done, _) = completion();
+                        assert_eq!(
+                            callback_ctx
+                                .compute(
+                                    &Expr::scalar(crate::Scalar::Float(1.0)),
+                                    Device::Cpu,
+                                    CancellationToken::new(),
+                                    done,
+                                )
+                                .unwrap_err()
+                                .code,
+                            ErrorCode::ContextClosed
+                        );
+                    }
+                    tx.send(result).unwrap();
+                }),
+            )
+            .unwrap();
+            let result = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            match case.as_str() {
+                "failed" => assert_eq!(result.unwrap_err().code, ErrorCode::ShapeBroadcast),
+                "cancelled" => assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled),
+                _ => assert!(result.is_ok()),
+            }
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            let metrics = ctx.metrics();
+            assert_eq!(
+                metrics.total_submitted,
+                if case == "submit" { 2 } else { 1 }
+            );
+            assert_eq!(
+                metrics.total_succeeded,
+                if case == "submit" {
+                    2
+                } else if case == "close" {
+                    1
+                } else {
+                    0
+                }
+            );
+            assert_eq!(metrics.total_failed, u64::from(case == "failed"));
+            assert_eq!(metrics.total_cancelled, u64::from(case == "cancelled"));
+            assert_eq!(metrics.cpu_memory.used, 0);
+            return;
+        }
+
+        for case in ["close", "submit", "failed", "cancelled"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "context::publication_tests::completion_callback_reentrancy_is_bounded",
+                    "--nocapture",
+                ])
+                .env(CASE_ENV, case)
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    assert!(status.success(), "completion case {case} failed: {status}");
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    child.kill().unwrap();
+                    child.wait().unwrap();
+                    panic!("completion case {case} exceeded 10 seconds");
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
 
     #[test]
@@ -876,5 +999,140 @@ mod publication_tests {
         );
         ctx.close();
         assert_eq!(ctx.metrics().total_cancelled, 1);
+    }
+}
+
+#[cfg(test)]
+mod random_tests {
+    use std::{
+        process::Command,
+        sync::mpsc,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use super::*;
+
+    fn context(budget: u64) -> Context {
+        Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 1,
+            cpu_memory_budget: budget,
+            gpu_memory_budget: 0,
+        })
+        .unwrap()
+    }
+
+    fn compute(ctx: &Context, expr: &Expr) -> Result<JobOutput> {
+        let (tx, rx) = mpsc::channel();
+        ctx.compute(
+            expr,
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |result| tx.send(result).unwrap()),
+        )
+        .unwrap();
+        let result = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(1)),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        ));
+        result
+    }
+
+    #[test]
+    fn random_allocation_failures_complete_without_hanging() {
+        if std::env::var_os("NMATH_RANDOM_OVERFLOW_CHILD").is_some() {
+            let ctx = context(0);
+            let generator = ctx.generator(42);
+            let initial = generator.current();
+            let oversized = [
+                vec![usize::MAX, 2],
+                vec![usize::MAX / 8 + 1],
+                vec![isize::MAX as usize / 8 + 1],
+            ];
+            for shape in oversized {
+                let expr = Expr::random(ctx.id(), &generator, shape);
+                assert_eq!(
+                    compute(&ctx, &expr).unwrap_err().code,
+                    ErrorCode::MemoryBudgetExceeded
+                );
+                assert_eq!(generator.current(), initial);
+                assert_eq!(ctx.metrics().cpu_memory.used, 0);
+            }
+            assert_eq!(ctx.metrics().total_failed, 3);
+            assert_eq!(ctx.metrics().executions.len(), 3);
+            assert!(
+                ctx.metrics()
+                    .executions
+                    .iter()
+                    .all(|record| record.status == ExecutionStatus::Failed)
+            );
+            ctx.close();
+            return;
+        }
+
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("context::random_tests::random_allocation_failures_complete_without_hanging")
+            .env("NMATH_RANDOM_OVERFLOW_CHILD", "1")
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(
+                    status.success(),
+                    "random allocation regression failed: {status}"
+                );
+                break;
+            }
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("random allocation regression did not complete within 10 seconds");
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn random_budget_failure_preserves_stream_and_valid_shapes() {
+        let ctx = context(32);
+        let generator = ctx.generator(42);
+        let initial = generator.current();
+        let too_large = Expr::random(ctx.id(), &generator, vec![5]);
+        assert_eq!(
+            compute(&ctx, &too_large).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(generator.current(), initial);
+
+        let scalar = Expr::random(ctx.id(), &generator, vec![]);
+        let zero = Expr::random(ctx.id(), &generator, vec![usize::MAX, 2, 0]);
+        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[usize::MAX, 2, 0][..], 0)] {
+            assert_eq!(expr.dtype(), crate::DType::Float64);
+            let JobOutput::Value(Value::Dense(value)) = compute(&ctx, expr).unwrap() else {
+                panic!("random compute did not return a dense value");
+            };
+            assert_eq!(value.shape, shape);
+            assert_eq!(value.buffer.len(), len);
+        }
+        let expected = generator.current();
+        let small = Expr::random(ctx.id(), &generator, vec![2, 2]);
+        let JobOutput::Value(Value::Dense(value)) = compute(&ctx, &small).unwrap() else {
+            panic!("random compute did not return a dense value");
+        };
+        let mut expected = expected;
+        assert_eq!(
+            value.buffer,
+            Buffer::F64((0..4).map(|_| expected.next_f64()).collect())
+        );
+        assert_eq!(generator.current(), expected);
+        drop(value);
+        ctx.close();
+        assert_eq!(ctx.metrics().cpu_memory.used, 0);
+        assert_eq!(ctx.metrics().total_failed, 1);
+        assert_eq!(ctx.metrics().total_succeeded, 3);
     }
 }

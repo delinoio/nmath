@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Expr, type NMathContext } from "./core.js";
+import { Expr, validatedShape, type NMathContext } from "./core.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
 import type { NativeGenerator } from "./native-binding.generated.js";
@@ -52,18 +52,12 @@ export class NMathGenerator {
     second = "0",
     endpoint = false,
   ): Expr<D, S> {
-    if (
-      shape.some((d) => !Number.isSafeInteger(d) || d < 0 || d > 0xffffffff)
-    ) {
-      throw new RangeError(
-        "Random dimensions must be unsigned 32-bit integers.",
-      );
-    }
+    const checkedShape = validatedShape(shape);
     return new Expr(
       native(() =>
         binding.NativeExpr.randomDistribution(
           this.#generator,
-          [...shape],
+          checkedShape,
           operation,
           dtype,
           first,

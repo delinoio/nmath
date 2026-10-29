@@ -25,6 +25,8 @@ This contract owns the `nmath-nts` and `nmath-compiler` components of the [`nmat
 
 The transform parses `.nts` text with the standard tsrs TypeScript parser and produces TypeScript text plus a span map. It does not extend the parser or lexer. Only checker-proven NMath operations are lowered. Ordinary JavaScript operators and bracket accesses remain unchanged. Project analysis repeats until lowered expression types propagate through local inference and imports; the language server uses the same analysis with unsaved overlays.
 
+An interface or class that inherits a package-owned NMath declaration retains NMath operator and numeric-index behavior. This also applies through transitive bases and generic constraints. A matching local class name or property name alone does not establish NMath identity.
+
 | `.nts` source                                         | Lowered TypeScript                                                                                                           |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `a + b`, `a - b`, `a * b`, `a / b`, `a % b`, `a ** b` | `__nmath.add(a, b)`, `__nmath.sub(a, b)`, `__nmath.mul(a, b)`, `__nmath.div(a, b)`, `__nmath.mod(a, b)`, `__nmath.pow(a, b)` |
@@ -41,8 +43,8 @@ The transform parses `.nts` text with the standard tsrs TypeScript parser and pr
 - Literal-only arithmetic (both operands numeric or string literals) is not rewritten.
 - NMath `a[i] = value` returns the assigned value and is rewritten only inside async function bodies or module top level. Elsewhere, including parameter initializers of async functions, the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
 - Compound assignment (`+=` and others), `++` and `--` on bracket expressions are left unchanged. Comparison and bitwise operators are never rewritten.
-- These forms are also left unchanged: optional element access (`a?.[i]`), `super[k]`, element access used as a call target (`a[i](x)`, `(a[i])(x)`), `delete a[i]` (including parenthesized or type-asserted operands such as `delete (a[i])`), destructuring and `for-of` assignment targets, ordinary property access (`a.b`) and string-literal keys (`obj["key"]`). Nothing inside type positions or enums is rewritten. Unary operators applied to numeric literals (for example `-1`) count as literals.
-- Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output.
+- These forms are also left unchanged: optional element access (`a?.[i]`), `super[k]`, element access used as a call target (`a[i](x)`, `(a[i])(x)`), element access used as a constructor target (`new a[i](x)`, `new a[i]`), `delete a[i]` (including parenthesized or type-asserted operands such as `delete (a[i])`), destructuring and `for-of` assignment targets, ordinary property access (`a.b`) and string-literal keys (`obj["key"]`). Parentheses and type-only wrappers around a constructor target preserve that target. Eligible index expressions inside a protected target can still be lowered. Nothing inside type positions or enums is rewritten. Unary operators applied to numeric literals (for example `-1`) count as literals.
+- Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output. With the transform's extension-rewriting option enabled, this includes quoted specifiers and dynamic imports with a template literal that has no substitutions. The transform preserves the original specifier when this option is disabled. Interpolated templates are unchanged.
 
 Unsupported NMath syntax reports a diagnostic instead of silently executing ordinary JavaScript semantics.
 
@@ -67,6 +69,7 @@ Every diagnostic reports the original `.nts` file and 1-based line and column, a
 - `nmath-compiler check -p <tsconfig>`: type-check the project. Exit code 0 on success, 1 on diagnostics, 2 on usage or configuration errors.
 - `nmath-compiler build -p <tsconfig>`: emit ESM JavaScript, declaration files and source maps. On any type or transform error, write nothing and keep existing outputs.
 - `nmath-compiler lsp`: run a generic Language Server Protocol server over stdio with semantic type diagnostics, completion and cross-file go-to-definition for `.nts` files. Locations use original-source UTF-16 coordinates. Full-document synchronization overlays unsaved buffers on disk content; changes refresh dependent diagnostics, and closing a document restores its disk content. Stale document versions do not replace newer buffers.
+- Each language-server semantic snapshot keeps the effective project roots from the selected `tsconfig.json`, including inherited declarations and include/exclude rules. It adds the queried document once if that document is outside the root set. Unsaved document text takes precedence over disk text for all roots.
 - `nmath-compiler content-mapper`: internal tsrs content-mapper process. Not a public interface.
 - `--json` prints the structured result `{ ok, diagnostics: [{ code, file, line, column, message, recovery }], outputFiles: [] }`.
 
@@ -101,7 +104,7 @@ Use `tracing` with structured fields. `NMATH_LOG` enables logs on stderr; ANSI c
 
 - `check` and `build` read the user's `tsconfig.json` through an in-memory layer that adds a config extending it and registering the NMath content mapper, which runs `nmath-compiler content-mapper`. The user's files are never edited. The reserved virtual names are `__nmath_compiler__.tsconfig.json` and `__nmath_compiler_emit__.tsconfig.json` next to the user's config.
 - tsrs, like TypeScript 7.1, does not emit JavaScript for content-mapped files. `build` therefore runs a second tsrs pass with `--noCheck` over the lowered TypeScript. NMath composes the JavaScript source maps with its transform span maps before publishing output. The maps name the original `.nts` files and embed their original text. Generated helper imports have no original source location. Source map coordinates use UTF-16 columns; transform spans use UTF-8 byte offsets. The JavaScript pass emits external maps beside its output with an empty source root, so virtual `.ts` paths do not escape into debugging metadata. Declaration maps are emitted by the checked pass through the pinned tsrs content-map support. Remove this workaround when the pinned tsrs emits content-mapped files.
-- `--rewriteRelativeImportExtensions` is always enabled because tsrs requires it for the `.nts` to `.js` mapping; `build` also enables `--declaration`, `--declarationMap` and `--sourceMap`.
+- `--rewriteRelativeImportExtensions` is enabled in both compiler passes, even when the user's config omits or disables it. This maps source-relative `.nts` and `.ts` imports to emitted `.js` files. `build` also enables `--declaration`, `--declarationMap` and `--sourceMap`.
 - Project references and `-b` builds are not supported.
 
 ## Change Triggers

@@ -101,14 +101,25 @@ impl RandomOperation {
         token: &CancellationToken,
     ) -> Result<DenseArray> {
         self.validate()?;
-        let len = shape
-            .iter()
-            .try_fold(1usize, |n, &d| n.checked_mul(d))
-            .ok_or_else(|| invalid("Random shape exceeds addressable storage."))?;
+        let invalid_size = || {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "The random array allocation size cannot be represented or allocated.",
+            )
+        };
+        let len = if shape.contains(&0) {
+            0
+        } else {
+            shape
+                .iter()
+                .try_fold(1usize, |n, &d| n.checked_mul(d))
+                .ok_or_else(invalid_size)?
+        };
         let bytes = len
             .checked_mul(self.dtype().item_size())
-            .ok_or_else(|| invalid("Random output exceeds addressable storage."))?;
-        let reservation = budget.reserve(bytes as u64)?;
+            .filter(|&bytes| bytes <= isize::MAX as usize)
+            .ok_or_else(invalid_size)?;
+        let reservation = budget.reserve(u64::try_from(bytes).map_err(|_| invalid_size())?)?;
         let mut local = *rng;
         let mut integers = IntegerBuffer::default();
         macro_rules! collect {

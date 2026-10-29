@@ -446,8 +446,14 @@ pub struct DenseArray {
 
 impl DenseArray {
     pub fn new(shape: Vec<usize>, buffer: Buffer, reservation: Reservation) -> Result<Self> {
-        let size: usize = shape.iter().product();
-        if size != buffer.len() {
+        let size = if shape.contains(&0) {
+            Some(0)
+        } else {
+            shape
+                .iter()
+                .try_fold(1usize, |size, &dim| size.checked_mul(dim))
+        };
+        if size != Some(buffer.len()) {
             return Err(Error::new(
                 ErrorCode::ShapeMismatch,
                 format!(

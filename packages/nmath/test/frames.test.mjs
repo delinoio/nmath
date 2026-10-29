@@ -16,6 +16,11 @@ test("numpy entry point builds the same lazy expressions", async () => {
     [2, 4, 6, 8, 10, 12],
   );
   assert.equal(await np.sum(a).compute(), 15);
+  const int32 = ctx.zeros([2], "int32");
+  assert.equal(await np.sum(int32).compute(), 0n);
+  assert.equal(await np.mean(int32).compute(), 0);
+  assert.equal(await np.min(int32).compute(), 0);
+  assert.equal(await np.max(int32).compute(), 0);
   const rng = np.random.defaultRng(ctx, 42);
   assert.equal((await rng.random([1]).compute()).item(0), 0.7739560485559633);
   await ctx.close();
