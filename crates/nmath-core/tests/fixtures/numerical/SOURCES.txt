@@ -1,0 +1,40 @@
+NumPy 2.5.4 is a development-only oracle. The JSON files include SHA-256
+hashes of the exact pinned source files used to choose criteria. Regenerate
+with generate.py and the fixed oracle environment. NumPy's license is retained
+in NUMPY-LICENSE.txt. No NumPy runtime kernel is included in this module.
+
+linalg.json:
+  numpy/linalg/tests/test_linalg.py:67-73 (assert_almost_equal helper),
+  143-157 (exact real/complex 2x2 inputs),
+  487-503 (SolveCases residual), 581-587 (InvCases identity residual),
+  974-986 (DetCases eigenvalue-product comparison).
+  The source uses decimal=6 for float32/complex64 and decimal=12 for
+  float64/complex128. numpy/testing/_private/utils.py assert_array_almost_equal
+  uses an absolute difference below 1.5 * 10**(-decimal), separately for real
+  and imaginary components. The test uses the stricter 10**(-decimal).
+  Solve/inverse check the same residual, not an unapproved output tolerance.
+  Determinants compare with the fixed oracle's double-component eigenvalue
+  product, as in DetCases.
+
+fft_identity.json:
+  numpy/fft/tests/test_pocketfft.py:35-52,
+  TestFFT1D.test_identity_long_short.
+  Bounded random real/complex inputs of length 16, n=1..31, float32/float64
+  components, backward normalization. Source criterion is rtol=0 and
+  atol=5*spacing(array(1.,dtype)); tests apply that bound to round-trip results.
+  Seed fixes inputs while preserving the original input range and conditions.
+  Stored forward results support inspection; they are not used to claim that
+  the round-trip criterion also approves forward-output comparisons.
+
+fft_adaptation.json:
+  Shape/dtype oracle only. Integer, boolean, float16, float32/64 and complex
+  inputs, axis 0/-1, n=5, all normalizations. Numerical acceptance for these
+  input/operation/dtype combinations remains pending; no tolerance invented.
+
+Other numerical tests use exact small identities for shape, conjugation,
+normalization, empty/singular cases, and execution/resource behavior. These
+are regression tests, not full-family numerical acceptance.
+
+Pending: direct transform output criteria beyond source-matched tests;
+large/ill-conditioned/extreme-scale/non-finite inputs; broader linalg mixed
+operand numerical criteria; platform acceptance; complete API families.
