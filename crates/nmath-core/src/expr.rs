@@ -499,8 +499,26 @@ impl JobEnv {
                 )
             }
             ExprKind::Random(g, shape) => {
-                let len: usize = shape.iter().product();
-                let reservation = budget.reserve((len * 8) as u64)?;
+                let invalid_size = || {
+                    Error::new(
+                        ErrorCode::MemoryBudgetExceeded,
+                        "The random array allocation size cannot be represented or allocated.",
+                    )
+                };
+                let len = if shape.contains(&0) {
+                    0
+                } else {
+                    shape
+                        .iter()
+                        .try_fold(1usize, |len, &dim| len.checked_mul(dim))
+                        .ok_or_else(invalid_size)?
+                };
+                let bytes = len
+                    .checked_mul(std::mem::size_of::<f64>())
+                    .filter(|&bytes| bytes <= isize::MAX as usize)
+                    .ok_or_else(invalid_size)?;
+                let reservation =
+                    budget.reserve(u64::try_from(bytes).map_err(|_| invalid_size())?)?;
                 let slot = self
                     .rng
                     .iter_mut()
