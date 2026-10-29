@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Type fixtures checked by `pnpm typecheck` with TypeScript 7.0.2. Never executed.
 import {
+  add,
   createContext,
+  div,
   indices,
   slice,
   type Expr,
   type NMathArray,
 } from "../../src/index.js";
+import * as np from "../../src/numpy.js";
 import * as nts from "../../src/nts-runtime.js";
 import * as pd from "../../src/pandas.js";
 
@@ -94,3 +97,17 @@ declare const series: pd.Series;
 const first = series.iloc(0);
 assertTrue<Equal<(typeof first)["shape"], []>>();
 expectType<pd.Series>(series.iloc(slice(1)));
+
+// Functional arithmetic keeps dtype and shape like the methods, NumPy aliases included.
+const fmv = add(m, v);
+assertTrue<Equal<typeof fmv, Expr<"float64", [2, 3]>>>();
+const fscaled = np.multiply(2, m);
+assertTrue<Equal<typeof fscaled, Expr<"float32", readonly [2, 3]>>>();
+const fdiv = div(v, 2n);
+assertTrue<Equal<(typeof fdiv)["dtype"], "float64">>();
+const ftrue = np.trueDivide(v, v);
+assertTrue<Equal<(typeof ftrue)["dtype"], "float64">>();
+// @ts-expect-error shapes [2] and [3] do not broadcast
+add(ctx.zeros([2], "float32"), ctx.zeros([3], "float32"));
+// @ts-expect-error shapes [2, 3] and [4] do not broadcast
+np.subtract(m, ctx.zeros([4], "float32"));
