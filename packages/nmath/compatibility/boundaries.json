@@ -31,7 +31,8 @@
     "dtypePlatform": "Per-entry conditions remain pending unless explicitly sourced. The inventory host does not establish eight-platform support.",
     "viewCopyMutation": "Per-entry conditions remain pending. Fixtures cover only their explicit selections and mutations.",
     "missingValues": "Per-entry conditions remain pending. No default null/NaN equivalence is assumed across libraries.",
-    "verification": "Fixture IDs identify runnable inputs, not a passing native result. Empty IDs and null criteria mean pending verification. GPU criteria remain separate and pending."
+    "verification": "Fixture IDs identify runnable inputs, not a passing native result. Empty IDs and null criteria mean pending verification. GPU criteria remain separate and pending. Evidence paths and SHA-256 hashes identify implementation, test and fixture inputs; sourceRevision pins the inspected implementation. Evidence availability does not assert that tests ran or passed. crossPlatformStatus and gpuStatus remain pending; execution results belong in external validation records.",
+    "supportedScope": "Present only for explicitly inspected partial counterparts. Records family, supported argument/dtype conditions, limits and repository evidence paths at counterpartSourceRevision. It does not propagate through upstream aliases, certify scalar dtype classes or waive any non-excluded forms."
   },
   "exclusionPolicy": "Only named agreed exclusions are applied. Mixed-mode APIs remain targets until argument-specific conditions are reviewed. Plotting, styles, configuration, testing, plugins and additional local file formats are not blanket exclusions.",
   "limitations": [

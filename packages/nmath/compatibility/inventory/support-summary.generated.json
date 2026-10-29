@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "6502833fbd8e4bb9b8e94ca38745c9c5b3a6e911",
+  "acceptanceStatus": "incomplete",
+  "statuses": {
+    "excluded": 676,
+    "partial-counterpart": 107,
+    "pending": 51978
+  },
+  "partialFamilies": {
+    "array-construction": 6,
+    "columnar-io": 8,
+    "elementwise": 10,
+    "fft": 4,
+    "indexing-casting": 3,
+    "linalg": 3,
+    "matrix-product": 1,
+    "numpy-io": 4,
+    "random": 8,
+    "reductions": 8,
+    "tables": 44,
+    "text-io": 8
+  },
+  "unperformed": [
+    "cross-platform-native-acceptance",
+    "gpu-release-matrix-acceptance",
+    "full-api-semantic-review"
+  ],
+  "unresolved": [
+    "GPU power: 84 one-ULP differences; no tolerance waiver",
+    "strings/temporal worker integration requires follow-up reconciliation"
+  ]
+}
