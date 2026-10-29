@@ -237,6 +237,12 @@ Polars exports `read_parquet(context, path, options?)` and `read_ipc(context, pa
 
 DataFrame columnar read adapters reject nonempty zero-column tables with `NMATH_DTYPE_UNSUPPORTED` because their constructors cannot preserve an explicit row count. `ctx.readColumnar` retains that row count for direct callers.
 
+### Matrix product adaptation
+
+`numpy.matmul(a, b)` and `a.matmul(b)` take two numeric or boolean lazy operands and return the same native expression. They infer the promoted dtype and broadcast leading batch dimensions. A vector on the left removes its temporary row axis; a vector on the right removes its temporary column axis. Two vectors produce a rank-zero expression. Known invalid core or batch dimensions and scalar/string/temporal operands are rejected by declarations; runtime inference validates dynamic dimensions with the same rules. Unknown batch dimensions preserve other known axes. File/order/output/ufunc options remain separate compatibility targets.
+
+Matrix products use native worker execution, actual-start snapshots, context ownership, cancellation and budget admission. Strided operands are frozen in logical order at execution start. Results are independent allocated values. Exact small-value NumPy fixtures cover shape, dtype, vector promotion, empty axes and all current numeric/boolean dtypes without setting a tolerance for arbitrary floating-point products. The runtime contract owns kernel and GPU restrictions.
+
 ### Linear algebra and FFT adaptation
 
 The NumPy entry point exports `linalg.solve(a, b)`, `linalg.inv(a)`, `linalg.det(a)` and `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, `fft.irfft`. Arguments are contextual lazy arrays or expressions; results are lazy expressions and use normal `compute()` and complex transport. FFT options are `{n?, axis?, norm?: "backward" | "forward" | "ortho"}`. Unknown options, including `out`, fail explicitly. The native runtime contract owns batch, dtype, normalization and resource behavior. Singular linear systems use `NMATH_LINALG_SINGULAR`.

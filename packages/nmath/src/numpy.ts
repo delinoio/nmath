@@ -5,7 +5,7 @@
 
 import {
   type ArrayOptions,
-  type Expr,
+  Expr,
   Lazy,
   type NMathArray,
   type NMathContext,
@@ -13,8 +13,14 @@ import {
   type Operand,
 } from "./core.js";
 import { add, div, mod, mul, pow, sub } from "./index.js";
+import { native } from "./errors.js";
+import { binding } from "./native.js";
 import type {
   ComputableDType,
+  NumericDType,
+  Promote,
+  MatMulShape,
+  MatMulCheck,
   SumDType,
   TrueDivide,
   ReduceShape,
@@ -144,11 +150,19 @@ export function max<
 export function max(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.max(axis);
 }
-export function matmul(
-  a: Lazy<ComputableDType, Shape>,
-  b: Lazy<ComputableDType, Shape>,
-) {
-  return a.matmul(b as never);
+export function matmul<
+  A extends NumericDType,
+  AS extends Shape,
+  B extends NumericDType,
+  BS extends Shape,
+>(
+  a: Lazy<NoInfer<A>, AS> & { readonly dtype: A },
+  b: Lazy<NoInfer<B>, BS> & { readonly dtype: B } & MatMulCheck<AS, BS>,
+): Expr<Promote<A, B>, MatMulShape<AS, BS>> {
+  return new Expr(
+    native(() => binding.NativeExpr.matmul(a.nativeExpr(), b.nativeExpr())),
+    a.context ?? b.context,
+  );
 }
 
 /** `np.save`: writes NPY without overwriting unless requested. */

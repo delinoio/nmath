@@ -177,3 +177,39 @@ await ctx.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("nts preserves inferred batched matmul shapes and rejects invalid batches", async () => {
+  const source = `import { createContext, type Expr } from "@delinoio/nmath";
+import { matmul } from "@delinoio/nmath/numpy";
+const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 4, cpuMemoryBudget: 1n << 20n, gpuMemoryBudget: 0n });
+const a = ctx.full([2, 1, 3, 4] as const, 1, "float32");
+const b = ctx.full([5, 4, 6] as const, 2, "float32");
+const expression: Expr<"float32", [2, 5, 3, 6]> = matmul(a + 1, b);
+const result = await expression.compute();
+console.log(JSON.stringify({ shape: result.shape, values: [...result.toTypedArray()] }));
+result.dispose();
+await ctx.close();
+`;
+  const dir = project({ "main.nts": source });
+  try {
+    const tsconfig = join(dir, "tsconfig.json");
+    const built = await build({ tsconfig });
+    assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
+    const output = JSON.parse(
+      execFileSync(process.execPath, [join(dir, "out", "main.js")], {
+        encoding: "utf8",
+      }).trim(),
+    );
+    assert.deepEqual(output.shape, [2, 5, 3, 6]);
+    assert.deepEqual(output.values, Array(180).fill(16));
+    writeFileSync(
+      join(dir, "src", "main.nts"),
+      source.replace("[5, 4, 6]", "[3, 5, 4, 6]"),
+    );
+    const checked = await check({ tsconfig });
+    assert.equal(checked.ok, false);
+    assert.ok(checked.diagnostics.length);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

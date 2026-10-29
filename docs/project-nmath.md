@@ -107,3 +107,5 @@ Numeric CSV/JSON file adapters belong to the existing core, pandas and Polars en
 The npm component owns `packages/nmath/scripts/benchmarks/`, `packages/nmath/test/fixtures/benchmarks/` and `packages/nmath/test/benchmarks.test.mjs`. These development tools measure matrix calculation, pandas/Polars tabular aggregation, and a compiled `.nts` numerical algorithm. The [package contract](packages-nmath-package-contract.md#workflow-benchmark-protocol) defines the protocol and evidence limits.
 
 Square linear algebra and one-axis FFT operations use the shared lazy execution graph. Their runtime and JS adaptation boundaries are specified in the runtime and package contracts. They do not establish complete numerical family coverage.
+
+Broadcast-batched matrix products and vector promotion share native shape inference across CPU, GPU and the package APIs. The [runtime contract](crates-nmath-runtime-contract.md#matrix-products) and [package contract](packages-nmath-package-contract.md#matrix-product-adaptation) define the behavior and type boundary.

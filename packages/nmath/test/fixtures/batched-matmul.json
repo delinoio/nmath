@@ -1,0 +1,9422 @@
+{
+  "numpy": "2.5.4",
+  "environment": {
+    "python": "3.13.7",
+    "system": "Darwin",
+    "machine": "arm64",
+    "byteorder": "little"
+  },
+  "criterion": "exact-small-values",
+  "cases": [
+    {
+      "id": "bool/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "id": "bool/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "id": "bool/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "id": "bool/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "bool",
+        "values": [
+          false
+        ]
+      }
+    },
+    {
+      "id": "bool/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "id": "bool/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      }
+    },
+    {
+      "id": "bool/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "bool",
+        "values": []
+      }
+    },
+    {
+      "id": "bool/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "id": "bool/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "bool",
+        "values": [
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "bool",
+        "values": []
+      }
+    },
+    {
+      "id": "bool/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "bool",
+        "values": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "bool",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "bool",
+        "values": []
+      }
+    },
+    {
+      "id": "int8/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4,
+          -5,
+          10,
+          -2,
+          1,
+          1,
+          -5,
+          -5,
+          -2,
+          -10,
+          -12,
+          4,
+          4,
+          -8,
+          -10,
+          4,
+          4,
+          15,
+          -8,
+          -3,
+          4,
+          17,
+          15,
+          -3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int8/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          -6,
+          9,
+          3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int8/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          8,
+          -1,
+          -3,
+          2,
+          -7,
+          5,
+          -4,
+          8
+        ]
+      }
+    },
+    {
+      "id": "int8/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "int8",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "int8/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "int8/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          0,
+          3,
+          -1,
+          2,
+          -10,
+          -12,
+          7,
+          5,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "int8/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "int8",
+        "values": []
+      }
+    },
+    {
+      "id": "int8/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "int8/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int8",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "int8",
+        "values": []
+      }
+    },
+    {
+      "id": "int8/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "int8",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "int8",
+        "values": []
+      }
+    },
+    {
+      "id": "int16/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4,
+          -5,
+          10,
+          -2,
+          1,
+          1,
+          -5,
+          -5,
+          -2,
+          -10,
+          -12,
+          4,
+          4,
+          -8,
+          -10,
+          4,
+          4,
+          15,
+          -8,
+          -3,
+          4,
+          17,
+          15,
+          -3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int16/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          -6,
+          9,
+          3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int16/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          8,
+          -1,
+          -3,
+          2,
+          -7,
+          5,
+          -4,
+          8
+        ]
+      }
+    },
+    {
+      "id": "int16/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "int16",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "int16/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "int16/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          0,
+          3,
+          -1,
+          2,
+          -10,
+          -12,
+          7,
+          5,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "int16/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "int16",
+        "values": []
+      }
+    },
+    {
+      "id": "int16/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "int16/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "int16",
+        "values": []
+      }
+    },
+    {
+      "id": "int16/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int16",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "int16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "int16",
+        "values": []
+      }
+    },
+    {
+      "id": "int32/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4,
+          -5,
+          10,
+          -2,
+          1,
+          1,
+          -5,
+          -5,
+          -2,
+          -10,
+          -12,
+          4,
+          4,
+          -8,
+          -10,
+          4,
+          4,
+          15,
+          -8,
+          -3,
+          4,
+          17,
+          15,
+          -3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int32/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          -6,
+          9,
+          3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "int32/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          8,
+          -1,
+          -3,
+          2,
+          -7,
+          5,
+          -4,
+          8
+        ]
+      }
+    },
+    {
+      "id": "int32/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "int32",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "int32/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          4,
+          -2,
+          4,
+          7,
+          10,
+          4,
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "int32/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          3,
+          -3,
+          5,
+          -1,
+          0,
+          3,
+          -1,
+          2,
+          -10,
+          -12,
+          7,
+          5,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "int32/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "int32",
+        "values": []
+      }
+    },
+    {
+      "id": "int32/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "int32/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "int32",
+        "values": []
+      }
+    },
+    {
+      "id": "int32/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int32",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "int32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "int32",
+        "values": []
+      }
+    },
+    {
+      "id": "int64/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1"
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "4",
+          "-2",
+          "4",
+          "7",
+          "10",
+          "4",
+          "1",
+          "4",
+          "-5",
+          "10",
+          "-2",
+          "1",
+          "1",
+          "-5",
+          "-5",
+          "-2",
+          "-10",
+          "-12",
+          "4",
+          "4",
+          "-8",
+          "-10",
+          "4",
+          "4",
+          "15",
+          "-8",
+          "-3",
+          "4",
+          "17",
+          "15",
+          "-3",
+          "-3"
+        ]
+      }
+    },
+    {
+      "id": "int64/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "3",
+          "-3",
+          "5",
+          "-1",
+          "-6",
+          "9",
+          "3",
+          "-3"
+        ]
+      }
+    },
+    {
+      "id": "int64/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "8",
+          "-1",
+          "-3",
+          "2",
+          "-7",
+          "5",
+          "-4",
+          "8"
+        ]
+      }
+    },
+    {
+      "id": "int64/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0"
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "int64",
+        "values": [
+          "8"
+        ]
+      }
+    },
+    {
+      "id": "int64/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "4",
+          "-2",
+          "4",
+          "7",
+          "10",
+          "4",
+          "1",
+          "4"
+        ]
+      }
+    },
+    {
+      "id": "int64/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1"
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "3",
+          "-3",
+          "5",
+          "-1",
+          "0",
+          "3",
+          "-1",
+          "2",
+          "-10",
+          "-12",
+          "7",
+          "5",
+          "1",
+          "1",
+          "1",
+          "1"
+        ]
+      }
+    },
+    {
+      "id": "int64/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "int64",
+        "values": []
+      }
+    },
+    {
+      "id": "int64/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      }
+    },
+    {
+      "id": "int64/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "int64",
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "int64",
+        "values": []
+      }
+    },
+    {
+      "id": "int64/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "int64",
+        "values": [
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1",
+          "0",
+          "1",
+          "2",
+          "3",
+          "-3",
+          "-2",
+          "-1"
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "int64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "int64",
+        "values": []
+      }
+    },
+    {
+      "id": "uint8/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40,
+          7,
+          10,
+          37,
+          28,
+          4,
+          7,
+          25,
+          37,
+          11,
+          18,
+          31,
+          40,
+          4,
+          11,
+          22,
+          31,
+          39,
+          4,
+          27,
+          22,
+          32,
+          39,
+          18,
+          27
+        ]
+      }
+    },
+    {
+      "id": "uint8/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          3,
+          6,
+          9,
+          12
+        ]
+      }
+    },
+    {
+      "id": "uint8/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          8,
+          26,
+          9,
+          20,
+          17,
+          14,
+          32,
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint8/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "uint8",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint8/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40
+        ]
+      }
+    },
+    {
+      "id": "uint8/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          33,
+          45,
+          29,
+          41,
+          8,
+          15,
+          22,
+          29,
+          25,
+          34,
+          22,
+          31
+        ]
+      }
+    },
+    {
+      "id": "uint8/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "uint8",
+        "values": []
+      }
+    },
+    {
+      "id": "uint8/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "uint8/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "uint8",
+        "values": []
+      }
+    },
+    {
+      "id": "uint8/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint8",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "uint8",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "uint8",
+        "values": []
+      }
+    },
+    {
+      "id": "uint16/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40,
+          7,
+          10,
+          37,
+          28,
+          4,
+          7,
+          25,
+          37,
+          11,
+          18,
+          31,
+          40,
+          4,
+          11,
+          22,
+          31,
+          39,
+          4,
+          27,
+          22,
+          32,
+          39,
+          18,
+          27
+        ]
+      }
+    },
+    {
+      "id": "uint16/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          3,
+          6,
+          9,
+          12
+        ]
+      }
+    },
+    {
+      "id": "uint16/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          8,
+          26,
+          9,
+          20,
+          17,
+          14,
+          32,
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint16/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "uint16",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint16/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "uint16",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40
+        ]
+      }
+    },
+    {
+      "id": "uint16/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          33,
+          45,
+          29,
+          41,
+          8,
+          15,
+          22,
+          29,
+          25,
+          34,
+          22,
+          31
+        ]
+      }
+    },
+    {
+      "id": "uint16/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "uint16",
+        "values": []
+      }
+    },
+    {
+      "id": "uint16/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "uint16/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint16",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "uint16",
+        "values": []
+      }
+    },
+    {
+      "id": "uint16/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint16",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "uint16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "uint16",
+        "values": []
+      }
+    },
+    {
+      "id": "uint32/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40,
+          7,
+          10,
+          37,
+          28,
+          4,
+          7,
+          25,
+          37,
+          11,
+          18,
+          31,
+          40,
+          4,
+          11,
+          22,
+          31,
+          39,
+          4,
+          27,
+          22,
+          32,
+          39,
+          18,
+          27
+        ]
+      }
+    },
+    {
+      "id": "uint32/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          3,
+          6,
+          9,
+          12
+        ]
+      }
+    },
+    {
+      "id": "uint32/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          8,
+          26,
+          9,
+          20,
+          17,
+          14,
+          32,
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint32/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "uint32",
+        "values": [
+          8
+        ]
+      }
+    },
+    {
+      "id": "uint32/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "uint32",
+        "values": [
+          13,
+          16,
+          40,
+          52,
+          10,
+          13,
+          28,
+          40
+        ]
+      }
+    },
+    {
+      "id": "uint32/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          9,
+          12,
+          8,
+          11,
+          33,
+          45,
+          29,
+          41,
+          8,
+          15,
+          22,
+          29,
+          25,
+          34,
+          22,
+          31
+        ]
+      }
+    },
+    {
+      "id": "uint32/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "uint32",
+        "values": []
+      }
+    },
+    {
+      "id": "uint32/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "uint32/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint32",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "uint32",
+        "values": []
+      }
+    },
+    {
+      "id": "uint32/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint32",
+        "values": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "uint32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "uint32",
+        "values": []
+      }
+    },
+    {
+      "id": "uint64/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "13",
+          "16",
+          "40",
+          "52",
+          "10",
+          "13",
+          "28",
+          "40",
+          "7",
+          "10",
+          "37",
+          "28",
+          "4",
+          "7",
+          "25",
+          "37",
+          "11",
+          "18",
+          "31",
+          "40",
+          "4",
+          "11",
+          "22",
+          "31",
+          "39",
+          "4",
+          "27",
+          "22",
+          "32",
+          "39",
+          "18",
+          "27"
+        ]
+      }
+    },
+    {
+      "id": "uint64/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "9",
+          "12",
+          "8",
+          "11",
+          "3",
+          "6",
+          "9",
+          "12"
+        ]
+      }
+    },
+    {
+      "id": "uint64/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "8",
+          "26",
+          "9",
+          "20",
+          "17",
+          "14",
+          "32",
+          "8"
+        ]
+      }
+    },
+    {
+      "id": "uint64/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "uint64",
+        "values": [
+          "8"
+        ]
+      }
+    },
+    {
+      "id": "uint64/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "13",
+          "16",
+          "40",
+          "52",
+          "10",
+          "13",
+          "28",
+          "40"
+        ]
+      }
+    },
+    {
+      "id": "uint64/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "9",
+          "12",
+          "8",
+          "11",
+          "33",
+          "45",
+          "29",
+          "41",
+          "8",
+          "15",
+          "22",
+          "29",
+          "25",
+          "34",
+          "22",
+          "31"
+        ]
+      }
+    },
+    {
+      "id": "uint64/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "uint64",
+        "values": []
+      }
+    },
+    {
+      "id": "uint64/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      }
+    },
+    {
+      "id": "uint64/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "uint64",
+        "values": []
+      }
+    },
+    {
+      "id": "uint64/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "uint64",
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "uint64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "uint64",
+        "values": []
+      }
+    },
+    {
+      "id": "float16/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0,
+          -5.0,
+          10.0,
+          -2.0,
+          1.0,
+          1.0,
+          -5.0,
+          -5.0,
+          -2.0,
+          -10.0,
+          -12.0,
+          4.0,
+          4.0,
+          -8.0,
+          -10.0,
+          4.0,
+          4.0,
+          15.0,
+          -8.0,
+          -3.0,
+          4.0,
+          17.0,
+          15.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float16/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          -6.0,
+          9.0,
+          3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float16/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          8.0,
+          -1.0,
+          -3.0,
+          2.0,
+          -7.0,
+          5.0,
+          -4.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float16/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "float16",
+        "values": [
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float16/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "float16",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "float16/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          0.0,
+          3.0,
+          -1.0,
+          2.0,
+          -10.0,
+          -12.0,
+          7.0,
+          5.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "float16/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "float16",
+        "values": []
+      }
+    },
+    {
+      "id": "float16/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "float16/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float16",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "float16",
+        "values": []
+      }
+    },
+    {
+      "id": "float16/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "float16",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "float16",
+        "values": []
+      }
+    },
+    {
+      "id": "float32/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0,
+          -5.0,
+          10.0,
+          -2.0,
+          1.0,
+          1.0,
+          -5.0,
+          -5.0,
+          -2.0,
+          -10.0,
+          -12.0,
+          4.0,
+          4.0,
+          -8.0,
+          -10.0,
+          4.0,
+          4.0,
+          15.0,
+          -8.0,
+          -3.0,
+          4.0,
+          17.0,
+          15.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float32/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          -6.0,
+          9.0,
+          3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float32/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          8.0,
+          -1.0,
+          -3.0,
+          2.0,
+          -7.0,
+          5.0,
+          -4.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float32/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "float32",
+        "values": [
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float32/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "float32/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          0.0,
+          3.0,
+          -1.0,
+          2.0,
+          -10.0,
+          -12.0,
+          7.0,
+          5.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "float32/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "float32",
+        "values": []
+      }
+    },
+    {
+      "id": "float32/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "float32/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float32",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "float32",
+        "values": []
+      }
+    },
+    {
+      "id": "float32/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "float32",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "float32",
+        "values": []
+      }
+    },
+    {
+      "id": "float64/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0,
+          -5.0,
+          10.0,
+          -2.0,
+          1.0,
+          1.0,
+          -5.0,
+          -5.0,
+          -2.0,
+          -10.0,
+          -12.0,
+          4.0,
+          4.0,
+          -8.0,
+          -10.0,
+          4.0,
+          4.0,
+          15.0,
+          -8.0,
+          -3.0,
+          4.0,
+          17.0,
+          15.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float64/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          -6.0,
+          9.0,
+          3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "float64/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          8.0,
+          -1.0,
+          -3.0,
+          2.0,
+          -7.0,
+          5.0,
+          -4.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float64/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "float64",
+        "values": [
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "float64/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "float64/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          3.0,
+          -3.0,
+          5.0,
+          -1.0,
+          0.0,
+          3.0,
+          -1.0,
+          2.0,
+          -10.0,
+          -12.0,
+          7.0,
+          5.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "float64/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "float64",
+        "values": []
+      }
+    },
+    {
+      "id": "float64/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "float64/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "float64",
+        "values": []
+      }
+    },
+    {
+      "id": "float64/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "float64",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "float64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "float64",
+        "values": []
+      }
+    },
+    {
+      "id": "complex64/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          3.0,
+          5.0,
+          0.0,
+          2.0,
+          3.0,
+          5.0,
+          9.0,
+          2.0,
+          9.0,
+          5.0,
+          6.0,
+          2.0,
+          0.0,
+          5.0,
+          6.0,
+          2.0,
+          -6.0,
+          -2.0,
+          12.0,
+          2.0,
+          -3.0,
+          -2.0,
+          3.0,
+          2.0,
+          0.0,
+          -2.0,
+          -3.0,
+          -5.0,
+          -6.0,
+          -2.0,
+          0.0,
+          -5.0,
+          -11.0,
+          5.0,
+          -10.0,
+          9.0,
+          3.0,
+          5.0,
+          6.0,
+          2.0,
+          -9.0,
+          5.0,
+          -8.0,
+          9.0,
+          3.0,
+          5.0,
+          6.0,
+          2.0,
+          14.0,
+          -2.0,
+          -6.0,
+          9.0,
+          -4.0,
+          -2.0,
+          6.0,
+          2.0,
+          16.0,
+          -2.0,
+          17.0,
+          2.0,
+          -4.0,
+          -2.0,
+          -1.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          4.0,
+          0.0,
+          -2.0,
+          0.0,
+          3.0,
+          3.0,
+          0.0,
+          0.0,
+          -5.0,
+          -7.0,
+          10.0,
+          0.0,
+          1.0,
+          3.0,
+          -2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          9.0,
+          1.0,
+          0.0,
+          1.0,
+          -2.0,
+          1.0,
+          3.0,
+          1.0,
+          -6.0,
+          8.0,
+          6.0,
+          1.0,
+          -3.0,
+          1.0,
+          9.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "complex64",
+        "values": [
+          9.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          3.0,
+          5.0,
+          0.0,
+          2.0,
+          3.0,
+          5.0,
+          9.0,
+          2.0,
+          9.0,
+          5.0,
+          6.0,
+          2.0,
+          0.0,
+          5.0,
+          6.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          4.0,
+          0.0,
+          -2.0,
+          0.0,
+          3.0,
+          3.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          4.0,
+          0.0,
+          -3.0,
+          3.0,
+          3.0,
+          0.0,
+          -9.0,
+          0.0,
+          -11.0,
+          7.0,
+          5.0,
+          -4.0,
+          6.0,
+          0.0,
+          2.0,
+          0.0,
+          2.0,
+          0.0,
+          -1.0,
+          3.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "complex64",
+        "values": []
+      }
+    },
+    {
+      "id": "complex64/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex64/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex64",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "complex64",
+        "values": []
+      }
+    },
+    {
+      "id": "complex64/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "complex64",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "complex64",
+        "values": []
+      }
+    },
+    {
+      "id": "complex128/0",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          3.0,
+          5.0,
+          0.0,
+          2.0,
+          3.0,
+          5.0,
+          9.0,
+          2.0,
+          9.0,
+          5.0,
+          6.0,
+          2.0,
+          0.0,
+          5.0,
+          6.0,
+          2.0,
+          -6.0,
+          -2.0,
+          12.0,
+          2.0,
+          -3.0,
+          -2.0,
+          3.0,
+          2.0,
+          0.0,
+          -2.0,
+          -3.0,
+          -5.0,
+          -6.0,
+          -2.0,
+          0.0,
+          -5.0,
+          -11.0,
+          5.0,
+          -10.0,
+          9.0,
+          3.0,
+          5.0,
+          6.0,
+          2.0,
+          -9.0,
+          5.0,
+          -8.0,
+          9.0,
+          3.0,
+          5.0,
+          6.0,
+          2.0,
+          14.0,
+          -2.0,
+          -6.0,
+          9.0,
+          -4.0,
+          -2.0,
+          6.0,
+          2.0,
+          16.0,
+          -2.0,
+          17.0,
+          2.0,
+          -4.0,
+          -2.0,
+          -1.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/1",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          4.0,
+          0.0,
+          -2.0,
+          0.0,
+          3.0,
+          3.0,
+          0.0,
+          0.0,
+          -5.0,
+          -7.0,
+          10.0,
+          0.0,
+          1.0,
+          3.0,
+          -2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/2",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          9.0,
+          1.0,
+          0.0,
+          1.0,
+          -2.0,
+          1.0,
+          3.0,
+          1.0,
+          -6.0,
+          8.0,
+          6.0,
+          1.0,
+          -3.0,
+          1.0,
+          9.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/3",
+      "a": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          9.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/4",
+      "a": {
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          2,
+          3,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          3.0,
+          5.0,
+          0.0,
+          2.0,
+          3.0,
+          5.0,
+          9.0,
+          2.0,
+          9.0,
+          5.0,
+          6.0,
+          2.0,
+          0.0,
+          5.0,
+          6.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/5",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1,
+          2,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          4.0,
+          0.0,
+          -2.0,
+          0.0,
+          3.0,
+          3.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          4.0,
+          0.0,
+          -3.0,
+          3.0,
+          3.0,
+          0.0,
+          -9.0,
+          0.0,
+          -11.0,
+          7.0,
+          5.0,
+          -4.0,
+          6.0,
+          0.0,
+          2.0,
+          0.0,
+          2.0,
+          0.0,
+          -1.0,
+          3.0,
+          2.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/6",
+      "a": {
+        "shape": [
+          0,
+          2,
+          3
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          0,
+          2,
+          4
+        ],
+        "dtype": "complex128",
+        "values": []
+      }
+    },
+    {
+      "id": "complex128/7",
+      "a": {
+        "shape": [
+          2,
+          3,
+          0
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          1,
+          0,
+          4
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "complex128/8",
+      "a": {
+        "shape": [
+          2,
+          0,
+          3
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "b": {
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "complex128",
+        "values": [
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          0,
+          4
+        ],
+        "dtype": "complex128",
+        "values": []
+      }
+    },
+    {
+      "id": "complex128/9",
+      "a": {
+        "shape": [
+          2,
+          4,
+          3
+        ],
+        "dtype": "complex128",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          2.0,
+          -1.0,
+          3.0,
+          0.0,
+          -3.0,
+          1.0,
+          -2.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          -1.0,
+          2.0,
+          0.0,
+          3.0,
+          1.0,
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          3,
+          0
+        ],
+        "dtype": "complex128",
+        "values": []
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          0
+        ],
+        "dtype": "complex128",
+        "values": []
+      }
+    },
+    {
+      "id": "promotion/int8/uint8",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "int8",
+        "values": [
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "uint8",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -14,
+          -20,
+          13,
+          16,
+          -8,
+          -14,
+          10,
+          13,
+          -23,
+          -8,
+          7,
+          10,
+          -17,
+          -23,
+          4,
+          7,
+          -16,
+          -18,
+          4,
+          4,
+          -14,
+          -16,
+          4,
+          4,
+          9,
+          -14,
+          -3,
+          4,
+          11,
+          9,
+          -3,
+          -3
+        ]
+      }
+    },
+    {
+      "id": "promotion/float16/int16",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float16",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int16",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0,
+          -5.0,
+          10.0,
+          -2.0,
+          1.0,
+          1.0,
+          -5.0,
+          -5.0,
+          -2.0,
+          -10.0,
+          -12.0,
+          4.0,
+          4.0,
+          -8.0,
+          -10.0,
+          4.0,
+          4.0,
+          15.0,
+          -8.0,
+          -3.0,
+          4.0,
+          17.0,
+          15.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "promotion/float32/int32",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "float32",
+        "values": [
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "int32",
+        "values": [
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          -3,
+          -2,
+          -1,
+          0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          4.0,
+          -2.0,
+          4.0,
+          7.0,
+          10.0,
+          4.0,
+          1.0,
+          4.0,
+          -5.0,
+          10.0,
+          -2.0,
+          1.0,
+          1.0,
+          -5.0,
+          -5.0,
+          -2.0,
+          -10.0,
+          -12.0,
+          4.0,
+          4.0,
+          -8.0,
+          -10.0,
+          4.0,
+          4.0,
+          15.0,
+          -8.0,
+          -3.0,
+          4.0,
+          17.0,
+          15.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "promotion/complex64/float64",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2,
+          3
+        ],
+        "dtype": "complex64",
+        "values": [
+          -3.0,
+          -1.0,
+          -2.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          -1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0,
+          3.0,
+          -1.0,
+          -3.0,
+          0.0,
+          -2.0,
+          1.0,
+          -1.0,
+          -1.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "b": {
+        "shape": [
+          4,
+          3,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          -3.0,
+          -2.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          4,
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          4.0,
+          4.0,
+          -2.0,
+          4.0,
+          4.0,
+          4.0,
+          7.0,
+          4.0,
+          10.0,
+          4.0,
+          4.0,
+          4.0,
+          1.0,
+          4.0,
+          4.0,
+          4.0,
+          -5.0,
+          -3.0,
+          10.0,
+          4.0,
+          -2.0,
+          -3.0,
+          1.0,
+          4.0,
+          1.0,
+          -3.0,
+          -5.0,
+          -3.0,
+          -5.0,
+          -3.0,
+          -2.0,
+          -3.0,
+          -10.0,
+          4.0,
+          -12.0,
+          4.0,
+          4.0,
+          4.0,
+          4.0,
+          4.0,
+          -8.0,
+          4.0,
+          -10.0,
+          4.0,
+          4.0,
+          4.0,
+          4.0,
+          4.0,
+          15.0,
+          -3.0,
+          -8.0,
+          4.0,
+          -3.0,
+          -3.0,
+          4.0,
+          4.0,
+          17.0,
+          -3.0,
+          15.0,
+          -3.0,
+          -3.0,
+          -3.0,
+          -3.0,
+          -3.0
+        ]
+      }
+    },
+    {
+      "id": "integer-boundary/int64",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "1152921504606846979",
+          "9223372036854775807",
+          "-9223372036854775808",
+          "-1"
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "int64",
+        "values": [
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1
+        ],
+        "dtype": "int64",
+        "values": [
+          "1152921504606846977",
+          "9223372036854775806"
+        ]
+      }
+    },
+    {
+      "id": "integer-boundary/uint64",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1152921504606846979",
+          "18446744073709551615",
+          "9223372036854775808",
+          "1"
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1",
+          "2"
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1
+        ],
+        "dtype": "uint64",
+        "values": [
+          "1152921504606846977",
+          "9223372036854775810"
+        ]
+      }
+    },
+    {
+      "id": "integer-boundary/int8",
+      "a": {
+        "shape": [
+          2,
+          1,
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          127,
+          127,
+          -128,
+          -128
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "int8",
+        "values": [
+          1,
+          2
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          1
+        ],
+        "dtype": "int8",
+        "values": [
+          125,
+          -128
+        ]
+      }
+    }
+  ]
+}
