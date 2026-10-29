@@ -540,3 +540,46 @@ fn assigning_a_view_valued_expression_copies_its_values() {
     assert_eq!(target.to_buffer(), Buffer::F64(vec![3.0, 4.0]));
     assert!(!target.shares_storage(&source));
 }
+
+#[test]
+fn random_assignments_commit_generator_state() {
+    let c = ctx(1, 4);
+    let g = c.generator(42);
+    let before = g.current();
+    let target = c.array(vec![3], Buffer::F64(vec![0.0; 3])).unwrap();
+    let value = Expr::random(c.id(), &g, vec![3]);
+    let (done, rx) = channel();
+    c.assign(&target, vec![], &value, CancellationToken::new(), done)
+        .unwrap();
+    wait(&rx).unwrap();
+    // NumPy 2.5.4: default_rng(42).random(3)
+    let first = Buffer::F64(vec![
+        0.7739560485559633,
+        0.4388784397520523,
+        0.8585979199113825,
+    ]);
+    assert_eq!(target.to_buffer(), first);
+    assert_ne!(g.current(), before);
+    let (done, rx) = channel();
+    c.assign(&target, vec![], &value, CancellationToken::new(), done)
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_ne!(
+        target.to_buffer(),
+        first,
+        "the next assignment continues the stream"
+    );
+    // A failing assignment leaves the generator state unchanged.
+    let committed = g.current();
+    let (done, rx) = channel();
+    c.assign(
+        &target,
+        vec![Selector::Index(0)],
+        &value,
+        CancellationToken::new(),
+        done,
+    )
+    .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeBroadcast);
+    assert_eq!(g.current(), committed);
+}

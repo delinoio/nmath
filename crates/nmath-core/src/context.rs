@@ -287,16 +287,27 @@ impl Context {
     ) -> Result<u64> {
         self.ensure_owned(Some(target.context_id()))?;
         self.ensure_owned(value.context_id())?;
+        // Like `compute()`, random nodes serialize on their generators in
+        // request order and commit the advanced state only on success.
+        let generator_tickets: Vec<Ticket> =
+            value.generators().iter().map(Generator::ticket).collect();
         let ticket = target.write_ticket();
         let target = target.clone();
         let value = value.clone();
         let work: Work = Box::new(move |env| {
+            let _turns: Vec<FifoGuard> = generator_tickets
+                .into_iter()
+                .map(|t| t.wait(&env.token))
+                .collect::<Result<_>>()?;
             let turn = ticket.wait(&env.token)?;
             env.freeze(&value)?;
             // Assignment copies values, so view-valued expressions (basic
             // indexing of an input) materialize from the frozen snapshot.
             let dense = env.eval_dense(&value)?;
             target.assign(&turn, &selectors, &dense, &env.token)?;
+            for (generator, state) in env.take_generator_states() {
+                generator.commit(state);
+            }
             Ok(JobOutput::Unit)
         });
         self.submit(
