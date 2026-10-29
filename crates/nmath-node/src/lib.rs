@@ -272,14 +272,26 @@ impl NativeExpr {
 
     #[napi(factory)]
     pub fn int_scalar(value: BigInt) -> Result<Self> {
-        let (negative, magnitude, lossless) = value.get_u64();
-        if !lossless {
-            return Err(core_err(
-                ErrorCode::DTypeUnsupported,
-                "Integer scalars must fit in 64 bits.",
-            ));
-        }
-        let scalar = if negative {
+        // `BigInt::get_u64` reports every negative value as lossy, so read the
+        // sign and words directly. Negative magnitudes up to 2^63 are valid;
+        // `-2^63` maps to `i64::MIN` exactly.
+        let magnitude = match value.words.split_first() {
+            Some((&low, high)) if high.iter().all(|&w| w == 0) => low,
+            None => 0,
+            Some(_) => {
+                return Err(core_err(
+                    ErrorCode::DTypeUnsupported,
+                    "Integer scalars must fit in 64 bits.",
+                ));
+            }
+        };
+        let scalar = if value.sign_bit && magnitude != 0 {
+            if magnitude > i64::MIN.unsigned_abs() {
+                return Err(core_err(
+                    ErrorCode::DTypeUnsupported,
+                    "Negative integer scalars must be at least -2^63.",
+                ));
+            }
             Scalar::Int((magnitude as i64).wrapping_neg())
         } else if magnitude > i64::MAX as u64 {
             Scalar::UInt(magnitude)

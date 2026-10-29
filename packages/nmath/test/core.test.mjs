@@ -97,6 +97,18 @@ test("64-bit integers stay exact as bigint", async () => {
   await ctx.close();
 });
 
+test("bigint scalars outside the signed 64-bit range are rejected", async () => {
+  const ctx = context();
+  const a = ctx.array([0n], { dtype: "int64" });
+  assert.deepEqual((await a.add(-1n).compute()).toArray(), [-1n]);
+  assert.deepEqual((await a.add(-(2n ** 63n)).compute()).toArray(), [
+    -(2n ** 63n),
+  ]);
+  throwsWith(() => a.add(-(2n ** 63n) - 1n), "NMATH_DTYPE_UNSUPPORTED");
+  throwsWith(() => a.add(-(2n ** 64n) + 1n), "NMATH_DTYPE_UNSUPPORTED");
+  await ctx.close();
+});
+
 test("dtype promotion and shape errors are reported at construction", () => {
   const ctx = context();
   const i32 = ctx.array([1, 2, 3], { dtype: "int32" });
