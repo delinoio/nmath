@@ -457,7 +457,8 @@ export class NMathArray<
 
   /** Reads one element synchronously. */
   item(...index: number[]): ScalarOf<D> {
-    return native(() => this.#array.item(index)) as ScalarOf<D>;
+    const checked = index.map((i) => checkInt(i, "An index") as number);
+    return native(() => this.#array.item(checked)) as ScalarOf<D>;
   }
 
   /** Copies the elements into a typed array in C order. */

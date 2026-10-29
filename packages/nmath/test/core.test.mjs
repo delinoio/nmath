@@ -227,6 +227,16 @@ test("memory budgets reject before allocation", async () => {
   await ctx.close();
 });
 
+test("item rejects non-integer indices", async () => {
+  const ctx = context();
+  const a = ctx.array([1, 2, 3], { dtype: "int32" });
+  for (const bad of [0.9, NaN, Infinity]) {
+    throwsWith(() => a.item(bad), "NMATH_INDEX_INVALID");
+  }
+  assert.equal(a.item(2), 3);
+  await ctx.close();
+});
+
 test("scalar results release their storage reservation", async () => {
   const ctx = context();
   const a = ctx.array([1, 2, 3], { dtype: "float64" });
