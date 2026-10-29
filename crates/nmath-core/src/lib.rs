@@ -31,3 +31,5 @@ pub use shape::Selector;
 pub use sync::CancellationToken;
 
 pub mod table;
+
+pub mod io_text;

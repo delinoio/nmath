@@ -1,3 +1,10 @@
+import type { NMathContext } from "./core.js";
+import {
+  readPandas,
+  writeFrame,
+  type TextReadOptions,
+  type TextWriteOptions,
+} from "./io-text-frames.js";
 // SPDX-License-Identifier: Apache-2.0
 // pandas-style entry point (subset). pandas operations always run on the CPU. The
 // compatibility inventory in README.md lists which pandas 3.1.0 APIs exist.
@@ -320,6 +327,21 @@ export class DataFrame {
     if (this.#columns.size) validateColumns(this.#columns, this.validity);
   }
 
+  toCsv(
+    context: NMathContext,
+    path: string,
+    options?: TextWriteOptions & { dropIndex?: boolean },
+  ) {
+    return writeFrame(context, this, path, "csv", options);
+  }
+  toJson(
+    context: NMathContext,
+    path: string,
+    options?: TextWriteOptions & { dropIndex?: boolean },
+  ) {
+    return writeFrame(context, this, path, "json", options);
+  }
+
   get columns(): string[] {
     return [...this.#columns.keys()];
   }
@@ -473,4 +495,19 @@ export class DataFrame {
     const out = await plan.compute(options);
     return new DataFrame(out.columns, { validity: out.validity });
   }
+}
+
+export function read_csv(
+  context: NMathContext,
+  path: string,
+  options?: TextReadOptions,
+) {
+  return readPandas(context, path, "csv", options);
+}
+export function read_json(
+  context: NMathContext,
+  path: string,
+  options?: TextReadOptions,
+) {
+  return readPandas(context, path, "json", options);
 }

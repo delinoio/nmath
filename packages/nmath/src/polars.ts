@@ -1,3 +1,10 @@
+import type { NMathContext } from "./core.js";
+import {
+  readPolars,
+  writeFrame,
+  type TextReadOptions,
+  type TextWriteOptions,
+} from "./io-text-frames.js";
 // SPDX-License-Identifier: Apache-2.0
 // Polars-style entry point (subset). Polars operations always run on the CPU. The
 // compatibility inventory in README.md lists which Polars 2.1.0 APIs exist.
@@ -139,6 +146,21 @@ export class DataFrame {
               .map((s) => [s.name, s.validity!])),
     );
     if (this.#columns.size) validateColumns(this.#columns, this.validity);
+  }
+
+  writeCsv(
+    context: NMathContext,
+    path: string,
+    options?: TextWriteOptions & { dropIndex?: boolean },
+  ) {
+    return writeFrame(context, this, path, "csv", options);
+  }
+  writeJson(
+    context: NMathContext,
+    path: string,
+    options?: TextWriteOptions & { dropIndex?: boolean },
+  ) {
+    return writeFrame(context, this, path, "json", options);
   }
 
   get columns(): string[] {
@@ -293,4 +315,19 @@ export class LazyFrame {
     const out = await this.#native().compute(options);
     return new DataFrame(out.columns, out.validity);
   }
+}
+
+export function read_csv(
+  context: NMathContext,
+  path: string,
+  options?: TextReadOptions,
+) {
+  return readPolars(context, path, "csv", options);
+}
+export function read_json(
+  context: NMathContext,
+  path: string,
+  options?: TextReadOptions,
+) {
+  return readPolars(context, path, "json", options);
 }
