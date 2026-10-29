@@ -54,7 +54,7 @@ Boolean remainder and power use the NumPy `int8` result loop. Boolean addition a
 - Admission: if fewer than `max_concurrent_jobs` jobs run, the job starts. Otherwise it enters a FIFO queue. If the queue holds `max_queue_length` jobs, admission fails with `NMATH_SCHED_QUEUE_FULL`.
 - Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Workers check cancellation before starting work. Kernels check the token between chunks; a cancelled read or computation does not return its result. File writers check cancellation before atomic publication. Successful publication is terminal success: cancellation received after publication does not change the completion or metrics to cancelled.
 - `Context::close()` rejects new work with `NMATH_CONTEXT_CLOSED`, cancels queued work, cancels running work cooperatively and resolves after all jobs release their resources.
-- Jobs on one storage that write are serialized in request order. A write commits only after it fully succeeds.
+- Jobs on one storage that write are serialized in admission order. Ticket creation and scheduler admission use one critical section, so a running context job never waits for a ticket held by a queued successor. A write commits only after it fully succeeds. Rejected and cancelled jobs give up unused tickets.
 
 ### Memory accounting
 
@@ -66,7 +66,7 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 ### Random generation
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
-- Jobs that share a generator serialize. A job reads state at start and commits the advanced state only on success.
+- Jobs that share a generator serialize in admission order. The same critical section coordinates generator tickets with scheduler admission. A job reads state at start and commits the advanced state only on success.
 
 ### Measurements
 
