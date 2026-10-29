@@ -9,6 +9,18 @@ publish.workspace = true
 
 [dependencies]
 tracing.workspace = true
+pollster = "=0.4.0"
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["metal"] }
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["vulkan"] }
+
+[target.'cfg(all(target_os = "windows", target_arch = "x86_64"))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["dx12"] }
 
 [dev-dependencies]
 tempfile = "3"
+naga = { version = "=30.0.1", default-features = false, features = ["wgsl-in"] }
