@@ -133,3 +133,26 @@ Joins use a single key and `how:'inner'|'left'`. `rightKey` chooses a differentl
 `Series.toPolars`, `DataFrame.toPolars`, `Series.toPandas` and `DataFrame.toPandas` preserve names, numeric dtypes and validity expressions. These synchronous conversions wrap the same lazy column handles; they do not copy buffers or move data between contexts. Calling compute/collect makes a native execution snapshot and returns independent result storage. pandas-to-Polars conversion rejects a non-default index unless `dropIndex:true` explicitly authorizes label loss. pandas `Series.toColumn()` returns the name, values, validity and labels together. `toArray()` explicitly drops the name and rejects nullable Series; use `toColumn()` to preserve the mask. Cross-context copies remain explicit array operations and require copying both values and validity columns.
 
 Errors use the existing stable codes and English recovery guidance. Table schema errors do not include input values or column names. Names are resolved to positions before native execution.
+
+### NPZ API
+
+`ctx.saveNpz(path, arrays, options?)` writes a `ReadonlyMap<string, NMathArray<any, any>>` in insertion order. Arrays may have different dtypes and shapes, but must belong to `ctx`. Options are `{ compressed?: boolean, overwrite?: boolean, signal?: AbortSignal }`. `compressed` and `overwrite` default to `false`. The core method uses the exact path without adding a suffix and returns `Promise<void>`.
+
+`ctx.loadNpz(path, { signal }?)` returns `Promise<Map<string, NMathArray<ComputableDType, number[]>>>`. Member names remain Map keys, including names such as `__proto__`; they are never assigned as object properties. Rank-zero members remain arrays and expose their scalar through `item()`. Callers dispose each returned array when finished. Empty archives return an empty Map.
+
+The NumPy entry point exports these explicit JS adaptations:
+
+```ts
+interface NpzInputs {
+  positional?: readonly NMathArray<any, any>[];
+  named?: ReadonlyMap<string, NMathArray<any, any>>;
+}
+
+savez(context, path, inputs?: NpzInputs, options?: { overwrite?: boolean; signal?: AbortSignal }): Promise<void>;
+savez_compressed(context, path, inputs?: NpzInputs, options?: { overwrite?: boolean; signal?: AbortSignal }): Promise<void>;
+loadNpz(context, path, options?: { signal?: AbortSignal }): Promise<Map<string, NMathArray<ComputableDType, number[]>>>;
+```
+
+`savez` uses stored members; `savez_compressed` uses DEFLATE. Both append `.npz` when the path does not already end with that exact suffix. They insert named entries in Map order, followed by positional entries named `arr_0`, `arr_1`, and so on. A positional name that collides with a named entry rejects with `TypeError` before native submission. Omitted inputs produce an empty archive. There is no pickle option. Existing `load` remains NPY-only; NPZ uses the explicit `loadNpz` method.
+
+All NPZ operations use native scheduled file jobs and explicit contexts. Pre-publication cancellation or failure preserves existing output, and writes reject existing destinations unless `overwrite: true`. Successful atomic publication is terminal success even if the signal aborts before Promise completion. Reads retain cancellation checks through scheduler completion. Name, compression, size, dtype and layout limits follow the runtime NPZ contract and remain visible compatibility constraints.

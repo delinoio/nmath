@@ -197,3 +197,28 @@ await ctx.close();
 ```
 
 Supported table operations: native multi-column compute, boolean-column filtering, stable single-key sorting, single-key inner/left equijoins, sum/mean/min/max/count grouping, and basic materialized lazy plans. pandas preserves explicit labels and matches null join keys; Polars uses positional rows and requires `nullsEqual:true` to match null join keys. Full label alignment, nullable expression arithmetic, arbitrary post-row projections, multiple keys, additional join modes, windows, pivots, strings, temporal/categorical operations, query optimization and internal streaming remain targets.
+
+### NPZ files
+
+Use an explicit context and await NPZ operations:
+
+```ts
+import { savez, savez_compressed, loadNpz } from '@delinoio/nmath/numpy';
+
+await savez(ctx, 'arrays', {
+  named: new Map([['weights', weights]]),
+  positional: [samples],
+});
+const arrays = await loadNpz(ctx, 'arrays.npz');
+const weightsAgain = arrays.get('weights');
+const samplesAgain = arrays.get('arr_0');
+
+await savez_compressed(ctx, 'arrays.npz', { named: arrays }, { overwrite: true });
+for (const array of arrays.values()) array.dispose();
+```
+
+The save helpers append `.npz` if needed. Named Map entries precede positional `arr_0`, `arr_1`, and subsequent entries; a name collision rejects before the write starts. Empty archives are supported. Loaded values are always arrays, including rank-zero members. Use `item()` for a scalar. `loadNpz` returns a Map, so arbitrary supported names do not become object properties. Existing `load` reads NPY files only.
+
+For exact paths, use `ctx.saveNpz(path, map, { compressed, overwrite, signal })` and `ctx.loadNpz(path, { signal })`. Compression and overwrite default to false. All saved arrays must belong to the context. Cancellation before publication preserves existing output. A write that has already published completes successfully even if its signal aborts before the Promise settles.
+
+NPZ supports stored and deflated numeric/boolean NPY members, including complex64 and complex128. Complex input supports both byte orders and C/Fortran layout; output is little-endian C order. Pickle/object data, string/date/structured/extended dtypes, unsupported noncomplex byte orders/layouts, encrypted members and other compression methods are unsupported. Names must be nonempty UTF-8 components other than `.` or `..`, without slashes, backslashes, colons or control characters, and at most 65,531 UTF-8 bytes. Duplicate names and non-NPY members are rejected. ZIP64 central directories, multi-disk archives, 65,535 or more members and output capacity bounds at or above 4 GiB are unsupported. Conservative memory and output reservations can reject an archive earlier. These limits do not establish full NumPy compatibility.
