@@ -9,6 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,6 +87,26 @@ export function stagePublic(output, licenseBundle) {
   for (const name of ["dist", "bin", "README.md"])
     cpSync(join(source, name), join(destination, name), { recursive: true });
   licenses(destination, licenseBundle);
+  const inventoryRoot = join(source, "compatibility/inventory");
+  const inventory = JSON.parse(
+    readFileSync(join(inventoryRoot, "manifest.generated.json"), "utf8"),
+  );
+  const rows = inventory.shards.flatMap((shard) =>
+    readFileSync(join(inventoryRoot, shard.path), "utf8")
+      .trimEnd()
+      .split("\n")
+      .map(JSON.parse),
+  );
+  writeFileSync(
+    join(destination, "compatibility.json.gz"),
+    gzipSync(
+      JSON.stringify({
+        versions: inventory.versions,
+        acceptanceStatus: inventory.acceptanceStatus,
+        rows,
+      }),
+    ),
+  );
   const { scripts, devDependencies, napi, ...published } = manifest;
   published.files = [
     "dist",
@@ -94,6 +115,7 @@ export function stagePublic(output, licenseBundle) {
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_LICENSES.txt",
+    "compatibility.json.gz",
   ];
   published.optionalDependencies = Object.fromEntries(
     targets.map((t) => [`@delinoio/nmath-${t.triple}`, manifest.version]),

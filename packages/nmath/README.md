@@ -203,6 +203,8 @@ Every failure is an `NMathError` with a stable `code` (for example `NMATH_SCHED_
 
 ## Compatibility inventory
 
+The installed package includes `compatibility.json.gz`. Decompress this JSON inventory to inspect each original API, its counterpart and verification state. A `pending` row or field is an unresolved support target; `excluded` records an agreed exclusion. The inventory does not certify full compatibility. Python is needed only by maintainers generating reference fixtures, never by the runtime.
+
 Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease covers a small part of each library. Every API not listed as available is a planned support target unless a published exclusion says otherwise.
 
 | Area                 | Available now                                                                                                                     | Not yet available                                                                                                                             |

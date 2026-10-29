@@ -54,7 +54,11 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:compiler": "node scripts/build-compiler.mjs",
     "package:native": "node scripts/distribution.mjs",
-    "test:package": "node scripts/smoke-package.mjs"
+    "test:package": "node scripts/smoke-package.mjs",
+    "test:compatibility": "node scripts/compatibility/check-native.mjs",
+    "oracle:generate": "python3 scripts/compatibility/generate-fixtures.py",
+    "oracle:inventory": "python3 scripts/compatibility/generate-inventory.py",
+    "oracle:check": "python3 scripts/compatibility/check-reproducibility.py"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.9",

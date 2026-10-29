@@ -8,6 +8,7 @@ import type {
   NativeSelector,
 } from "./native-binding.generated.js";
 import type {
+  BoolArithmetic,
   Broadcast,
   BroadcastCheck,
   ComputableDType,
@@ -302,11 +303,11 @@ export abstract class Lazy<
         S,
         S2
       >,
-  ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
+  ): Expr<BoolArithmetic<Promote<D, D2>>, Broadcast<S, S2>>;
   mod<W extends Exclude<WeakScalar, Complex>>(
     this: D extends "complex64" | "complex128" ? never : Lazy<D, S>,
     other: W,
-  ): Expr<PromoteWeak<D, W>, S>;
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
   mod(other: Operand): Expr<any, any> {
     return this.binaryOp("mod", other);
   }
@@ -316,20 +317,22 @@ export abstract class Lazy<
         S,
         S2
       >,
-  ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
-  pow<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
+  ): Expr<BoolArithmetic<Promote<D, D2>>, Broadcast<S, S2>>;
+  pow<W extends WeakScalar>(
+    other: W,
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
   pow(other: Operand): Expr<any, any> {
     return this.binaryOp("pow", other);
   }
 
-  neg(): Expr<D, S> {
+  neg(this: [D] extends ["bool"] ? never : Lazy<D, S>): Expr<D, S> {
     return new Expr(
       native(() => binding.NativeExpr.unary("neg", this.nativeExpr())),
       this.context,
     );
   }
 
-  pos(): Expr<D, S> {
+  pos(this: [D] extends ["bool"] ? never : Lazy<D, S>): Expr<D, S> {
     return new Expr(
       native(() => binding.NativeExpr.unary("pos", this.nativeExpr())),
       this.context,

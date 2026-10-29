@@ -90,6 +90,16 @@ The package does not log by default. `NMATH_LOG` enables native `tracing` output
 - Platform acceptance for the eight CPU binary combinations and the GPU matrix is recorded in pull requests, issues and CI artifacts, not in this document.
 - Native package staging, installed-archive smoke tests, license bundles and release evidence follow the [distribution contract](packages-nmath-distribution-contract.md). The staged public manifest selects exact-version platform optional dependencies; development installs do not resolve unpublished platform packages.
 
+### Compatibility inventory and reference fixtures
+
+`packages/nmath/compatibility/inventory/` records the fixed originals' public API boundaries, aliases, per-entry conditions, verification and agreed exclusions. Pending semantics, argument adaptations, dtype/platform, view/mutation and missing-value fields remain explicit support obligations. Source references use pinned revisions and hashes; a row count or successful generation does not establish behavioral or cross-platform acceptance.
+
+`packages/nmath/scripts/compatibility/` generates and checks fixtures from the exact development-only versions in `compatibility/oracle-requirements.txt`. Runtime builds and native comparisons do not need Python. `oracle:generate`, `oracle:inventory` and `oracle:check` are uncached package tasks run through root Turbo; inventory and reproducibility tasks take explicit pinned upstream source-directory arguments. Run them with the pinned oracle environment on PATH. Do not regenerate fixtures from unpinned originals or silently change numerical criteria.
+
+`test:compatibility` depends on the native package build, runs through root Turbo without caching, and returns failure for native mismatches. It accepts an optional report output path and records actual source revision and environment. Fixture equality alone is not full numerical acceptance; operation/dtype-specific criteria and unperformed scenarios remain recorded.
+
+The published package includes `compatibility.json.gz`, a gzip-compressed JSON object with fixed `versions`, `acceptanceStatus` and API `rows`. This is the public inventory artifact. It preserves pending and excluded states and ships no Python tooling, oracle environment or input fixtures.
+
 ## Dependencies and Integrations
 
 - Upstream: [runtime crates contract](crates-nmath-runtime-contract.md) and [compiler crates contract](crates-nmath-compiler-contract.md).

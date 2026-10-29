@@ -89,13 +89,13 @@ export function neg(a: NValue): AnyExpr;
 export function neg(a: number): number;
 export function neg(a: bigint): bigint;
 export function neg(a: any): any {
-  return isN(a) ? a.neg() : -a;
+  return isN(a) ? (a as Lazy<ComputableDType, Shape>).neg() : -a;
 }
 
 export function pos(a: NValue): AnyExpr;
 export function pos(a: number | string | boolean | null | undefined): number;
 export function pos(a: any): any {
-  return isN(a) ? a.pos() : +a;
+  return isN(a) ? (a as Lazy<ComputableDType, Shape>).pos() : +a;
 }
 
 type Key = Selector | readonly Selector[];

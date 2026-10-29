@@ -60,8 +60,7 @@ impl BinaryOp {
                 "Remainder is not defined for complex operands. Use real operands.",
             ));
         }
-        if promoted == DType::Bool && matches!(self, BinaryOp::Sub | BinaryOp::Mod | BinaryOp::Pow)
-        {
+        if promoted == DType::Bool && self == BinaryOp::Sub {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
                 format!(
@@ -72,6 +71,7 @@ impl BinaryOp {
         }
         Ok(match self {
             BinaryOp::Div => promoted.true_divide(),
+            BinaryOp::Mod | BinaryOp::Pow if promoted == DType::Bool => DType::Int8,
             _ => promoted,
         })
     }
@@ -453,7 +453,9 @@ pub fn binary(
 ) -> Result<DenseArray> {
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;
-    let work_dtype = if op == BinaryOp::Div {
+    let work_dtype = if op == BinaryOp::Div
+        || compute_dtype == DType::Bool && matches!(op, BinaryOp::Mod | BinaryOp::Pow)
+    {
         result_dtype
     } else {
         compute_dtype
@@ -507,10 +509,10 @@ pub fn unary(
     token: &CancellationToken,
 ) -> Result<DenseArray> {
     token.check()?;
-    if op == UnaryOp::Neg && input.dtype() == DType::Bool {
+    if input.dtype() == DType::Bool {
         return Err(Error::new(
             ErrorCode::DTypeUnsupported,
-            "The negative operator is not supported for bool operands.",
+            "Unary arithmetic is not supported for bool operands.",
         ));
     }
     let reservation = reserve_for(budget, input.dtype(), input.size())?;

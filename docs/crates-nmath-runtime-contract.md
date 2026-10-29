@@ -33,6 +33,8 @@ Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `su
 
 Basic indexing shares complex storage; advanced indexing and explicit context copies preserve both components. An explicit `astype` may discard the imaginary component when converting to a real dtype. Complex-to-boolean casts test both components. Assignment from complex values to real numeric storage requires an explicit cast before the write; assignment to boolean storage uses complex truth semantics. Failed writes preserve the target.
 
+Boolean remainder and power use the NumPy `int8` result loop. Boolean addition and multiplication preserve `bool`; subtraction and both unary arithmetic operators reject boolean operands.
+
 ### Arrays and storage
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.

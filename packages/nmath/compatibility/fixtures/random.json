@@ -1,0 +1,594 @@
+{
+  "schemaVersion": 1,
+  "versions": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "polars": "2.1.0"
+  },
+  "sources": {
+    "numpy": {
+      "repository": "numpy/numpy",
+      "tag": "v2.5.4",
+      "commit": "a3d0ef1df045b858e68115001fdabc930bb3b68c"
+    },
+    "pandas": {
+      "repository": "pandas-dev/pandas",
+      "tag": "v3.1.0",
+      "commit": "c6f46769b808eb60218189d089dd67841b44f1b9"
+    },
+    "polars": {
+      "repository": "pola-rs/polars",
+      "tag": "py-2.1.0",
+      "commit": "7f902bd3ffd27ff82d14278a09a295ff2f7aed92"
+    }
+  },
+  "environment": {
+    "python": "3.12.14",
+    "system": "Darwin",
+    "machine": "arm64",
+    "byteorder": "little"
+  },
+  "device": "cpu",
+  "cases": [
+    {
+      "id": "random/pcg64/0",
+      "seed": "0",
+      "calls": [
+        {
+          "shape": [
+            3
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 35399562948360463058890781895381311971,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              3
+            ],
+            "values": [
+              "3fe461fd79fb3850",
+              "3fd1442f7e20b674",
+              "3fa4fa7b529d9bd0"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 18792671013009471063546316241193924174,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            0
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 18792671013009471063546316241193924174,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              0
+            ],
+            "values": []
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 18792671013009471063546316241193924174,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            2,
+            2
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 18792671013009471063546316241193924174,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              2,
+              2
+            ],
+            "values": [
+              "3f90ec9ed84d0bc0",
+              "3fea064f4f059bca",
+              "3fed354b2f34c803",
+              "3fe3698f6e301db6"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 192621658367251491052343927637849451242,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            1
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 192621658367251491052343927637849451242,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              1
+            ],
+            "values": [
+              "3fe758092bff1053"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 309019961079606187284900980202903920827,
+              "inc": 87136372517582989555478159403783844777
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        }
+      ],
+      "criterion": "random-exact-contract"
+    },
+    {
+      "id": "random/pcg64/42",
+      "seed": "42",
+      "calls": [
+        {
+          "shape": [
+            3
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 274674114334540486603088602300644985544,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              3
+            ],
+            "values": [
+              "3fe8c43f79a2db24",
+              "3fdc16959869e47e",
+              "3feb79a2584ddb42"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 302602671330392952913379056849247414473,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            0
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 302602671330392952913379056849247414473,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              0
+            ],
+            "values": []
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 302602671330392952913379056849247414473,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            2,
+            2
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 302602671330392952913379056849247414473,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              2,
+              2
+            ],
+            "values": [
+              "3fe650d6c1c2c011",
+              "3fb81c01b5339380",
+              "3fef384c5db0d8ea",
+              "3fe85b41a5f78b48"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 293937245690557665821800615632328156573,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            1
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 293937245690557665821800615632328156573,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              1
+            ],
+            "values": [
+              "3fe927705476f592"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 175865384792420015972094667196815174992,
+              "inc": 332724090758049132448979897138935081983
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        }
+      ],
+      "criterion": "random-exact-contract"
+    },
+    {
+      "id": "random/pcg64/12345",
+      "seed": "12345",
+      "calls": [
+        {
+          "shape": [
+            3
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 33261208707367790463622745601869196757,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              3
+            ],
+            "values": [
+              "3fcd1958c6d97fe0",
+              "3fd445c4c5727930",
+              "3fe984049046889d"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 123100685240869032725484100130172923898,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            0
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 123100685240869032725484100130172923898,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              0
+            ],
+            "values": []
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 123100685240869032725484100130172923898,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            2,
+            2
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 123100685240869032725484100130172923898,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              2,
+              2
+            ],
+            "values": [
+              "3fe5a3e0d5d490dd",
+              "3fd907f05a3f42de",
+              "3fd54cd2c9f5b922",
+              "3fe32558663228fc"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 57529584864481096715335935045332150942,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            1
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 57529584864481096715335935045332150942,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              1
+            ],
+            "values": [
+              "3fc7e6e7e21b4844"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 216098700122296263478885786697608317821,
+              "inc": 268209174141567072605526753992732310247
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        }
+      ],
+      "criterion": "random-exact-contract"
+    },
+    {
+      "id": "random/pcg64/18446744073709551617",
+      "seed": "18446744073709551617",
+      "calls": [
+        {
+          "shape": [
+            3
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 136113688006807229084096736040053889493,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              3
+            ],
+            "values": [
+              "3fe6271e9b3f3e1f",
+              "3fcc96883be2ada0",
+              "3fe9e868dc785262"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 66709275233183064390093112348825202262,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            0
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 66709275233183064390093112348825202262,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              0
+            ],
+            "values": []
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 66709275233183064390093112348825202262,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            2,
+            2
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 66709275233183064390093112348825202262,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              2,
+              2
+            ],
+            "values": [
+              "3fc8472bccd52d28",
+              "3fd4d16bc8cc7540",
+              "3fe35588cce09f0a",
+              "3feb5055e4afbd25"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 64024889313900715330205283873236192554,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        },
+        {
+          "shape": [
+            1
+          ],
+          "before": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 64024889313900715330205283873236192554,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          },
+          "expected": {
+            "dtype": "float64",
+            "shape": [
+              1
+            ],
+            "values": [
+              "3fcea53545202dc8"
+            ]
+          },
+          "after": {
+            "bit_generator": "PCG64",
+            "state": {
+              "state": 238479791993115712192990724762338111581,
+              "inc": 51869342842129160214173914552414160907
+            },
+            "has_uint32": 0,
+            "uinteger": 0
+          }
+        }
+      ],
+      "criterion": "random-exact-contract"
+    }
+  ]
+}
