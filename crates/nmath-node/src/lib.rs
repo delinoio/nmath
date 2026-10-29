@@ -170,6 +170,7 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
         DType::UInt16 => read!(u16),
         DType::UInt32 => read!(u32),
         DType::UInt64 => read!(u64),
+        DType::Float16 => read!(nmath_core::buffer::Float16),
         DType::Float32 => read!(f32),
         DType::Float64 => read!(f64),
         DType::Complex64 => CoreBuffer::C64(
@@ -209,6 +210,7 @@ fn buffer_to_bytes(buffer: &CoreBuffer) -> Vec<u8> {
         CoreBuffer::U16(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::U32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::U64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::F16(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::F32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::F64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::C64(v) => v
