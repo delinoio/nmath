@@ -16,6 +16,8 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 - JavaScript and TypeScript developers who use NMath from Node.js 24.
 - `.nts` output produced by `nmath-compiler`, which imports `@delinoio/nmath/nts-runtime`.
 
+When the `.nts` transform's extension-rewriting option is enabled, source-relative `.nts` specifiers in quoted imports and static template dynamic imports become `.js` specifiers. The [compiler contract](crates-nmath-compiler-contract.md) owns this behavior and its span mapping.
+
 ## Interfaces and Contracts
 
 ### Entry points
@@ -43,8 +45,11 @@ const ctx = createContext({
 ```
 
 All four options are required. `ctx.close(): Promise<void>` follows the runtime close contract. `ctx.metrics()` returns measurement snapshots. Contexts and arrays implement `dispose()` and `Symbol.dispose` for `using`.
+Native jobs release their execution slot before they settle their result Promise. Promise handlers can close the context or submit another job under the normal admission rules.
 
 Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
+
+Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ctx.generator(seed).random(shape)` must be finite integers from `0` through `4294967295`, inclusive. Their NumPy wrappers use the same rule. Invalid dimensions fail with `NMATH_SHAPE_MISMATCH` before budget arithmetic, input allocation or native shape conversion. Rank-zero shape `[]` and zero dimensions remain valid. A valid shape whose data length differs from its element count also fails with `NMATH_SHAPE_MISMATCH`.
 
 ### Expressions and compute
 
@@ -65,6 +70,8 @@ Complex arithmetic, unary operations, reductions, indexing, writes, copies, expl
 ### Typing
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
+
+The NumPy `sum`, `mean`, `min` and `max` wrappers preserve the core methods' dtype and shape inference. Omitting the axis, or passing `undefined`, produces a scalar result type. A literal axis removes its dimension from a tuple shape. A dynamic axis retains the result dtype and uses a dynamic shape because its result rank is not known at type-check time.
 
 ### Errors
 
@@ -116,7 +123,7 @@ The published package includes `compatibility.json.gz`, a gzip-compressed JSON o
 - [Repository defaults](repository-defaults.md)
 - [Repository workflow](repository-workflow-contract.md)
 
-Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics.
+Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics. Bracket access used as a constructor target, including through parentheses and type-only wrappers, keeps its JavaScript grouping.
 
 ## Numeric tables
 

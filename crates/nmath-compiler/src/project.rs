@@ -392,6 +392,7 @@ fn emit_nts_javascript(
     };
     let args = [
         "--noCheck",
+        "--rewriteRelativeImportExtensions",
         "--declaration",
         "false",
         "--declarationMap",

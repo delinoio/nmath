@@ -98,6 +98,8 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
+
 ## Entry points
 
 | Import                     | Purpose                                                                                                              |

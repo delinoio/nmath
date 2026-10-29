@@ -790,6 +790,25 @@ function product(shape: readonly number[]): number {
   return shape.reduce((a, b) => a * b, 1);
 }
 
+function validatedShape(shape: readonly number[]): number[] {
+  const copy = [...shape];
+  if (
+    copy.some(
+      (dimension) =>
+        typeof dimension !== "number" ||
+        !Number.isInteger(dimension) ||
+        dimension < 0 ||
+        dimension > 0xffff_ffff,
+    )
+  ) {
+    throw new NMathError(
+      "NMATH_SHAPE_MISMATCH",
+      "NMATH_SHAPE_MISMATCH: Each dimension must be a finite integer from 0 through 4294967295. Correct the shape before creating an array or expression.",
+    );
+  }
+  return copy;
+}
+
 function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
   if (dtype !== "complex64" && dtype !== "complex128") {
     for (let i = 0; i < values.length; i++) {
@@ -896,6 +915,9 @@ export class NMathContext {
   ): NMathArray<D, S> {
     let values: ArrayLike<unknown>;
     let shape: number[];
+    const explicitShape = options.shape
+      ? validatedShape(options.shape)
+      : undefined;
     if (
       ArrayBuffer.isView(data) &&
       (options.dtype === "complex64" || options.dtype === "complex128")
@@ -908,7 +930,7 @@ export class NMathContext {
         );
       }
       this.ensureCpuBudget(data.length / 2, options.dtype);
-      const shape = options.shape ? [...options.shape] : [data.length / 2];
+      const shape = explicitShape ?? validatedShape([data.length / 2]);
       const array = native(() =>
         this.nativeContext.array(
           shape,
@@ -920,15 +942,16 @@ export class NMathContext {
     }
     if (ArrayBuffer.isView(data)) {
       values = data as unknown as ArrayLike<unknown>;
-      shape = options.shape ? [...options.shape] : [values.length];
+      shape = explicitShape ?? validatedShape([values.length]);
       this.ensureCpuBudget(values.length, options.dtype);
     } else {
       const inferred = inferShape(data);
+      validatedShape(inferred);
       this.ensureCpuBudget(product(inferred), options.dtype);
       const flat: unknown[] = [];
       flatten(data, inferred, 0, flat);
       values = flat;
-      shape = options.shape ? [...options.shape] : inferred;
+      shape = explicitShape ?? inferred;
     }
     const array = native(() =>
       this.nativeContext.array(
@@ -945,13 +968,14 @@ export class NMathContext {
     value: ScalarOf<D>,
     dtype: D,
   ): NMathArray<D, S> {
-    const size = product(shape);
+    const checkedShape = validatedShape(shape);
+    const size = product(checkedShape);
     this.ensureCpuBudget(size, dtype);
     // Fill a typed array directly instead of building a JS array of `size` values.
     const typed = filled(dtype, size, value);
     const array = native(() =>
       this.nativeContext.array(
-        [...shape],
+        checkedShape,
         dtype,
         Buffer.from(typed.buffer, typed.byteOffset, typed.byteLength),
       ),
@@ -1133,7 +1157,7 @@ export class NMathGenerator {
    */
   random<const S extends Shape>(shape: S): Expr<"float64", S> {
     return new Expr(
-      binding.NativeExpr.random(this.#generator, [...shape]),
+      binding.NativeExpr.random(this.#generator, validatedShape(shape)),
       this.context,
     );
   }
