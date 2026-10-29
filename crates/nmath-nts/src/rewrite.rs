@@ -197,9 +197,23 @@ impl Rewriter<'_> {
             | Kind::Constructor
             | Kind::GetAccessor
             | Kind::SetAccessor => {
+                // Only the body is an await context, because `await` is a
+                // syntax error in parameter initializers. Computed names and
+                // decorators evaluate in the enclosing context.
                 let is_async =
                     tsrs_ast::get_function_flags(Some(node)).contains(FunctionFlags::Async);
-                return self.visit_children(node, is_async, depth);
+                let body = node.body();
+                for child in node.iter_children() {
+                    let child_context = if Some(child) == body {
+                        is_async
+                    } else if child.kind() == Kind::Parameter {
+                        false
+                    } else {
+                        async_context
+                    };
+                    self.visit(child, child_context, depth + 1);
+                }
+                return;
             }
             Kind::ClassStaticBlockDeclaration
             | Kind::PropertyDeclaration

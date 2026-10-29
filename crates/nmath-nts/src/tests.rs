@@ -123,6 +123,14 @@ fn rewrites_element_assignment_at_top_level_and_in_async_functions() {
     );
     assert_eq!(lower("a[i]=v;"), "(await __nmath.set(a, i, v));");
     assert_eq!(
+        lower("const f = async (x) => a[i] = x;"),
+        "const f = async (x) => (await __nmath.set(a, i, x));"
+    );
+    assert_eq!(
+        lower("class C { [a[i] = k]() {} }"),
+        "class C { [(await __nmath.set(a, i, k))]() {} }"
+    );
+    assert_eq!(
         lower("a[f(), g()] = v;"),
         "(await __nmath.set(a, (f(), g()), v));"
     );
@@ -156,6 +164,9 @@ fn reports_element_assignment_outside_async_context() {
         "class C { static { a[i] = v; } }",
         "async function f() { function g() { a[i] = v; } }",
         "async function f() { [1].forEach((x) => { a[x] = v; }); }",
+        "async function f(x = (a[i] = v)) {}",
+        "const f = async (x = (a[i] = v)) => x;",
+        "class C { async m(x = (a[i] = v)) {} }",
     ] {
         let output = transform("a.nts", source);
         assert_eq!(output.diagnostics.len(), 1, "{source}");
