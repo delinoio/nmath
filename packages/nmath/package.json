@@ -52,7 +52,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/types/tsconfig.json",
     "test": "node --test test/*.test.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build:compiler": "node scripts/build-compiler.mjs"
+    "build:compiler": "node scripts/build-compiler.mjs",
+    "package:native": "node scripts/distribution.mjs",
+    "test:package": "node scripts/smoke-package.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.9",

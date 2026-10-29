@@ -72,6 +72,14 @@ test("every shared fixture input selects tests", async (t) => {
     "lefthook.yml",
     "scripts/install-git-hooks.sh",
     "scripts/ci/plan.mjs",
+    "packaging/nmath/targets.json",
+    "packages/nmath/src/native.ts",
+    "apps/nmath-vscode/scripts/package.mjs",
+    "crates/nmath-node/Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain",
+    ".github/workflows/nmath-release-build.yml",
+    "packages/nmath/scripts/distribution.mjs",
     "scripts/ci/format-changed.test.mjs",
   ]) {
     await t.test(path, (t) => {

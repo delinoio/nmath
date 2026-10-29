@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { NMathError } from "./errors.js";
-import { platformTriple } from "./native.js";
+import { platformTriple } from "./platform.js";
 
 /** File name of the compiler executable for this platform inside `native/`. */
 export function compilerFileName(): string {

@@ -4,6 +4,12 @@
   "tasks": {
     "test": {
       "dependsOn": ["^build", "build"]
+    },
+    "package:vsix": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "env": ["NMATH_LICENSE_BUNDLE"],
+      "outputs": ["dist/**"]
     }
   }
 }
