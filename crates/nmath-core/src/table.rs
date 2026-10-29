@@ -240,7 +240,14 @@ struct KeyIndex {
 }
 const NO_ROW: usize = usize::MAX;
 impl KeyIndex {
-    fn new(key: &MaterializedColumn, nulls: bool, env: &JobEnv) -> Result<Self> {
+    fn excluded(key: &MaterializedColumn, row: usize, nulls: bool, exclude_nan: bool) -> bool {
+        (!nulls && !key.valid(row))
+            || (exclude_nan
+                && key.valid(row)
+                && matches!(key.values.buffer.get(row), Scalar::Float(n) if n.is_nan()))
+    }
+
+    fn new(key: &MaterializedColumn, nulls: bool, exclude_nan: bool, env: &JobEnv) -> Result<Self> {
         let rows = key.values.size();
         let capacity = rows
             .checked_mul(2)
@@ -259,7 +266,7 @@ impl KeyIndex {
         // the input accumulation order within each group.
         for i in (0..rows).rev() {
             env.token.check()?;
-            if !nulls && !key.valid(i) {
+            if Self::excluded(key, i, nulls, exclude_nan) {
                 continue;
             }
             let slot = index.slot(key, key, i, env)?;
@@ -312,9 +319,10 @@ impl KeyIndex {
         key: &MaterializedColumn,
         row: usize,
         nulls: bool,
+        exclude_nan: bool,
         env: &JobEnv,
     ) -> Result<usize> {
-        if !nulls && !key.valid(row) {
+        if Self::excluded(key, row, nulls, exclude_nan) {
             return Ok(NO_ROW);
         }
         Ok(self.slots[self.slot(indexed, key, row, env)?])
@@ -461,10 +469,10 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
                     "Join keys must have the same numeric dtype. Cast keys explicitly.",
                 ));
             }
-            let index = KeyIndex::new(&b.columns[*y], *nulls, env)?;
+            let index = KeyIndex::new(&b.columns[*y], *nulls, false, env)?;
             let mut count = 0usize;
             for i in 0..a.rows {
-                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, env)?;
+                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, false, env)?;
                 if *left && j == NO_ROW {
                     count = count.checked_add(1).ok_or_else(invalid)?;
                 }
@@ -478,7 +486,7 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
             let mut ar = Vec::with_capacity(count);
             let mut br = Vec::with_capacity(count);
             for i in 0..a.rows {
-                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, env)?;
+                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, false, env)?;
                 if *left && j == NO_ROW {
                     ar.push(Some(i));
                     br.push(None);
@@ -519,12 +527,13 @@ fn group(
     if value.values.dtype().kind() == crate::dtype::DTypeKind::Other {
         return Err(crate::dtype::unsupported());
     }
-    let index = KeyIndex::new(key, !drop_nulls, env)?;
+    let exclude_nan = drop_nulls && flavor == Flavor::Pandas;
+    let index = KeyIndex::new(key, !drop_nulls, exclude_nan, env)?;
     let _charge = reserve(env, t.rows, std::mem::size_of::<Option<usize>>())?;
     let mut reps: Vec<Option<usize>> = Vec::with_capacity(t.rows);
     for i in 0..t.rows {
         env.token.check()?;
-        if index.find(key, key, i, !drop_nulls, env)? == i {
+        if index.find(key, key, i, !drop_nulls, exclude_nan, env)? == i {
             reps.push(Some(i));
         }
     }
