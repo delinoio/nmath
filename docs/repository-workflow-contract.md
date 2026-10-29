@@ -2,7 +2,7 @@
 
 ## Scope
 
-The repository contains the [NMath project](project-nmath.md), its Rust workspace, the `@delinoio/nmath` npm package and a VS Code extension, alongside shared instructions, skills, documentation templates and formatting infrastructure. Component contracts own runtime behavior and platform targets. No release workflow or deployment target is configured; release credentials remain outside source control.
+The repository contains the [NMath project](project-nmath.md), its Rust workspace, the `@delinoio/nmath` npm package and a VS Code extension, alongside shared instructions, skills, documentation templates and formatting infrastructure. The NMath project and distribution contracts own runtime build and release preparation boundaries. Release credentials remain outside source control.
 
 ## Installation
 
@@ -10,7 +10,7 @@ Use Node.js 24 from `.nvmrc` and pnpm 10.26.2 from `package.json`. Run `pnpm ins
 
 ## Task orchestration
 
-The pinned `turbo` dependency and root `turbo.json` orchestrate packages selected by `pnpm-workspace.yaml`: `apps/*`, `packages/*` and `servers/*`. The active pnpm packages are `@delinoio/nmath` and `nmath-vscode`; commands run only tasks that exist in package scripts. Rust crates are explicit members of the root Cargo workspace, not pnpm packages.
+The pinned `turbo` dependency and root `turbo.json` orchestrate packages selected by `pnpm-workspace.yaml`: `apps/*`, `packages/*` and `servers/*`. Commands run the tasks declared by the active workspace packages. Rust crates are explicit members of the root Cargo workspace, not pnpm packages.
 
 Root `pnpm build`, `pnpm dev`, `pnpm lint` and `pnpm typecheck` delegate to `turbo run`. Root `pnpm test` runs workspace tests and the repository-wide `test:tooling` task. The latter runs the existing formatter and hook fixtures directly and is registered as `//#test:tooling`. It is uncached so each invocation checks the current Git and hook environment. `prepare`, `format` and `format:check` remain direct commands: hook installation has side effects, and formatting depends on Git revisions, staged changes and untracked files rather than package inputs.
 
@@ -49,6 +49,12 @@ The `changes` job resolves that comparison and runs `scripts/ci/plan.mjs` withou
 Each CI run records the validation revision, comparison revisions, commands and results in its logs and job summary. The CI workflow currently plans only formatting and shared-tooling inputs; it has no dedicated Rust, package, compiler or extension validation jobs. Its fixtures step invokes root `pnpm test`, which now includes NMath tasks and native build prerequisites, rather than only shared fixtures. Changes limited to runtime source do not select a runtime test job through this planner. Passing formatting or shared fixtures does not establish runtime, native platform, GPU, editor accessibility or release acceptance. Record actual component and platform validation separately under the owning contracts.
 
 The `ci-result` job aggregates validation through `needs`, including `changes` and `quality`. It runs with `always()` so dependency failures do not skip the aggregate check. Failed or cancelled dependencies fail `ci-result`. The `changes` job must succeed; a skipped `quality` job passes only when the planner selected no validation. Successful dependencies and other skipped dependencies pass. Every new PR validation job must be included in `ci-result.needs`. The aggregate job runs on Ubuntu for the same PR, main-push and manual-dispatch events.
+
+## NMath distribution validation
+
+The [NMath distribution contract](packages-nmath-distribution-contract.md) owns native tarball staging, VSIX packaging and evidence validation. The affected planner also selects fixtures for NMath package and extension paths, Rust crate paths, Cargo manifests/lockfile, the Rust toolchain selector, packaging targets and NMath release workflows. Affected quality validation runs an installed-package smoke through root Turbo in addition to existing checks.
+
+Dedicated prerelease artifact builds use the eight labeled native release environments; they are separate from PRs, main pushes and affected manual CI. The manual distribution evidence gate runs on Ubuntu against the selected source revision and actual tested artifact hashes. Neither workflow publishes packages or substitutes build results for native/GPU/editor acceptance.
 
 ## Assets and licensing
 

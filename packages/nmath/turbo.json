@@ -21,6 +21,21 @@
       "dependsOn": ["build"],
       "cache": false,
       "outputs": ["native/**"]
+    },
+    "package:native": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "env": [
+        "NMATH_TARGET",
+        "NMATH_LICENSE_BUNDLE",
+        "RUSTFLAGS",
+        "MACOSX_DEPLOYMENT_TARGET"
+      ],
+      "outputs": ["../../packaging/nmath/dist/**"]
+    },
+    "test:package": {
+      "dependsOn": ["build", "build:compiler"],
+      "cache": false
     }
   }
 }

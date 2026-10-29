@@ -1,0 +1,98 @@
+name: NMath release candidate artifacts
+on:
+  release:
+    types: [prereleased]
+permissions:
+  contents: read
+jobs:
+  native:
+    environment: nmath-release
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          [
+            darwin-x64,
+            darwin-arm64,
+            win32-x64-msvc,
+            win32-arm64-msvc,
+            linux-x64-gnu,
+            linux-arm64-gnu,
+            linux-x64-musl,
+            linux-arm64-musl,
+          ]
+    runs-on: [self-hosted, nmath-release, "${{ matrix.target }}"]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build candidate packages
+        env:
+          NMATH_TARGET: ${{ matrix.target }}
+          NMATH_LICENSE_BUNDLE: ${{ vars.NMATH_LICENSE_BUNDLE }}
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+          RUSTFLAGS: ${{ endsWith(matrix.target, '-musl') && '-C target-feature=-crt-static' || '' }}
+        run: pnpm exec turbo run package:native --filter=@delinoio/nmath
+      - name: Upload candidate archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nmath-${{ matrix.target }}
+          path: packaging/nmath/dist/*.tgz
+          if-no-files-found: error
+      - name: Record scope
+        if: always()
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "Revision: $(git rev-parse HEAD); target: $TARGET; result: $RESULT"
+            echo 'Command: pnpm exec turbo run package:native --filter=@delinoio/nmath'
+            echo 'Build/package evidence only. CPU, GPU, extension, numerical and release acceptance remain unperformed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Clean generated distribution directories
+        if: always()
+        shell: bash
+        run: node -e "for(const p of ['packages/nmath/dist','packaging/nmath/dist'])require('node:fs').rmSync(p,{recursive:true,force:true})"
+  extension:
+    environment: nmath-release
+    runs-on: [self-hosted, nmath-release, linux-x64-gnu]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          lfs: true
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Package extension
+        env:
+          NMATH_LICENSE_BUNDLE: ${{ vars.NMATH_EXTENSION_LICENSE_BUNDLE }}
+        run: pnpm exec turbo run package:vsix --filter=nmath-vscode
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nmath-vscode
+          path: apps/nmath-vscode/dist/*.vsix
+          if-no-files-found: error
+      - name: Record scope and clean output
+        if: always()
+        shell: bash
+        env:
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "Revision: $(git rev-parse HEAD); VSIX package: $RESULT"
+            echo 'Command: pnpm exec turbo run package:vsix --filter=nmath-vscode. Editor/accessibility/Marketplace acceptance unperformed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          node -e "require('node:fs').rmSync('apps/nmath-vscode/dist',{recursive:true,force:true})"

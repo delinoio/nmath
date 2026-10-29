@@ -26,6 +26,7 @@ Before implementing a new project, add `project-<id>.md`, at least one `<domain>
 - [Compiler crates contract](crates-nmath-compiler-contract.md)
 - [npm package contract](packages-nmath-package-contract.md)
 - [VS Code extension contract](apps-nmath-vscode-contract.md)
+- [Native distribution and release evidence](packages-nmath-distribution-contract.md)
 
 ## Instruction update policy
 

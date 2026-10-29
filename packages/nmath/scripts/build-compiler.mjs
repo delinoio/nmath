@@ -7,10 +7,14 @@ import { fileURLToPath } from "node:url";
 import { compilerFileName } from "../dist/compiler-binary.js";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
-execFileSync("cargo", ["build", "--release", "-p", "nmath-compiler"], {
-  cwd: root,
-  stdio: "inherit",
-});
+execFileSync(
+  "cargo",
+  ["build", "--locked", "--release", "-p", "nmath-compiler"],
+  {
+    cwd: root,
+    stdio: "inherit",
+  },
+);
 const exe =
   process.platform === "win32" ? "nmath-compiler.exe" : "nmath-compiler";
 const native = fileURLToPath(new URL("../native/", import.meta.url));

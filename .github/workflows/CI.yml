@@ -97,6 +97,9 @@ jobs:
       - name: Test formatting and hooks
         if: needs.changes.outputs.fixtures == 'true'
         run: pnpm test
+      - name: Test installed native package
+        if: needs.changes.outputs.fixtures == 'true'
+        run: pnpm exec turbo run test:package --filter=@delinoio/nmath
       - name: Record validation result
         if: always()
         env:
@@ -108,9 +111,9 @@ jobs:
         run: |
           echo "Comparison: $COMPARISON_BASE..$COMPARISON_HEAD" >> "$GITHUB_STEP_SUMMARY"
           echo "Planned: format=$FORMAT_PLANNED; fixtures=$FIXTURES_PLANNED" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Commands (when planned): pnpm install --frozen-lockfile --ignore-scripts; pnpm format:check; pnpm test' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Commands (when planned): pnpm install --frozen-lockfile --ignore-scripts; pnpm format:check; pnpm test; pnpm exec turbo run test:package --filter=@delinoio/nmath' >> "$GITHUB_STEP_SUMMARY"
           echo "Result: $RESULT" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Runtime, account, native platform and release acceptance: not applicable; no projects are included.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Local native smoke is not eight-platform CPU, GPU, editor, account or release acceptance.' >> "$GITHUB_STEP_SUMMARY"
   ci-result:
     if: always()
     needs: [changes, quality]

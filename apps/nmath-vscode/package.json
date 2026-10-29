@@ -62,7 +62,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "package:vsix": "node scripts/package.mjs"
   },
   "dependencies": {
     "vscode-languageclient": "11.0.0"
@@ -70,6 +71,8 @@
   "devDependencies": {
     "@types/node": "24.19.2",
     "@types/vscode": "1.91.0",
+    "@vscode/vsce": "4.1.0",
+    "esbuild": "0.25.12",
     "typescript": "7.0.2"
   }
 }

@@ -1,0 +1,47 @@
+name: NMath distribution evidence gate
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Prerelease tag containing evidence JSON and the exact tested tgz/VSIX assets
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    environment: nmath-release
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Download candidate evidence and tested artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANDIDATE: ${{ inputs.candidate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$CANDIDATE" --pattern 'nmath-release-evidence.json' --pattern '*.tgz' --pattern '*.vsix' --dir 'evidence'
+      - name: Validate exact revision and artifact evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ci/release-gate.mjs 'evidence/nmath-release-evidence.json' "$(git rev-parse HEAD)" 'evidence' | tee 'distribution-gate.json'
+      - name: Record gate result
+        if: always()
+        shell: bash
+        env:
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "Revision: $(git rev-parse HEAD); distribution evidence gate: $RESULT"
+            echo 'Commands: gh release download; node scripts/ci/release-gate.mjs'
+            echo 'Submitted hardware records require maintainer review. This gate does not run hardware tests, waive product acceptance, or publish packages.'
+          } >> "$GITHUB_STEP_SUMMARY"

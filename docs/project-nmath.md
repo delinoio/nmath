@@ -44,6 +44,7 @@ Paths marked `planned` do not exist yet. A path becomes a Cargo workspace member
 - [Compiler crates contract](crates-nmath-compiler-contract.md): `nmath-nts` and `nmath-compiler`.
 - [npm package contract](packages-nmath-package-contract.md): `@delinoio/nmath` and its entry points.
 - [VS Code extension contract](apps-nmath-vscode-contract.md): `nmath-vscode`.
+- [Distribution contract](packages-nmath-distribution-contract.md): `packaging/nmath/`, native package staging, release artifact workflows and distribution evidence gates, owned by `nmath-package`.
 
 ## Cross-Domain Invariants
 

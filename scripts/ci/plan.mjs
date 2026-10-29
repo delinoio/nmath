@@ -8,6 +8,9 @@ import { changedFormatFiles } from "./format-changed.mjs";
 const fixtureInputs = new Set([
   ".github/workflows/CI.yml",
   ".nvmrc",
+  "Cargo.toml",
+  "Cargo.lock",
+  "rust-toolchain",
   "package.json",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
@@ -25,7 +28,14 @@ export function plan(cwd, base, head) {
     { cwd, encoding: "utf8" },
   ).split("\0");
   const fixtures = paths.some(
-    (path) => fixtureInputs.has(path) || path.startsWith("scripts/ci/"),
+    (path) =>
+      fixtureInputs.has(path) ||
+      path.startsWith("scripts/ci/") ||
+      path.startsWith("packaging/nmath/") ||
+      path.startsWith("packages/nmath/") ||
+      path.startsWith("apps/nmath-vscode/") ||
+      path.startsWith("crates/") ||
+      path.startsWith(".github/workflows/nmath-release-"),
   );
   return { quality: format || fixtures, format, fixtures };
 }

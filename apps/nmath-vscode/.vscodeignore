@@ -1,0 +1,7 @@
+**/*
+!package.json
+!README.md
+!LICENSE
+!language-configuration.json
+!dist/extension.js
+!dist/THIRD_PARTY_LICENSES.txt

@@ -80,6 +80,7 @@ The package does not log by default. `NMATH_LOG` enables native `tracing` output
 - `pnpm --filter @delinoio/nmath test` runs Node.js tests against the built native binary.
 - `dist/` is ignored generated output and is removed after validation.
 - Platform acceptance for the eight CPU binary combinations and the GPU matrix is recorded in pull requests, issues and CI artifacts, not in this document.
+- Native package staging, installed-archive smoke tests, license bundles and release evidence follow the [distribution contract](packages-nmath-distribution-contract.md). The staged public manifest selects exact-version platform optional dependencies; development installs do not resolve unpublished platform packages.
 
 ## Dependencies and Integrations
 

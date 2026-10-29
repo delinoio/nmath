@@ -1,0 +1,62 @@
+[
+  {
+    "triple": "darwin-x64",
+    "rust": "x86_64-apple-darwin",
+    "os": "darwin",
+    "cpu": "x64",
+    "library": "libnmath_node.dylib"
+  },
+  {
+    "triple": "darwin-arm64",
+    "rust": "aarch64-apple-darwin",
+    "os": "darwin",
+    "cpu": "arm64",
+    "library": "libnmath_node.dylib"
+  },
+  {
+    "triple": "win32-x64-msvc",
+    "rust": "x86_64-pc-windows-msvc",
+    "os": "win32",
+    "cpu": "x64",
+    "library": "nmath_node.dll"
+  },
+  {
+    "triple": "win32-arm64-msvc",
+    "rust": "aarch64-pc-windows-msvc",
+    "os": "win32",
+    "cpu": "arm64",
+    "library": "nmath_node.dll"
+  },
+  {
+    "triple": "linux-x64-gnu",
+    "rust": "x86_64-unknown-linux-gnu",
+    "os": "linux",
+    "cpu": "x64",
+    "libc": "glibc",
+    "library": "libnmath_node.so"
+  },
+  {
+    "triple": "linux-arm64-gnu",
+    "rust": "aarch64-unknown-linux-gnu",
+    "os": "linux",
+    "cpu": "arm64",
+    "libc": "glibc",
+    "library": "libnmath_node.so"
+  },
+  {
+    "triple": "linux-x64-musl",
+    "rust": "x86_64-unknown-linux-musl",
+    "os": "linux",
+    "cpu": "x64",
+    "libc": "musl",
+    "library": "libnmath_node.so"
+  },
+  {
+    "triple": "linux-arm64-musl",
+    "rust": "aarch64-unknown-linux-musl",
+    "os": "linux",
+    "cpu": "arm64",
+    "libc": "musl",
+    "library": "libnmath_node.so"
+  }
+]
