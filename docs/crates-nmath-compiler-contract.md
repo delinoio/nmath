@@ -33,11 +33,15 @@ The transform parses `.nts` text with the standard tsrs TypeScript parser and pr
 | `a[[i, j]]`                                           | `__nmath.get(a, [i, j])`                                                                                                     |
 | `a[i] = value`                                        | `(await __nmath.set(a, i, value))`                                                                                           |
 
-- The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module.
+- The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module, after any shebang line and leading triple-slash directives (`/// <reference ... />`, `/// <amd-module ... />`).
+- The runtime namespace is named `__nmath` unless the file already uses that identifier anywhere (as a binding or a reference); then the transform uses the first unused name of `__nmath_1`, `__nmath_2`, ... for the import and every lowered helper call, so no local binding captures generated calls.
 - `__nmath` operator helpers are overloaded in TypeScript declarations. An overload accepts NMath operands and returns a lazy expression; the remaining overloads accept ordinary JS operands and return the ordinary result type. A union that may be NMath or ordinary JS matches no overload, so the checker requires narrowing. The type checker, not speculative dispatch, decides the semantics. The runtime helper calls the NMath operation only when an operand is an NMath value.
+- When a lowered assignment starts an expression statement that follows a statement not ending in `;`, the transform prefixes it with `;` so semicolonless code keeps its statement boundaries.
+- A comma-expression index stays one helper argument: `a[f(), g()]` lowers to `__nmath.get(a, (f(), g()))`, and the same applies to `a[f(), g()] = value`.
 - Literal-only arithmetic (both operands numeric or string literals) is not rewritten.
-- `a[i] = value` is rewritten only inside async functions or module top level. Elsewhere the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
+- `a[i] = value` is rewritten only inside async function bodies or module top level. Elsewhere, including parameter initializers of async functions, the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
 - Compound assignment (`+=` and others), `++` and `--` on bracket expressions are left unchanged. Comparison and bitwise operators are never rewritten.
+- These forms are also left unchanged: optional element access (`a?.[i]`), `super[k]`, element access used as a call target (`a[i](x)`, `(a[i])(x)`), `delete a[i]` (including parenthesized or type-asserted operands such as `delete (a[i])`), destructuring and `for-of` assignment targets, ordinary property access (`a.b`) and string-literal keys (`obj["key"]`). Nothing inside type positions or enums is rewritten. Unary operators applied to numeric literals (for example `-1`) count as literals.
 - Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output.
 
 ### Diagnostics
