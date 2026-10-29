@@ -131,6 +131,108 @@ test("pandas labels align, filter/sort retain labels, conversions preserve masks
     await ctx.close();
   }
 });
+test("pandas Series arithmetic rejects mismatched duplicate labels in either operand", async () => {
+  const ctx = context();
+  try {
+    const make = (values, index, name = "left") =>
+      new pd.Series(ctx.array(values, { dtype: "float64" }), name, index);
+    const duplicate = make([10, 20], ["a", "a"]);
+    const unique = make([1, 2], ["a", "b"], "right");
+    const reordered = make([1, 2, 3], ["a", "a", "b"]);
+    const differentlyOrdered = make([1, 2, 3], ["a", "b", "a"]);
+    const operations = ["add", "sub", "mul", "div", "mod", "pow"];
+
+    for (const operation of operations) {
+      assert.throws(
+        () => duplicate[operation](unique),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: duplicate left index`,
+      );
+      assert.throws(
+        () => unique[operation](duplicate),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: duplicate right index`,
+      );
+      assert.throws(
+        () => reordered[operation](differentlyOrdered),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: differently ordered duplicate indexes`,
+      );
+    }
+
+    const sameLabels = make([1, 2], ["a", "a"], "right");
+    const leftUnique = make([10, 20], ["a", "b"]);
+    const rightReordered = make([1, 2], ["b", "a"], "right");
+    const expected = {
+      add: [
+        [11, 22],
+        [12, 21],
+      ],
+      sub: [
+        [9, 18],
+        [8, 19],
+      ],
+      mul: [
+        [10, 40],
+        [20, 20],
+      ],
+      div: [
+        [10, 10],
+        [5, 20],
+      ],
+      mod: [
+        [0, 0],
+        [0, 0],
+      ],
+      pow: [
+        [10, 400],
+        [100, 20],
+      ],
+    };
+    for (const operation of operations) {
+      const positional = duplicate[operation](sameLabels);
+      assert.equal(positional.name, "left");
+      assert.deepEqual(positional.index, ["a", "a"]);
+      assert.deepEqual(
+        (await positional.toArray()).toArray(),
+        expected[operation][0],
+        `${operation}: identical duplicate indexes align positionally`,
+      );
+
+      const aligned = leftUnique[operation](rightReordered);
+      assert.equal(aligned.name, "left");
+      assert.deepEqual(aligned.index, ["a", "b"]);
+      assert.deepEqual(
+        (await aligned.toArray()).toArray(),
+        expected[operation][1],
+        `${operation}: unique matching indexes reorder right-hand values`,
+      );
+    }
+    assert.throws(
+      () => unique.add(make([1, 2], ["a", "c"])),
+      (error) => error.code === "NMATH_INDEX_INVALID",
+    );
+
+    const numeric = make([3, 4], [1, 2]).add(make([5, 6], [2, 1]));
+    assert.deepEqual(numeric.index, [1, 2]);
+    assert.deepEqual((await numeric.toArray()).toArray(), [9, 9]);
+    const empty = make([], []).add(make([], []));
+    assert.deepEqual((await empty.toArray()).toArray(), []);
+    assert.deepEqual((await unique.add(2).toArray()).toArray(), [3, 4]);
+    const nullable = new pd.Series(
+      ctx.array([1, 2], { dtype: "float64" }),
+      "nullable",
+      ["a", "b"],
+      ctx.array([true, false], { dtype: "bool" }),
+    );
+    assert.throws(
+      () => nullable.add(unique),
+      (error) => error.code === "NMATH_INDEX_INVALID",
+    );
+  } finally {
+    await ctx.close();
+  }
+});
 test("table errors reject mixed contexts, malformed masks, GPU and cancellation without leaking names", async () => {
   const a = context(),
     b = context();
