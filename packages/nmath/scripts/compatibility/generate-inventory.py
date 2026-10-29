@@ -348,10 +348,17 @@ def main():
         for name in group:
             if name != canonical:
                 entries[name]["aliasOf"] = canonical
-        exclusion = next((entries[name]["exclusion"] for name in group if entries[name]["exclusion"]), None)
+        # A dtype-specific exclusion on an inherited method must not spread to
+        # the same descriptor exposed by an in-scope numeric dtype. Only explicit
+        # entry exclusions propagate through object aliases.
+        exclusion = next((EXCLUSIONS[name] for name in group if name in EXCLUSIONS), None)
         if exclusion:
             for name in group:
                 entries[name].update(status="excluded", supportTarget=False, exclusion=exclusion)
+    for name in sorted(entries, key=lambda value: (value.count("."), value)):
+        parent = entries.get(name.rsplit(".", 1)[0])
+        if parent and parent["exclusion"] and parent["kind"] in {"class", "accessor"}:
+            entries[name].update(status="excluded", supportTarget=False, exclusion=parent["exclusion"])
     primitive = json.loads((ROOT / "fixtures/primitive.json").read_text())
     for case in primitive["cases"]:
         name = "numpy.ndarray.__getitem__" if case["operation"] == "index" else "numpy." + case["operation"]

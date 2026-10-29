@@ -70,6 +70,9 @@ test("ledger retains provenance, pending obligations and resolvable aliases", ()
 test("public accessors, aliases, optional families and conditional dtypes remain inventoried", () => {
   for (const name of [
     "numpy.ndarray.__getitem__",
+    "numpy.int32.sum",
+    "numpy.float64.sum",
+    "numpy.matlib.int32.sum",
     "numpy.add.reduce",
     "numpy.random.Generator.random",
     "numpy.polynomial.Polynomial.deriv",
