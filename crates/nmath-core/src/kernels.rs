@@ -764,7 +764,7 @@ pub fn matmul(
         Ok(out)
     }
     let buffer = match (a.as_ref(), b.as_ref()) {
-        (Buffer::Bool(x), Buffer::Bool(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::Bool(x), Buffer::Bool(y)) => boolean_matmul(x, y, n, k, m, token, || {})?.into(),
         (Buffer::I8(x), Buffer::I8(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I16(x), Buffer::I16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I32(x), Buffer::I32(y)) => mm(x, y, n, k, m, token)?.into(),
@@ -780,6 +780,34 @@ pub fn matmul(
         _ => unreachable!(),
     };
     DenseArray::new(out_shape, buffer, reservation)
+}
+
+fn boolean_matmul(
+    a: &[bool],
+    b: &[bool],
+    n: usize,
+    k: usize,
+    m: usize,
+    token: &CancellationToken,
+    mut visit_product: impl FnMut(),
+) -> Result<Vec<bool>> {
+    let mut out = vec![false; n * m];
+    for i in 0..n {
+        for j in 0..m {
+            token.check()?;
+            for p in 0..k {
+                if p % CHUNK == 0 {
+                    token.check()?;
+                }
+                visit_product();
+                if a[i * k + p] && b[p * m + j] {
+                    out[i * m + j] = true;
+                    break;
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn matmul_rank_error(shape: &[usize]) -> Error {
@@ -1058,6 +1086,126 @@ mod tests {
             matmul(&a, &bad, DType::Float64, &b, &t).unwrap_err().code,
             ErrorCode::ShapeMismatch
         );
+    }
+
+    #[test]
+    fn boolean_matmul_stops_at_each_first_true_product() {
+        let token = CancellationToken::new();
+        for first_true in [0, 3, 7] {
+            let mut lhs = vec![false; 8];
+            lhs[first_true] = true;
+            let rhs = vec![true; 8];
+            let mut evaluated = 0;
+            let result = boolean_matmul(&lhs, &rhs, 1, 8, 1, &token, || evaluated += 1).unwrap();
+            assert_eq!(result, vec![true]);
+            assert_eq!(evaluated, first_true + 1);
+        }
+        let mut evaluated = 0;
+        let result =
+            boolean_matmul(&[false; 8], &[true; 8], 1, 8, 1, &token, || evaluated += 1).unwrap();
+        assert_eq!(result, vec![false]);
+        assert_eq!(evaluated, 8);
+    }
+
+    #[test]
+    fn all_true_boolean_matmul_evaluates_one_product_per_output() {
+        let (budget, token) = env();
+        let lhs = dense(vec![128, 4096], Buffer::Bool(vec![true; 128 * 4096]));
+        let rhs = dense(vec![4096, 128], Buffer::Bool(vec![true; 4096 * 128]));
+        let mut evaluated = 0;
+        let Buffer::Bool(lhs_values) = &lhs.buffer else {
+            unreachable!()
+        };
+        let Buffer::Bool(rhs_values) = &rhs.buffer else {
+            unreachable!()
+        };
+        let values = boolean_matmul(lhs_values, rhs_values, 128, 4096, 128, &token, || {
+            evaluated += 1
+        })
+        .unwrap();
+        assert_eq!(values, vec![true; 128 * 128]);
+        assert_eq!(evaluated, 128 * 128);
+
+        let result = matmul(&lhs, &rhs, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![128, 128]);
+        assert_eq!(result.dtype(), DType::Bool);
+        assert_eq!(result.buffer, Buffer::Bool(values));
+    }
+
+    #[test]
+    fn boolean_matmul_preserves_shapes_and_strict_result_budget() {
+        let token = CancellationToken::new();
+        let vector = dense(vec![2], Buffer::Bool(vec![true, false]));
+        let matrix = dense(vec![2, 2], Buffer::Bool(vec![true, false, false, true]));
+        for (lhs, rhs, shape, values) in [
+            (&vector, &vector, vec![], vec![true]),
+            (&vector, &matrix, vec![2], vec![true, false]),
+            (&matrix, &vector, vec![2], vec![true, false]),
+            (&matrix, &matrix, vec![2, 2], vec![true, false, false, true]),
+        ] {
+            let budget = MemoryBudget::new(Device::Cpu, values.len() as u64);
+            let result = matmul(lhs, rhs, DType::Bool, &budget, &token).unwrap();
+            assert_eq!(result.shape, shape);
+            assert_eq!(result.dtype(), DType::Bool);
+            assert_eq!(result.buffer, Buffer::Bool(values));
+            assert_eq!(budget.usage().peak, budget.usage().used);
+            drop(result);
+            assert_eq!(budget.usage().used, 0);
+        }
+        let tight = MemoryBudget::new(Device::Cpu, 3);
+        assert_eq!(
+            matmul(&matrix, &matrix, DType::Bool, &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+
+        let empty_inner = dense(vec![2, 0], Buffer::Bool(vec![]));
+        let empty_inner_rhs = dense(vec![0, 3], Buffer::Bool(vec![]));
+        let budget = MemoryBudget::new(Device::Cpu, 6);
+        let result = matmul(&empty_inner, &empty_inner_rhs, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![2, 3]);
+        assert_eq!(result.buffer, Buffer::Bool(vec![false; 6]));
+        let empty_rows = dense(vec![0, 2], Buffer::Bool(vec![]));
+        let result = matmul(&empty_rows, &matrix, DType::Bool, &budget, &token).unwrap();
+        assert_eq!(result.shape, vec![0, 2]);
+        assert_eq!(result.buffer, Buffer::Bool(vec![]));
+    }
+
+    #[test]
+    fn boolean_matmul_cancels_during_an_unsuccessful_dot_product() {
+        let token = CancellationToken::new();
+        let budget = MemoryBudget::new(Device::Cpu, 1);
+        let k = CHUNK * 3;
+        let lhs = dense(vec![1, k], Buffer::Bool(vec![false; k]));
+        let rhs = dense(vec![k, 1], Buffer::Bool(vec![true; k]));
+        token.cancel();
+        assert_eq!(
+            matmul(&lhs, &rhs, DType::Bool, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        let mut evaluated = 0;
+        let Buffer::Bool(lhs_values) = &lhs.buffer else {
+            unreachable!()
+        };
+        let Buffer::Bool(rhs_values) = &rhs.buffer else {
+            unreachable!()
+        };
+        let result = boolean_matmul(lhs_values, rhs_values, 1, k, 1, &token, || {
+            evaluated += 1;
+            if evaluated == CHUNK + 1 {
+                cancel.cancel();
+            }
+        });
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        assert!(evaluated <= 2 * CHUNK);
     }
 
     #[test]
