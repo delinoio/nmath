@@ -1048,7 +1048,8 @@ mod tests {
     fn float32_pairwise_sum_and_mean_preserve_precision_and_budget() {
         let values = vec![0.1_f32; 1_000_000];
         let input = dense(vec![1_000_000], Buffer::F32(values.clone()));
-        let budget = MemoryBudget::new(Device::Cpu, 4);
+        // One rank of metadata (33 bytes) and one float32 result (4 bytes).
+        let budget = MemoryBudget::new(Device::Cpu, 37);
         let token = CancellationToken::new();
         let sum = reduce(ReduceOp::Sum, &input, None, &budget, &token).unwrap();
         let Buffer::F32(sums) = &sum.buffer else {
@@ -1057,7 +1058,7 @@ mod tests {
         assert_eq!(sums[0], 100_000.007_812_5); // NumPy 2.5.4, float32 sum.
         assert!((sums[0] - 100_000.0).abs() < 1.0);
         assert_ne!(sums[0], 100_958.343_75);
-        assert_eq!(budget.usage().peak, 4);
+        assert_eq!(budget.usage().peak, 37);
         drop(sum);
         let mean = reduce(ReduceOp::Mean, &input, None, &budget, &token).unwrap();
         let Buffer::F32(means) = &mean.buffer else {
@@ -1073,7 +1074,8 @@ mod tests {
             vec![2, 1_000_000],
             Buffer::F32([values.clone(), values].concat()),
         );
-        let budget = MemoryBudget::new(Device::Cpu, 8);
+        // Two ranks of metadata (66 bytes), result shape (8), and data (8).
+        let budget = MemoryBudget::new(Device::Cpu, 82);
         for op in [ReduceOp::Sum, ReduceOp::Mean] {
             let result = reduce(op, &rows, Some(&[1]), &budget, &token).unwrap();
             assert_eq!(result.shape, vec![2]);
@@ -1093,7 +1095,7 @@ mod tests {
                 0.100_000_008_940_696_72
             };
             assert_eq!(actual, &vec![reference; 2]);
-            assert_eq!(budget.usage().peak, 8);
+            assert_eq!(budget.usage().peak, 82);
             drop(result);
         }
     }
