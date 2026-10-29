@@ -1103,7 +1103,12 @@ mod tests {
     fn half_mean_scratch_is_charged_and_released() {
         let input = dense(vec![2, 2], Buffer::F16(vec![Float16::from_f32(0.5); 4]));
         let token = CancellationToken::new();
-        let tight = MemoryBudget::new(Device::Cpu, 11);
+        // Rank metadata, retained result shape/data, and two float32 scratch
+        // values.
+        let metadata = (2 * (1 + 4 * std::mem::size_of::<usize>())) as u64;
+        let retained = 4 + std::mem::size_of::<usize>() as u64;
+        let peak = metadata + retained + 8;
+        let tight = MemoryBudget::new(Device::Cpu, peak - 1);
         assert_eq!(
             reduce(ReduceOp::Mean, &input, Some(&[0]), &tight, &token)
                 .unwrap_err()
@@ -1111,11 +1116,11 @@ mod tests {
             ErrorCode::MemoryBudgetExceeded
         );
         assert_eq!(tight.usage().used, 0);
-        let fits = MemoryBudget::new(Device::Cpu, 12);
+        let fits = MemoryBudget::new(Device::Cpu, peak);
         let result = reduce(ReduceOp::Mean, &input, Some(&[0]), &fits, &token).unwrap();
         assert_eq!(result.buffer, Buffer::F16(vec![Float16::from_f32(0.5); 2]));
-        assert_eq!(fits.usage().peak, 12);
-        assert_eq!(fits.usage().used, 4);
+        assert_eq!(fits.usage().peak, peak);
+        assert_eq!(fits.usage().used, retained);
         drop(result);
         assert_eq!(fits.usage().used, 0);
         token.cancel();
