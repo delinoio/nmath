@@ -117,8 +117,8 @@ impl Expr {
         let shape = broadcast_shapes(lhs.shape(), rhs.shape())?;
         let compute_dtype = match (lhs.weak_scalar(), rhs.weak_scalar()) {
             (Some(_), Some(_)) | (None, None) => DType::promote(lhs.dtype(), rhs.dtype())?,
-            (Some(s), None) => DType::promote_weak(rhs.dtype(), s.kind())?,
-            (None, Some(s)) => DType::promote_weak(lhs.dtype(), s.kind())?,
+            (Some(s), None) => weak_scalar_dtype(rhs.dtype(), s)?,
+            (None, Some(s)) => weak_scalar_dtype(lhs.dtype(), s)?,
         };
         let dtype = op.result_dtype(compute_dtype)?;
         Ok(Expr::node(
@@ -311,6 +311,36 @@ impl Expr {
         });
         problem.map_or(Ok(()), Err)
     }
+}
+
+/// NEP 50 promotion of an array dtype with a weak scalar. An integer scalar
+/// that the resulting integer dtype cannot represent fails instead of wrapping,
+/// as NumPy raises `OverflowError` for out-of-bounds Python integers.
+fn weak_scalar_dtype(array: DType, scalar: Scalar) -> Result<DType> {
+    let dtype = DType::promote_weak(array, scalar.kind())?;
+    let value: i128 = match scalar {
+        Scalar::Int(v) => v.into(),
+        Scalar::UInt(v) => v.into(),
+        Scalar::Bool(_) | Scalar::Float(_) => return Ok(dtype),
+    };
+    let (min, max): (i128, i128) = match dtype {
+        DType::Int32 => (i32::MIN.into(), i32::MAX.into()),
+        DType::Int64 => (i64::MIN.into(), i64::MAX.into()),
+        DType::UInt32 => (0, u32::MAX.into()),
+        DType::UInt64 => (0, u64::MAX.into()),
+        _ => return Ok(dtype),
+    };
+    if value < min || value > max {
+        return Err(Error::new(
+            ErrorCode::DTypeUnsupported,
+            format!(
+                "The integer scalar {value} is out of bounds for dtype '{}'. Cast the array to a \
+                 wider dtype first.",
+                dtype.id()
+            ),
+        ));
+    }
+    Ok(dtype)
 }
 
 fn scalar_matmul_error() -> Error {
@@ -533,6 +563,41 @@ mod tests {
         let e = Expr::binary(BinaryOp::Mul, &a, &Expr::scalar(Scalar::Float(2.0))).unwrap();
         assert_eq!(e.dtype(), DType::Float32);
         assert_eq!(eval(&e).buffer, Buffer::F32(vec![2.0, 4.0]));
+    }
+
+    #[test]
+    fn weak_integer_scalars_must_fit_the_array_dtype() {
+        // NumPy 2.5.4: np.array([1], np.uint32) + (-1) and
+        // np.array([1], np.int32) + 2**32 raise OverflowError.
+        let u = Expr::input(&arr(1, vec![1], Buffer::U32(vec![1])));
+        let i = Expr::input(&arr(1, vec![1], Buffer::I32(vec![1])));
+        let add = |a: &Expr, s: Scalar| Expr::binary(BinaryOp::Add, a, &Expr::scalar(s));
+        assert_eq!(
+            add(&u, Scalar::Int(-1)).unwrap_err().code,
+            ErrorCode::DTypeUnsupported
+        );
+        assert_eq!(
+            Expr::binary(BinaryOp::Add, &Expr::scalar(Scalar::Int(1 << 32)), &i)
+                .unwrap_err()
+                .code,
+            ErrorCode::DTypeUnsupported
+        );
+        let b = Expr::input(&arr(1, vec![1], Buffer::Bool(vec![true])));
+        assert!(add(&b, Scalar::UInt(u64::MAX)).is_err());
+        // In-range scalars keep the array dtype; float arrays accept any int.
+        assert_eq!(
+            add(&u, Scalar::Int(u32::MAX as i64)).unwrap().dtype(),
+            DType::UInt32
+        );
+        assert_eq!(
+            add(&i, Scalar::Int(i32::MIN as i64)).unwrap().dtype(),
+            DType::Int32
+        );
+        let f = Expr::input(&arr(1, vec![1], Buffer::F32(vec![1.0])));
+        assert_eq!(
+            add(&f, Scalar::UInt(u64::MAX)).unwrap().dtype(),
+            DType::Float32
+        );
     }
 
     #[test]
