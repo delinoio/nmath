@@ -16,6 +16,8 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 - JavaScript and TypeScript developers who use NMath from Node.js 24.
 - `.nts` output produced by `nmath-compiler`, which imports `@delinoio/nmath/nts-runtime`.
 
+When the `.nts` transform's extension-rewriting option is enabled, source-relative `.nts` specifiers in quoted imports and static template dynamic imports become `.js` specifiers. The [compiler contract](crates-nmath-compiler-contract.md) owns this behavior and its span mapping.
+
 ## Interfaces and Contracts
 
 ### Entry points
