@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "8baf90086ff809c8d1dcf64ad3722453af4cc2d1"
+COUNTERPART_REVISION = "a1f49c4fac30b40a1aae7fc0478620a5c7251a2b"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
@@ -117,7 +117,10 @@ for op in ["sum", "mean", "min", "max"]:
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
         NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
 counterparts({"numpy.matmul":"numpy.matmul"}, "matrix-product", ["a", "b"], NUMERIC,
-    NUMERIC_LIMITS + ["Only existing vector/matrix 1-D/2-D forms; batched matmul and full ufunc options remain targets."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+    NUMERIC_LIMITS + ["Broadcast batch axes and NumPy vector promotion; full ufunc options remain targets. Exact small-value fixtures are not arbitrary floating-point or platform acceptance."],
+    CORE + ["crates/nmath-core/src/shape.rs", "crates/nmath-core/src/kernels.rs"],
+    DTYPE_TESTS + ["packages/nmath/test/batched-matmul.test.mjs", "packages/nmath/test/types/batched-matmul.ts", "packages/nmath/test/compiler.test.mjs", "crates/nmath-core/tests/gpu.rs"],
+    DTYPE_FIXTURES + ["packages/nmath/test/fixtures/batched-matmul.json"])
 for op, target, args, limit in [
     ("__getitem__", "get", ["integer", "slice", "indices", "mask"], "Basic indexing shares storage; advanced selections copy. Full upstream mixed indexing remains pending."),
     ("__setitem__", "set", ["selectors", "value", "signal"], "Asynchronous atomic writes; complex-to-real writes require explicit casts; failed writes preserve storage."),
