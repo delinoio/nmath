@@ -83,7 +83,11 @@ export type FftShape<
   O extends FftOptions = {},
   Real extends boolean = false,
 > = O extends { n: number }
-  ? LiteralFftShape<S, O, Real>
+  ? "axis" extends keyof O
+    ? O extends { axis: number }
+      ? LiteralFftShape<S, O, Real>
+      : DynamicShape<S>
+    : LiteralFftShape<S, O, Real>
   : "n" extends keyof O
     ? DynamicShape<S>
     : Real extends true

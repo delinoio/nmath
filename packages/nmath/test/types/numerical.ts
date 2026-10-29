@@ -36,3 +36,22 @@ declare const dynamicOptions: import("../../src/fft.js").FftOptions;
 const dynamicTransform: Expr<"complex64", readonly [number, number, number]> =
   fft.fft(a, dynamicOptions);
 void dynamicTransform;
+
+const optionalAxis: { n: 8; axis?: number } = { n: 8, axis: 0 };
+const optionalLiteralAxis: { n: 8; axis?: 0 } = { n: 8 };
+for (const options of [optionalAxis, optionalLiteralAxis]) {
+  const forward = fft.fft(a, options);
+  const inverse = fft.ifft(a, options);
+  const real = fft.rfft(a, options);
+  const inverseReal = fft.irfft(a, options);
+  const dimensions: readonly [number, number, number] = forward.shape;
+  // @ts-expect-error an optional axis may change a non-last dimension
+  const wrongForward: readonly [2, 3, 8] = forward.shape;
+  // @ts-expect-error inverse transforms have the same axis uncertainty
+  const wrongInverse: readonly [2, 3, 8] = inverse.shape;
+  // @ts-expect-error real transforms cannot retain the leading dimensions
+  const wrongReal: readonly [2, 3, number] = real.shape;
+  // @ts-expect-error inverse real transforms cannot retain the leading dimensions
+  const wrongInverseReal: readonly [2, 3, number] = inverseReal.shape;
+  void [dimensions, wrongForward, wrongInverse, wrongReal, wrongInverseReal];
+}
