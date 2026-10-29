@@ -29,12 +29,17 @@
       "types": "./dist/polars.d.ts",
       "default": "./dist/polars.js"
     },
+    "./compiler": {
+      "types": "./dist/compiler.d.ts",
+      "default": "./dist/compiler.js"
+    },
     "./nts-runtime": {
       "types": "./dist/nts-runtime.d.ts",
       "default": "./dist/nts-runtime.js"
     }
   },
   "files": [
+    "bin",
     "dist",
     "native",
     "LICENSE",
@@ -46,7 +51,8 @@
     "build:native": "napi build --manifest-path ../../crates/nmath-node/Cargo.toml --platform --release --output-dir native --no-js --dts native.d.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/types/tsconfig.json",
     "test": "node --test test/*.test.mjs",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:compiler": "node scripts/build-compiler.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.9",
@@ -65,5 +71,8 @@
       "x86_64-unknown-linux-musl",
       "aarch64-unknown-linux-musl"
     ]
+  },
+  "bin": {
+    "nmath-compiler": "./bin/nmath-compiler.mjs"
   }
 }

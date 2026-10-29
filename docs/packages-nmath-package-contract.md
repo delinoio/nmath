@@ -29,7 +29,7 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 | `@delinoio/nmath/compiler`    | `compiler`     | `check` and `build` project APIs.                                                                           |
 | `@delinoio/nmath/nts-runtime` | (internal)     | Helpers that compiled `.nts` output imports. Not documented for direct use.                                 |
 
-The CLI executable is `nmath-compiler`. No separate compiler package is published.
+The CLI executable is `nmath-compiler`. No separate compiler package is published. The package `bin` entry is a small Node.js launcher that runs the platform's prebuilt `nmath-compiler` executable from `native/` or the platform package; `@delinoio/nmath/compiler` runs the same executable with `--json`.
 
 ### Contexts
 
@@ -76,7 +76,7 @@ The package does not log by default. `NMATH_LOG` enables native `tracing` output
 
 ## Build and Test
 
-- `pnpm --filter @delinoio/nmath build` compiles TypeScript to `dist/`. `build:native` builds `nmath-node` with the napi-rs CLI.
+- `pnpm --filter @delinoio/nmath build` compiles TypeScript to `dist/`. `build:native` builds `nmath-node` with the napi-rs CLI. `build:compiler` builds `nmath-compiler` and copies it to `native/`.
 - `pnpm --filter @delinoio/nmath test` runs Node.js tests against the built native binary.
 - `dist/` is ignored generated output and is removed after validation.
 - Platform acceptance for the eight CPU binary combinations and the GPU matrix is recorded in pull requests, issues and CI artifacts, not in this document.

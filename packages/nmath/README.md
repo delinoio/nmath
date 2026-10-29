@@ -128,9 +128,10 @@ Install Rust (the toolchain in `rust-toolchain`) and pnpm 10, then run:
 pnpm install
 pnpm --filter @delinoio/nmath build:native
 pnpm --filter @delinoio/nmath build
+pnpm --filter @delinoio/nmath build:compiler
 ```
 
-`build:native` writes the binary for your platform to `native/`.
+`build:native` and `build:compiler` write the binaries for your platform to `native/`.
 
 ## Support
 
