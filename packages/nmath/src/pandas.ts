@@ -10,6 +10,7 @@ import {
   readColumnar,
   writeColumnar,
   requireDefaultIndex,
+  requireFrameRows,
   type ColumnarReadOptions,
   type ColumnarWriteOptions,
 } from "./columnar.js";
@@ -557,6 +558,7 @@ export async function read_parquet(
   options: ColumnarReadOptions = {},
 ): Promise<DataFrame> {
   const result = await readColumnar(context, path, "parquet", options);
+  requireFrameRows(result);
   return new DataFrame(new Map(result.columns), { validity: result.validity });
 }
 
@@ -566,5 +568,6 @@ export async function read_feather(
   options: ColumnarReadOptions = {},
 ): Promise<DataFrame> {
   const result = await readColumnar(context, path, "arrow", options);
+  requireFrameRows(result);
   return new DataFrame(new Map(result.columns), { validity: result.validity });
 }

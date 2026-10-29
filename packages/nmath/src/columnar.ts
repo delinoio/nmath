@@ -123,3 +123,12 @@ export function requireDefaultIndex(index: readonly (string | number)[]): void {
       "Columnar output cannot preserve this pandas index. Reset it explicitly before writing.",
     );
 }
+
+/** Frame constructors currently derive row counts from their columns. */
+export function requireFrameRows(table: ColumnarTable): void {
+  if (table.rows > 0 && table.columns.size === 0)
+    throw new NMathError(
+      "NMATH_DTYPE_UNSUPPORTED",
+      "Nonempty zero-column tables cannot be represented by this DataFrame. Use readColumnar to retain the explicit row count.",
+    );
+}
