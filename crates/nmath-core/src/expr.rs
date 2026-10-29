@@ -324,8 +324,12 @@ fn weak_scalar_dtype(array: DType, scalar: Scalar) -> Result<DType> {
         Scalar::Bool(_) | Scalar::Float(_) => return Ok(dtype),
     };
     let (min, max): (i128, i128) = match dtype {
+        DType::Int8 => (i8::MIN.into(), i8::MAX.into()),
+        DType::Int16 => (i16::MIN.into(), i16::MAX.into()),
         DType::Int32 => (i32::MIN.into(), i32::MAX.into()),
         DType::Int64 => (i64::MIN.into(), i64::MAX.into()),
+        DType::UInt8 => (0, u8::MAX.into()),
+        DType::UInt16 => (0, u16::MAX.into()),
         DType::UInt32 => (0, u32::MAX.into()),
         DType::UInt64 => (0, u64::MAX.into()),
         _ => return Ok(dtype),

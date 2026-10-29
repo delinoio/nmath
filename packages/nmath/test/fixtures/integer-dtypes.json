@@ -1,0 +1,742 @@
+{
+  "numpy": "2.5.4",
+  "promotion": {
+    "bool": {
+      "bool": "bool",
+      "int8": "int8",
+      "int16": "int16",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "uint8",
+      "uint16": "uint16",
+      "uint32": "uint32",
+      "uint64": "uint64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "int8": {
+      "bool": "int8",
+      "int8": "int8",
+      "int16": "int16",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "int16",
+      "uint16": "int32",
+      "uint32": "int64",
+      "uint64": "float64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "int16": {
+      "bool": "int16",
+      "int8": "int16",
+      "int16": "int16",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "int16",
+      "uint16": "int32",
+      "uint32": "int64",
+      "uint64": "float64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "int32": {
+      "bool": "int32",
+      "int8": "int32",
+      "int16": "int32",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "int32",
+      "uint16": "int32",
+      "uint32": "int64",
+      "uint64": "float64",
+      "float32": "float64",
+      "float64": "float64"
+    },
+    "int64": {
+      "bool": "int64",
+      "int8": "int64",
+      "int16": "int64",
+      "int32": "int64",
+      "int64": "int64",
+      "uint8": "int64",
+      "uint16": "int64",
+      "uint32": "int64",
+      "uint64": "float64",
+      "float32": "float64",
+      "float64": "float64"
+    },
+    "uint8": {
+      "bool": "uint8",
+      "int8": "int16",
+      "int16": "int16",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "uint8",
+      "uint16": "uint16",
+      "uint32": "uint32",
+      "uint64": "uint64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "uint16": {
+      "bool": "uint16",
+      "int8": "int32",
+      "int16": "int32",
+      "int32": "int32",
+      "int64": "int64",
+      "uint8": "uint16",
+      "uint16": "uint16",
+      "uint32": "uint32",
+      "uint64": "uint64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "uint32": {
+      "bool": "uint32",
+      "int8": "int64",
+      "int16": "int64",
+      "int32": "int64",
+      "int64": "int64",
+      "uint8": "uint32",
+      "uint16": "uint32",
+      "uint32": "uint32",
+      "uint64": "uint64",
+      "float32": "float64",
+      "float64": "float64"
+    },
+    "uint64": {
+      "bool": "uint64",
+      "int8": "float64",
+      "int16": "float64",
+      "int32": "float64",
+      "int64": "float64",
+      "uint8": "uint64",
+      "uint16": "uint64",
+      "uint32": "uint64",
+      "uint64": "uint64",
+      "float32": "float64",
+      "float64": "float64"
+    },
+    "float32": {
+      "bool": "float32",
+      "int8": "float32",
+      "int16": "float32",
+      "int32": "float64",
+      "int64": "float64",
+      "uint8": "float32",
+      "uint16": "float32",
+      "uint32": "float64",
+      "uint64": "float64",
+      "float32": "float32",
+      "float64": "float64"
+    },
+    "float64": {
+      "bool": "float64",
+      "int8": "float64",
+      "int16": "float64",
+      "int32": "float64",
+      "int64": "float64",
+      "uint8": "float64",
+      "uint16": "float64",
+      "uint32": "float64",
+      "uint64": "float64",
+      "float32": "float64",
+      "float64": "float64"
+    }
+  },
+  "cases": [
+    {
+      "dtype": "int8",
+      "a": [
+        [
+          -128,
+          127
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "min": -128,
+      "max": 127,
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnfGkxJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAqAfwID",
+      "operations": {
+        "add": {
+          "dtype": "int8",
+          "values": [
+            [
+              -127,
+              -127
+            ],
+            [
+              3,
+              5
+            ]
+          ]
+        },
+        "sub": {
+          "dtype": "int8",
+          "values": [
+            [
+              127,
+              125
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "mul": {
+          "dtype": "int8",
+          "values": [
+            [
+              -128,
+              -2
+            ],
+            [
+              2,
+              6
+            ]
+          ]
+        },
+        "div": {
+          "dtype": "float64",
+          "values": [
+            [
+              -128.0,
+              63.5
+            ],
+            [
+              2.0,
+              1.5
+            ]
+          ]
+        },
+        "mod": {
+          "dtype": "int8",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        "pow": {
+          "dtype": "int8",
+          "values": [
+            [
+              -128,
+              1
+            ],
+            [
+              2,
+              9
+            ]
+          ]
+        },
+        "neg": {
+          "dtype": "int8",
+          "values": [
+            [
+              -128,
+              -127
+            ],
+            [
+              -2,
+              -3
+            ]
+          ]
+        },
+        "sum": {
+          "dtype": "int64",
+          "values": [
+            -126,
+            130
+          ]
+        },
+        "mean": {
+          "dtype": "float64",
+          "values": [
+            -63.0,
+            65.0
+          ]
+        },
+        "min": {
+          "dtype": "int8",
+          "values": [
+            -128,
+            3
+          ]
+        },
+        "max": {
+          "dtype": "int8",
+          "values": [
+            2,
+            127
+          ]
+        },
+        "matmul": {
+          "dtype": "int8",
+          "values": [
+            126,
+            8
+          ]
+        }
+      }
+    },
+    {
+      "dtype": "int16",
+      "a": [
+        [
+          -32768,
+          32767
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "min": -32768,
+      "max": 32767,
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGkyJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAgP9/AgADAA==",
+      "operations": {
+        "add": {
+          "dtype": "int16",
+          "values": [
+            [
+              -32767,
+              -32767
+            ],
+            [
+              3,
+              5
+            ]
+          ]
+        },
+        "sub": {
+          "dtype": "int16",
+          "values": [
+            [
+              32767,
+              32765
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "mul": {
+          "dtype": "int16",
+          "values": [
+            [
+              -32768,
+              -2
+            ],
+            [
+              2,
+              6
+            ]
+          ]
+        },
+        "div": {
+          "dtype": "float64",
+          "values": [
+            [
+              -32768.0,
+              16383.5
+            ],
+            [
+              2.0,
+              1.5
+            ]
+          ]
+        },
+        "mod": {
+          "dtype": "int16",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        "pow": {
+          "dtype": "int16",
+          "values": [
+            [
+              -32768,
+              1
+            ],
+            [
+              2,
+              9
+            ]
+          ]
+        },
+        "neg": {
+          "dtype": "int16",
+          "values": [
+            [
+              -32768,
+              -32767
+            ],
+            [
+              -2,
+              -3
+            ]
+          ]
+        },
+        "sum": {
+          "dtype": "int64",
+          "values": [
+            -32766,
+            32770
+          ]
+        },
+        "mean": {
+          "dtype": "float64",
+          "values": [
+            -16383.0,
+            16385.0
+          ]
+        },
+        "min": {
+          "dtype": "int16",
+          "values": [
+            -32768,
+            3
+          ]
+        },
+        "max": {
+          "dtype": "int16",
+          "values": [
+            2,
+            32767
+          ]
+        },
+        "matmul": {
+          "dtype": "int16",
+          "values": [
+            32766,
+            8
+          ]
+        }
+      }
+    },
+    {
+      "dtype": "uint8",
+      "a": [
+        [
+          0,
+          255
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "min": 0,
+      "max": 255,
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnfHUxJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoA/wID",
+      "operations": {
+        "add": {
+          "dtype": "uint8",
+          "values": [
+            [
+              1,
+              1
+            ],
+            [
+              3,
+              5
+            ]
+          ]
+        },
+        "sub": {
+          "dtype": "uint8",
+          "values": [
+            [
+              255,
+              253
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "mul": {
+          "dtype": "uint8",
+          "values": [
+            [
+              0,
+              254
+            ],
+            [
+              2,
+              6
+            ]
+          ]
+        },
+        "div": {
+          "dtype": "float64",
+          "values": [
+            [
+              0.0,
+              127.5
+            ],
+            [
+              2.0,
+              1.5
+            ]
+          ]
+        },
+        "mod": {
+          "dtype": "uint8",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        "pow": {
+          "dtype": "uint8",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              9
+            ]
+          ]
+        },
+        "neg": {
+          "dtype": "uint8",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              254,
+              253
+            ]
+          ]
+        },
+        "sum": {
+          "dtype": "uint64",
+          "values": [
+            2,
+            258
+          ]
+        },
+        "mean": {
+          "dtype": "float64",
+          "values": [
+            1.0,
+            129.0
+          ]
+        },
+        "min": {
+          "dtype": "uint8",
+          "values": [
+            0,
+            3
+          ]
+        },
+        "max": {
+          "dtype": "uint8",
+          "values": [
+            2,
+            255
+          ]
+        },
+        "matmul": {
+          "dtype": "uint8",
+          "values": [
+            254,
+            8
+          ]
+        }
+      }
+    },
+    {
+      "dtype": "uint16",
+      "a": [
+        [
+          0,
+          65535
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "min": 0,
+      "max": 65535,
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPHUyJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAP//AgADAA==",
+      "operations": {
+        "add": {
+          "dtype": "uint16",
+          "values": [
+            [
+              1,
+              1
+            ],
+            [
+              3,
+              5
+            ]
+          ]
+        },
+        "sub": {
+          "dtype": "uint16",
+          "values": [
+            [
+              65535,
+              65533
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "mul": {
+          "dtype": "uint16",
+          "values": [
+            [
+              0,
+              65534
+            ],
+            [
+              2,
+              6
+            ]
+          ]
+        },
+        "div": {
+          "dtype": "float64",
+          "values": [
+            [
+              0.0,
+              32767.5
+            ],
+            [
+              2.0,
+              1.5
+            ]
+          ]
+        },
+        "mod": {
+          "dtype": "uint16",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        "pow": {
+          "dtype": "uint16",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              9
+            ]
+          ]
+        },
+        "neg": {
+          "dtype": "uint16",
+          "values": [
+            [
+              0,
+              1
+            ],
+            [
+              65534,
+              65533
+            ]
+          ]
+        },
+        "sum": {
+          "dtype": "uint64",
+          "values": [
+            2,
+            65538
+          ]
+        },
+        "mean": {
+          "dtype": "float64",
+          "values": [
+            1.0,
+            32769.0
+          ]
+        },
+        "min": {
+          "dtype": "uint16",
+          "values": [
+            0,
+            3
+          ]
+        },
+        "max": {
+          "dtype": "uint16",
+          "values": [
+            2,
+            65535
+          ]
+        },
+        "matmul": {
+          "dtype": "uint16",
+          "values": [
+            65534,
+            8
+          ]
+        }
+      }
+    }
+  ]
+}

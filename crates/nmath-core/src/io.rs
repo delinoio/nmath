@@ -40,8 +40,12 @@ fn format_error(detail: &str) -> Error {
 fn descr(dtype: DType) -> Result<&'static str> {
     Ok(match dtype {
         DType::Bool => "|b1",
+        DType::Int8 => "|i1",
+        DType::Int16 => "<i2",
         DType::Int32 => "<i4",
         DType::Int64 => "<i8",
+        DType::UInt8 => "|u1",
+        DType::UInt16 => "<u2",
         DType::UInt32 => "<u4",
         DType::UInt64 => "<u8",
         DType::Float32 => "<f4",
@@ -87,10 +91,22 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
     out.extend_from_slice(header.as_bytes());
     match buffer {
         Buffer::Bool(v) => out.extend(v.iter().map(|&b| b as u8)),
+        Buffer::I8(v) => v
+            .iter()
+            .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+        Buffer::I16(v) => v
+            .iter()
+            .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
         Buffer::I32(v) => v
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
         Buffer::I64(v) => v
+            .iter()
+            .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+        Buffer::U8(v) => v
+            .iter()
+            .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+        Buffer::U16(v) => v
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
         Buffer::U32(v) => v
@@ -165,8 +181,12 @@ fn decode_npy_with<R>(
         .ok_or_else(|| format_error("malformed descr"))?;
     let dtype = match descr_text {
         "|b1" => DType::Bool,
+        "|i1" => DType::Int8,
+        "<i2" => DType::Int16,
         "<i4" => DType::Int32,
         "<i8" => DType::Int64,
+        "|u1" => DType::UInt8,
+        "<u2" => DType::UInt16,
         "<u4" => DType::UInt32,
         "<u8" => DType::UInt64,
         "<f4" => DType::Float32,
@@ -227,8 +247,12 @@ fn decode_npy_with<R>(
             }
             Buffer::Bool(data.iter().map(|&b| b == 1).collect())
         }
+        DType::Int8 => read_le!(i8, 1),
+        DType::Int16 => read_le!(i16, 2),
         DType::Int32 => read_le!(i32, 4),
         DType::Int64 => read_le!(i64, 8),
+        DType::UInt8 => read_le!(u8, 1),
+        DType::UInt16 => read_le!(u16, 2),
         DType::UInt32 => read_le!(u32, 4),
         DType::UInt64 => read_le!(u64, 8),
         DType::Float32 => read_le!(f32, 4),
