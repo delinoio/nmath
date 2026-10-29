@@ -124,9 +124,7 @@ function extractFrame(frame) {
       assert.ok(Array.from(col.validity.toTypedArray()).every(Boolean));
   }
   const arrays = columns.map((c) => Array.from(c.values.toTypedArray()));
-  const rows = arrays[0]
-    .map((k, i) => [k, arrays[1][i]])
-    .sort((a, b) => Number(a[0] - b[0]));
+  const rows = arrays[0].map((k, i) => [k, arrays[1][i]]);
   return { shape: [rows.length, 2], dtype: "int64", values: rows.flat() };
 }
 async function measure(name, run, extract, dispose, expected) {

@@ -62,6 +62,7 @@ def main():
     report = {"schemaVersion": 1, "status": "running", "versions": VERSIONS, "workload": WORKLOAD,
               "command": sys.argv, "python": sys.version, "platform": platform.platform(),
               "machine": platform.machine(), "processor": platform.processor(), "cpuCount": os.cpu_count(),
+              "cpuModel": subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip() if sys.platform == "darwin" else platform.processor(),
               "sourceRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "scriptSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "workingTree": subprocess.check_output(["git", "status", "--porcelain"], text=True),
@@ -86,6 +87,7 @@ def main():
         data = np.array(values(rows), dtype=np.int64)
         pdf = pd.DataFrame({"k": keys, "v": data})
         pldf = pl.DataFrame({"k": keys, "v": data})
+        polars_query = pldf.lazy().group_by("k").agg(pl.col("v").sum()).sort("k")
         expected_matrix = [sum(int(a[i,k])*int(b[k,j]) for k in range(n)) for i in range(n) for j in range(n)]
         sums = [sum(int(data[i]) for i in range(g, rows, groups)) for g in range(groups)]
         expected_table = [v for pair in zip(range(groups), sums) for v in pair]
@@ -93,7 +95,7 @@ def main():
         cases = [
             ("matrix", lambda: a @ b, lambda r: r.ravel().tolist(), expected_matrix, [n,n], "float32", "numpy"),
             ("tabular-pandas", lambda: pdf.groupby("k", as_index=False, sort=True)["v"].sum(), lambda r: r.to_numpy().ravel().tolist(), expected_table, [groups,2], "int64", "pandas"),
-            ("tabular-polars", lambda: pldf.lazy().group_by("k").agg(pl.col("v").sum()).sort("k").collect(), lambda r: [v for row in r.rows() for v in row], expected_table, [groups,2], "int64", "polars"),
+            ("tabular-polars", lambda: polars_query.collect(), lambda r: [v for row in r.rows() for v in row], expected_table, [groups,2], "int64", "polars"),
             ("algorithm-nts", lambda: (x*2+3)*x+1, lambda r: r.tolist(), expected_algorithm, [len(x)], "float32", "numpy")]
         report["setupAndIndependentOracleMs"] = (time.perf_counter() - setup_start) * 1000
         fixture = {"schemaVersion": 1, "versions": VERSIONS, "workload": WORKLOAD,

@@ -14,7 +14,7 @@
   },
   "criterion": "Exact full-output equality for bounded integer-valued inputs; no general floating-point tolerance claim.",
   "provenance": {
-    "generatorSha256": "1d9b89f9c45dd86f0d3aaf501ec13cd9888c12e11778113538d5b907bfe3851e",
+    "generatorSha256": "a72cf5876c62518920c64f9b87a3c8a77c54bdf187fe094c8a0a8a042ce20e69",
     "python": "3.14.8",
     "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
   },
