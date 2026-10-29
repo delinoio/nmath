@@ -166,7 +166,7 @@ fn native_precision_guard_verifies_integer_preservation() {
 
 // This diagnostic deliberately uses native pow, outside the production
 // integer kernels. A passing diagnostic is not power acceptance: it records
-// device behavior and verifies that the unimplemented operation stays rejected.
+// device behavior independently of the production power implementation.
 #[test]
 #[ignore = "requires an actual supported native GPU"]
 fn native_power_precision_diagnostic() {
@@ -248,12 +248,6 @@ fn native_power_precision_diagnostic() {
         DenseArray::new(vec![1], Buffer::F32(vec![2.0]), Reservation::none()).unwrap(),
     ));
     let power = Expr::binary(kernels::BinaryOp::Pow, &input, &input).unwrap();
-    assert_eq!(
-        validate(&power).unwrap_err().code,
-        ErrorCode::GpuUnsupportedOperation
-    );
-    assert_eq!(
-        shader::generate(&power).unwrap_err().code,
-        ErrorCode::GpuUnsupportedOperation
-    );
+    validate(&power).unwrap();
+    shader::generate(&power).unwrap();
 }

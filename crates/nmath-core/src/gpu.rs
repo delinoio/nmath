@@ -90,14 +90,8 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             lhs,
             rhs,
             compute_dtype,
-            op,
+            ..
         } => {
-            if *compute_dtype == DType::Float32 && *op == kernels::BinaryOp::Pow {
-                return Err(unsupported(
-                    "Float32 GPU power lacks a validated precision-preserving implementation. Use \
-                     explicit CPU execution.",
-                ));
-            }
             if !supported_dtype(*compute_dtype) {
                 return Err(unsupported(
                     "Binary promotion requires an unsupported GPU dtype.",

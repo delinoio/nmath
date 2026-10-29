@@ -53,9 +53,7 @@ fn binary(op: BinaryOp, dtype: DType) -> String {
         BinaryOp::Mul => "return x * y;".into(),
         BinaryOp::Div => "return divf(x, y);".into(),
         BinaryOp::Mod if dtype == DType::Float32 => "return modf(x, y);".into(),
-        BinaryOp::Pow if dtype == DType::Float32 => {
-            unreachable!("float32 power is rejected before shader generation")
-        }
+        BinaryOp::Pow if dtype == DType::Float32 => "return powf(x, y);".into(),
         BinaryOp::Mod if dtype == DType::Int32 => {
             "if y == 0 || (x == bitcast<i32>(0x80000000u) && y == -1) { return 0; } var r = x % y; \
              if r != 0 && ((r < 0) != (y < 0)) { r += y; } return r;"
@@ -76,19 +74,6 @@ fn binary(op: BinaryOp, dtype: DType) -> String {
 }
 
 pub(super) fn generate(expr: &Expr) -> Result<String> {
-    if expr.dtype() == DType::Float32
-        && matches!(
-            expr.kind(),
-            ExprKind::Binary {
-                op: BinaryOp::Pow,
-                ..
-            }
-        )
-    {
-        return Err(unsupported(
-            "Float32 power has no precision-preserving GPU shader.",
-        ));
-    }
     let t = ty(expr.dtype());
     let count = elements(expr.shape())?;
     let mut source = format!(
@@ -99,6 +84,15 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
     );
     if expr.dtype() == DType::Float32 {
         source.push_str(FLOAT_HELPERS);
+        if matches!(
+            expr.kind(),
+            ExprKind::Binary {
+                op: BinaryOp::Pow,
+                ..
+            }
+        ) {
+            source.push_str(include_str!("power.wgsl"));
+        }
     }
     let body = match expr.kind() {
         ExprKind::Unary(op, _) if expr.dtype() == DType::Float32 => format!(

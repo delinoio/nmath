@@ -55,7 +55,7 @@ fn actual_context_gpu_and_separate_budgets() {
 
 #[test]
 #[ignore = "requires actual supported native GPU hardware"]
-fn actual_context_float32_preserves_underflow_and_rejects_power() {
+fn actual_context_float32_preserves_underflow_and_executes_power() {
     let ctx = Context::new(ContextOptions {
         max_concurrent_jobs: 1,
         max_queue_length: 0,
@@ -95,19 +95,27 @@ fn actual_context_float32_preserves_underflow_and_rejects_power() {
     assert_eq!(ctx.metrics().cpu_memory.used, 16);
     let power = Expr::binary(BinaryOp::Pow, &Expr::input(&a), &Expr::input(&b)).unwrap();
     let before = ctx.metrics();
+    let (tx, rx) = mpsc::channel();
+    ctx.compute(
+        &power,
+        Device::Gpu,
+        CancellationToken::new(),
+        Box::new(move |v| tx.send(v).unwrap()),
+    )
+    .unwrap();
+    let JobOutput::Value(Value::Dense(result)) = rx.recv().unwrap().unwrap() else {
+        panic!()
+    };
+    let Buffer::F32(words) = &result.buffer else {
+        panic!()
+    };
     assert_eq!(
-        ctx.compute(
-            &power,
-            Device::Gpu,
-            CancellationToken::new(),
-            Box::new(|_| panic!("not admitted"))
-        )
-        .unwrap_err()
-        .code,
-        ErrorCode::GpuUnsupportedOperation
+        words.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        [0, 0x20000000]
     );
-    assert_eq!(
-        ctx.metrics().gpu_memory.cumulative_reserved,
-        before.gpu_memory.cumulative_reserved
-    );
+    assert_eq!(ctx.metrics().gpu_memory.used, 0);
+    assert!(ctx.metrics().gpu_memory.cumulative_reserved > before.gpu_memory.cumulative_reserved);
+    assert_eq!(ctx.metrics().cpu_memory.used, 24);
+    drop(result);
+    assert_eq!(ctx.metrics().cpu_memory.used, 16);
 }
