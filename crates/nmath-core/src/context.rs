@@ -276,8 +276,8 @@ impl Context {
         )
     }
 
-    /// `target[selectors] = value`, serialized per storage in admission order and
-    /// atomic.
+    /// `target[selectors] = value`, serialized per storage in admission order
+    /// and atomic.
     pub fn assign(
         &self,
         target: &NdArray,
@@ -765,6 +765,45 @@ mod admission_tests {
     }
 
     #[test]
+    fn concurrent_assignments_complete_in_admission_order() {
+        let ctx = context(2);
+        let target = ctx.array(vec![1], Buffer::I32(vec![0])).unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let mut requests = Vec::new();
+        for value in [1, 2] {
+            let ctx = ctx.clone();
+            let target = target.clone();
+            let barrier = barrier.clone();
+            requests.push(thread::spawn(move || {
+                let (done, rx) = completion();
+                barrier.wait();
+                let id = ctx
+                    .assign(
+                        &target,
+                        vec![],
+                        &Expr::scalar(Scalar::Int(value)),
+                        CancellationToken::new(),
+                        done,
+                    )
+                    .unwrap();
+                (id, value, rx)
+            }));
+        }
+        barrier.wait();
+        let first = requests.remove(0).join().unwrap();
+        let second = requests.remove(0).join().unwrap();
+        completed(first.2);
+        completed(second.2);
+        let last = if first.0 > second.0 {
+            first.1
+        } else {
+            second.1
+        };
+        assert_eq!(target.to_buffer(), Buffer::I32(vec![last as i32]));
+        ctx.close();
+    }
+
+    #[test]
     fn assignment_rejection_and_cancellation_release_tickets() {
         let ctx = context(1);
         let target = ctx.array(vec![1], Buffer::I32(vec![0])).unwrap();
@@ -980,7 +1019,11 @@ mod admission_tests {
         );
         release_tx.send(()).unwrap();
         assert_eq!(
-            block_rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap_err().code,
+            block_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
             ErrorCode::Cancelled
         );
         close_thread.join().unwrap();
