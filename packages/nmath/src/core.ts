@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import {
   readText,
   writeText,
@@ -5,8 +6,14 @@ import {
   type TextWriteOptions,
   type TextFormat,
 } from "./io-text.js";
+import {
+  readColumnar,
+  writeColumnar,
+  type ColumnarFormat,
+  type ColumnarReadOptions,
+  type ColumnarWriteOptions,
+} from "./columnar.js";
 import type { Column, Validity } from "./frame.js";
-// SPDX-License-Identifier: Apache-2.0
 import { NMathError, native, nativeAsync } from "./errors.js";
 import { binding } from "./native.js";
 import type {
@@ -542,6 +549,15 @@ export class NMathArray<
     return typedArrayFor(this.dtype, copy) as TypedArrayOf<D>;
   }
 
+  /** Copies exact IEEE-754 binary16 encodings, including NaN payloads. */
+  toFloat16Bits(this: NMathArray<"float16", S>): Uint16Array {
+    if (this.dtype !== "float16")
+      throw new TypeError("toFloat16Bits requires float16 storage.");
+    return new Uint16Array(
+      new Uint8Array(native(() => this.#array.toBytes())).buffer,
+    );
+  }
+
   /** Copies the elements into nested JS arrays. */
   toArray(): Nested<ScalarOf<D>> {
     const typed = this.toTypedArray();
@@ -623,6 +639,15 @@ export class NMathArray<
   }
 }
 
+function float16Constructor(): Float16ArrayConstructor {
+  if (typeof Float16Array === "undefined") {
+    throw new TypeError(
+      "This Node.js runtime has no Float16Array. Use arrayFromFloat16Bits/toFloat16Bits for exact binary16 transport, or upgrade Node.js 24.",
+    );
+  }
+  return Float16Array;
+}
+
 function typedArrayFor(dtype: ComputableDType, buffer: ArrayBuffer) {
   switch (dtype) {
     case "bool":
@@ -631,6 +656,8 @@ function typedArrayFor(dtype: ComputableDType, buffer: ArrayBuffer) {
       return new Int8Array(buffer);
     case "int16":
       return new Int16Array(buffer);
+    case "float16":
+      return new (float16Constructor())(buffer);
     case "uint8":
       return new Uint8Array(buffer);
     case "uint16":
@@ -776,6 +803,7 @@ function itemSize(dtype: ComputableDType): number {
       return 1;
     case "int16":
     case "uint16":
+    case "float16":
       return 2;
     case "int32":
     case "uint32":
@@ -821,6 +849,11 @@ function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
   const length = values.length;
   let typed: ArrayBufferView;
   switch (dtype) {
+    case "float16":
+      typed = float16Constructor().from({ length }, (_, i) =>
+        Number(values[i]),
+      );
+      break;
     case "complex64":
     case "complex128": {
       const parts =
@@ -919,6 +952,21 @@ export class NMathContext {
       ? validatedShape(options.shape)
       : undefined;
     if (
+      options.dtype === "float16" &&
+      typeof Float16Array !== "undefined" &&
+      data instanceof Float16Array
+    ) {
+      this.ensureCpuBudget(data.length, options.dtype);
+      const array = native(() =>
+        this.nativeContext.array(
+          options.shape ? [...options.shape] : [data.length],
+          options.dtype,
+          Buffer.from(data.buffer, data.byteOffset, data.byteLength),
+        ),
+      );
+      return new NMathArray(array, this);
+    }
+    if (
       ArrayBuffer.isView(data) &&
       (options.dtype === "complex64" || options.dtype === "complex128")
     ) {
@@ -958,6 +1006,25 @@ export class NMathContext {
         shape,
         options.dtype,
         toBytes(options.dtype, values),
+      ),
+    );
+    return new NMathArray(array, this);
+  }
+
+  /** Creates float16 storage from exact IEEE-754 binary16 encodings. */
+  arrayFromFloat16Bits<const S extends Shape = number[]>(
+    bits: Uint16Array,
+    options: { shape?: S } = {},
+  ): NMathArray<"float16", S> {
+    if (!(bits instanceof Uint16Array))
+      throw new TypeError("Binary16 bits must be a Uint16Array.");
+    const shape = validatedShape(options.shape ?? [bits.length]);
+    this.ensureCpuBudget(bits.length, "float16");
+    const array = native(() =>
+      this.nativeContext.array(
+        shape,
+        "float16",
+        Buffer.from(bits.buffer, bits.byteOffset, bits.byteLength),
       ),
     );
     return new NMathArray(array, this);
@@ -1022,7 +1089,6 @@ export class NMathContext {
     return new NMathArray(array, this);
   }
 
-  /** Writes named arrays to an exact NPZ path in Map insertion order. */
   readText(path: string, format: TextFormat, options?: TextReadOptions) {
     return readText(this, path, format, options);
   }
@@ -1036,6 +1102,24 @@ export class NMathContext {
     return writeText(this, path, format, columns, validity, options);
   }
 
+  readColumnar(
+    path: string,
+    format: ColumnarFormat,
+    options: ColumnarReadOptions = {},
+  ) {
+    return readColumnar(this, path, format, options);
+  }
+  writeColumnar(
+    path: string,
+    format: ColumnarFormat,
+    columns: ReadonlyMap<string, Column>,
+    validity: Validity = new Map(),
+    options: ColumnarWriteOptions = {},
+  ) {
+    return writeColumnar(this, path, format, columns, validity, options);
+  }
+
+  /** Writes named arrays to an exact NPZ path in Map insertion order. */
   saveNpz(
     path: string,
     arrays: ReadonlyMap<string, NMathArray<any, any>>,
@@ -1096,6 +1180,8 @@ function filled(
     );
   }
   switch (dtype) {
+    case "float16":
+      return new (float16Constructor())(size).fill(Number(value));
     case "complex64":
     case "complex128": {
       const z = value instanceof Complex ? value : new Complex(Number(value));

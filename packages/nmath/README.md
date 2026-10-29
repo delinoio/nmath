@@ -211,19 +211,19 @@ The installed package includes `compatibility.json.gz`. Decompress this JSON inv
 
 Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease covers a small part of each library. Every API not listed as available is a planned support target unless a published exclusion says otherwise.
 
-| Area                 | Available now                                                                                                                     | Not yet available                                                                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `complex64`, `complex128` | float16, extended precision, string, datetime, timedelta, categorical, structured                                                             |
-| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                          | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                  |
-| NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                              |
-| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                   | several advanced selectors combined, `newaxis`, ellipsis                                                                                      |
-| NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                                          | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                 |
-| NumPy random         | `default_rng(seed).random(shape)` with NumPy-identical PCG64 streams                                                              | other distributions and bit generators                                                                                                        |
-| NumPy I/O            | NPY (C order, little endian; complex input also supports big endian and Fortran order)                                            | NPZ; Fortran-order input for non-complex dtypes                                                                                               |
-| pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`                            | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
-| Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                                    | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
-| `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                                             | Marketplace publication and editor acceptance                                                                                                 |
-| GPU                  | Native backend with strict device and precision rejection                                                                         | Complete numerical and hardware acceptance                                                                                                    |
+| Area                 | Available now                                                                                                                                | Not yet available                                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float16`, `float32`, `float64`, `complex64`, `complex128` | extended precision, string, datetime, timedelta, categorical, structured                                                                      |
+| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                     | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                  |
+| NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                           | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                              |
+| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                              | several advanced selectors combined, `newaxis`, ellipsis                                                                                      |
+| NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                                                     | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                 |
+| NumPy random         | `default_rng(seed).random(shape)` with NumPy-identical PCG64 streams                                                                         | other distributions and bit generators                                                                                                        |
+| NumPy I/O            | NPY (C order, little endian; complex input also supports big endian and Fortran order)                                                       | NPZ; Fortran-order input for non-complex dtypes                                                                                               |
+| pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`                                       | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
+| Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                                               | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
+| `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                                                        | Marketplace publication and editor acceptance                                                                                                 |
+| GPU                  | Native backend with strict device and precision rejection                                                                                    | Complete numerical and hardware acceptance                                                                                                    |
 
 ## Build from source
 
@@ -298,6 +298,14 @@ For exact paths, use `ctx.saveNpz(path, map, { compressed, overwrite, signal })`
 
 NPZ supports stored and deflated numeric/boolean NPY members, including complex64 and complex128. Complex input supports both byte orders and C/Fortran layout; output is little-endian C order. Pickle/object data, string/date/structured/extended dtypes, unsupported noncomplex byte orders/layouts, encrypted members and other compression methods are unsupported. Names must be nonempty UTF-8 components other than `.` or `..`, without slashes, backslashes, colons or control characters, and at most 65,531 UTF-8 bytes. Duplicate names and non-NPY members are rejected. ZIP64 central directories, multi-disk archives, 65,535 or more members and output capacity bounds at or above 4 GiB are unsupported. Conservative memory and output reservations can reject an archive earlier. These limits do not establish full NumPy compatibility.
 
+### Float16 arrays
+
+Use `dtype: "float16"` for two-byte IEEE-754 binary16 storage. Arithmetic, reductions and 1-D/2-D matrix multiplication run on CPU. Scalars are JS numbers. Promotion follows NumPy: float16 with an 8-bit integer stays float16, with a 16-bit integer becomes float32, and with a 32-bit/64-bit integer becomes float64. Weak real scalars preserve float16. GPU execution rejects float16 before queue admission.
+
+`toTypedArray()` returns a `Float16Array` copy. Numeric creation requires a Node.js 24 runtime with `Float16Array`. For exact bit transport, including NaN payloads, use `ctx.arrayFromFloat16Bits(new Uint16Array([0x3c00, 0x8000]))` and `array.toFloat16Bits()`. These bit methods also work when `Float16Array` is unavailable. No method substitutes float32 storage.
+
+Float16 NPY and NPZ input supports both byte orders and C/Fortran layout. Output uses little-endian C order. Recorded numerical cases compare exact finite bits and NaN classification. Broader power, long-reduction and matrix-accumulation criteria remain incomplete; these tests do not establish full numerical or platform acceptance.
+
 ### Numeric CSV and JSON files
 
 ```ts
@@ -338,3 +346,23 @@ string/datetime columns and full upstream read/write options remain unsupported.
 CSV empty cells and JSON null become invalid values. JSON non-finite floats become
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
+
+### Arrow IPC and Parquet local files
+
+Use an explicit context for asynchronous file operations:
+
+```ts
+const table = await ctx.readColumnar("input.parquet", "parquet");
+await ctx.writeColumnar("output.arrow", "arrow", table.columns, table.validity);
+for (const value of [...table.columns.values(), ...table.validity.values()]) {
+  value.dispose();
+}
+```
+
+Writes reject existing destinations unless `{ overwrite: true }` is provided. Reads and writes accept `{ signal }`. Failed or cancelled writes preserve the destination until atomic publication; a published file is a successful write. Column names, numeric/boolean dtypes and null masks are preserved. 64-bit integer scalars use `bigint`. File operations use CPU workers and context scheduling and memory budgets.
+
+pandas provides `read_parquet(ctx, path)` and `read_feather(ctx, path)`, plus DataFrame `to_parquet(ctx, path)` and `to_feather(ctx, path)`. A non-default pandas index is rejected. Polars provides `read_parquet(ctx, path)` and `read_ipc(ctx, path)`, plus DataFrame `write_parquet(ctx, path)` and `write_ipc(ctx, path)`. Each returns a Promise. The pandas adapter retains nullable numeric widths, corresponding to pandas' `dtype_backend="numpy_nullable"` representation.
+
+Current format limits: uncompressed Arrow IPC files/Feather V2 and uncompressed or Snappy Parquet. Output Parquet uses Snappy. IPC stream containers, compressed IPC, other Parquet codecs, pandas/custom metadata, duplicate names, dictionaries, and nonnumeric/nonboolean schemas fail explicitly. IPC supports at most 1,024 flat fields and 4,096 UTF-8 bytes per field name. These are implementation limits, not full format compatibility. Reads currently buffer serialized input before batched decoding, and conservative codec reservations may reject files whose final table alone would fit the budget.
+
+Columnar DataFrame readers reject nonempty tables with no columns. Use `ctx.readColumnar` to retain their explicit `rows` count.

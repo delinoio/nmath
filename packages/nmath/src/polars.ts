@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { NMathContext } from "./core.js";
 import {
   readPolars,
@@ -5,7 +6,14 @@ import {
   type TextReadOptions,
   type TextWriteOptions,
 } from "./io-text-frames.js";
-// SPDX-License-Identifier: Apache-2.0
+import {
+  readColumnar,
+  writeColumnar,
+  requireDefaultIndex,
+  requireFrameRows,
+  type ColumnarReadOptions,
+  type ColumnarWriteOptions,
+} from "./columnar.js";
 // Polars-style entry point (subset). Polars operations always run on the CPU. The
 // compatibility inventory in README.md lists which Polars 2.1.0 APIs exist.
 
@@ -120,6 +128,36 @@ export const col = ColumnExpr.col;
 
 /** An eager frame. */
 export class DataFrame {
+  async write_parquet(
+    context: NMathContext,
+    path: string,
+    options: ColumnarWriteOptions = {},
+  ): Promise<void> {
+    return writeColumnar(
+      context,
+      path,
+      "parquet",
+      this.columnMap,
+      this.validity,
+      options,
+    );
+  }
+
+  async write_ipc(
+    context: NMathContext,
+    path: string,
+    options: ColumnarWriteOptions = {},
+  ): Promise<void> {
+    return writeColumnar(
+      context,
+      path,
+      "arrow",
+      this.columnMap,
+      this.validity,
+      options,
+    );
+  }
+
   readonly #columns: Map<string, Column>;
   readonly validity: Validity;
 
@@ -330,4 +368,24 @@ export function read_json(
   options?: TextReadOptions,
 ) {
   return readPolars(context, path, "json", options);
+}
+
+export async function read_parquet(
+  context: NMathContext,
+  path: string,
+  options: ColumnarReadOptions = {},
+): Promise<DataFrame> {
+  const result = await readColumnar(context, path, "parquet", options);
+  requireFrameRows(result);
+  return new DataFrame(new Map(result.columns), result.validity);
+}
+
+export async function read_ipc(
+  context: NMathContext,
+  path: string,
+  options: ColumnarReadOptions = {},
+): Promise<DataFrame> {
+  const result = await readColumnar(context, path, "arrow", options);
+  requireFrameRows(result);
+  return new DataFrame(new Map(result.columns), result.validity);
 }

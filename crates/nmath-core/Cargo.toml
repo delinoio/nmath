@@ -10,6 +10,13 @@ publish.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
+base64 = { version = "=0.23.1", default-features = false, features = ["alloc"] }
+arrow-array = { version = "=60.1.0", default-features = false }
+arrow-schema = { version = "=60.1.0", default-features = false }
+arrow-ipc = { version = "=60.1.0", default-features = false }
+parquet = { version = "=60.1.0", default-features = false, features = ["arrow", "snap"] }
+bytes = { version = "1", default-features = false }
+half = { version = "=2.7.1", default-features = false }
 tracing.workspace = true
 zip = { version = "=9.1.3", default-features = false, features = ["deflate-flate2"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
