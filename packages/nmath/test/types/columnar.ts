@@ -20,3 +20,21 @@ void read_ipc(ctx, "file");
 ctx.readColumnar("file", "csv");
 // @ts-expect-error overwrite must be boolean
 ctx.writeColumnar("file", "arrow", columns, new Map(), { overwrite: "yes" });
+
+async function useMaterializedColumns() {
+  const result = await ctx.readColumnar("file", "arrow");
+  for (const value of result.columns.values()) {
+    value.item(0);
+    value.toTypedArray();
+    value.dispose();
+  }
+  for (const mask of result.validity.values()) {
+    const value: boolean = mask.item(0);
+    const dtype: "bool" = mask.dtype;
+    mask.toTypedArray();
+    mask.dispose();
+    void value;
+    void dtype;
+  }
+}
+void useMaterializedColumns;

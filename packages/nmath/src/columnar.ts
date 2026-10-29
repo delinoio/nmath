@@ -17,8 +17,8 @@ export interface ColumnarWriteOptions extends ColumnarReadOptions {
   overwrite?: boolean;
 }
 export interface ColumnarTable {
-  readonly columns: ReadonlyMap<string, Column>;
-  readonly validity: Validity;
+  readonly columns: ReadonlyMap<string, NMathArray<any, any>>;
+  readonly validity: ReadonlyMap<string, NMathArray<"bool", any>>;
   readonly rows: number;
 }
 interface NativeColumnarContext {
@@ -71,8 +71,8 @@ export async function readColumnar(
       cancel,
     ),
   );
-  const columns = new Map<string, Column>();
-  const validity = new Map<string, Column>();
+  const columns = new Map<string, NMathArray<any, any>>();
+  const validity = new Map<string, NMathArray<"bool", any>>();
   for (let i = 0; i < result.names.length; i++) {
     columns.set(result.names[i], new NMathArray(result.values[i], context));
     if (result.nullable[i])
