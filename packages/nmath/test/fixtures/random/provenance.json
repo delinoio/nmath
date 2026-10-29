@@ -1,0 +1,10 @@
+{
+  "numpy": "2.5.4",
+  "numpyRevision": "a3d0ef1df045b858e68115001fdabc930bb3b68c",
+  "platform": "Darwin",
+  "machine": "arm64",
+  "python": "3.12.14",
+  "seed": "12345",
+  "comparison": "exact little-endian output bytes and complete PCG64 state after every call",
+  "scope": "scalar-parameter Generator methods; not full API or cross-platform acceptance"
+}

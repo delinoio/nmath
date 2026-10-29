@@ -13,7 +13,7 @@ use crate::{
     error::{Error, ErrorCode, Result},
     kernels::{self, BinaryOp, ReduceOp, UnaryOp},
     memory::{Device, MemoryBudget, Reservation},
-    random::{Generator, Pcg64},
+    random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
     sync::CancellationToken,
 };
@@ -34,7 +34,7 @@ pub enum ExprKind {
     Index(Expr, Vec<Selector>),
     Cast(Expr, DType),
     /// `Generator.random(shape)` in float64.
-    Random(Generator, Vec<usize>),
+    Random(Generator, Vec<usize>, RandomOperation),
 }
 
 #[derive(Debug)]
@@ -85,11 +85,30 @@ impl Expr {
 
     pub fn random(context_id: u64, generator: &Generator, shape: Vec<usize>) -> Expr {
         Expr::node(
-            ExprKind::Random(generator.clone(), shape.clone()),
+            ExprKind::Random(
+                generator.clone(),
+                shape.clone(),
+                RandomOperation::Random(DType::Float64),
+            ),
             DType::Float64,
             shape,
             Some(context_id),
         )
+    }
+
+    pub fn random_operation(
+        context_id: u64,
+        generator: &Generator,
+        shape: Vec<usize>,
+        operation: RandomOperation,
+    ) -> Result<Expr> {
+        operation.validate()?;
+        Ok(Expr::node(
+            ExprKind::Random(generator.clone(), shape.clone(), operation.clone()),
+            operation.dtype(),
+            shape,
+            Some(context_id),
+        ))
     }
 
     pub fn dtype(&self) -> DType {
@@ -276,7 +295,7 @@ impl Expr {
     pub fn generators(&self) -> Vec<Generator> {
         let mut out: Vec<Generator> = Vec::new();
         self.visit(&mut |e| {
-            if let ExprKind::Random(g, _) = &e.0.kind
+            if let ExprKind::Random(g, _, _) = &e.0.kind
                 && !out.iter().any(|h| h.ptr_eq(g))
             {
                 out.push(g.clone());
@@ -348,6 +367,7 @@ pub enum Value {
 /// Per-job state: the frozen inputs, budget, cancellation and pending generator
 /// states.
 pub struct JobEnv {
+    pub generator_turns: Vec<crate::sync::FifoGuard>,
     pub device: Device,
     pub budget: MemoryBudget,
     pub gpu_budget: Option<MemoryBudget>,
@@ -363,6 +383,7 @@ unsafe impl Send for JobEnv {}
 impl JobEnv {
     pub fn new(device: Device, budget: MemoryBudget, token: CancellationToken) -> Self {
         Self {
+            generator_turns: Vec::new(),
             device,
             budget,
             gpu_budget: None,
@@ -498,27 +519,7 @@ impl JobEnv {
                     reservation,
                 )
             }
-            ExprKind::Random(g, shape) => {
-                let invalid_size = || {
-                    Error::new(
-                        ErrorCode::MemoryBudgetExceeded,
-                        "The random array allocation size cannot be represented or allocated.",
-                    )
-                };
-                let len = if shape.contains(&0) {
-                    0
-                } else {
-                    shape
-                        .iter()
-                        .try_fold(1usize, |len, &dim| len.checked_mul(dim))
-                        .ok_or_else(invalid_size)?
-                };
-                let bytes = len
-                    .checked_mul(std::mem::size_of::<f64>())
-                    .filter(|&bytes| bytes <= isize::MAX as usize)
-                    .ok_or_else(invalid_size)?;
-                let reservation =
-                    budget.reserve(u64::try_from(bytes).map_err(|_| invalid_size())?)?;
+            ExprKind::Random(g, shape, operation) => {
                 let slot = self
                     .rng
                     .iter_mut()
@@ -529,8 +530,7 @@ impl JobEnv {
                             "A generator was not frozen at job start.",
                         )
                     })?;
-                let values: Vec<f64> = (0..len).map(|_| slot.1.next_f64()).collect();
-                DenseArray::new(shape.clone(), Buffer::F64(values), reservation)
+                operation.generate(&mut slot.1, shape, &budget, &token)
             }
         }
     }

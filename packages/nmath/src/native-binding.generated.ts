@@ -74,6 +74,7 @@ export declare class NativeExpr {
   static index(input: NativeExpr, selectors: Array<NativeSelector>): NativeExpr
   static cast(input: NativeExpr, dtype: string): NativeExpr
   static random(generator: NativeGenerator, shape: Array<number>): NativeExpr
+  static randomDistribution(generator: NativeGenerator, shape: Array<number>, operation: string, dtype: string, first: string, second: string, endpoint: boolean): NativeExpr
   get dtype(): string
   get shape(): Array<number>
   get contextId(): number | null

@@ -20,7 +20,7 @@ use crate::{
     memory::{Device, MemoryBudget, MemoryUsage},
     random::Generator,
     shape::Selector,
-    sync::{CancellationToken, FifoGuard, Ticket},
+    sync::{CancellationToken, Ticket},
 };
 
 static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -259,16 +259,13 @@ impl Context {
                 let generator_tickets: Vec<Ticket> =
                     generators.iter().map(Generator::ticket).collect();
                 Box::new(move |env| {
-                    let _turns: Vec<FifoGuard> = generator_tickets
+                    env.generator_turns = generator_tickets
                         .into_iter()
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
                     env.freeze(&expr)?;
                     let value = env.eval(&expr)?;
                     env.token.check()?;
-                    for (generator, state) in env.take_generator_states() {
-                        generator.commit(state);
-                    }
                     Ok(JobOutput::Value(value))
                 })
             },
@@ -303,7 +300,7 @@ impl Context {
                     generators.iter().map(Generator::ticket).collect();
                 let ticket = target.write_ticket();
                 Box::new(move |env| {
-                    let _turns: Vec<FifoGuard> = generator_tickets
+                    env.generator_turns = generator_tickets
                         .into_iter()
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
@@ -314,9 +311,6 @@ impl Context {
                     // materialize from the frozen snapshot.
                     let dense = env.eval_dense(&value)?;
                     target.assign(&turn, &selectors, &dense, &env.token)?;
-                    for (generator, state) in env.take_generator_states() {
-                        generator.commit(state);
-                    }
                     Ok(JobOutput::Unit)
                 })
             },
@@ -626,17 +620,28 @@ fn run_job(
             let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
             env.gpu_budget = Some(inner.gpu.clone());
             let mut result = token.check().and_then(|()| work(&mut env));
-            drop(env);
-            // FileWrite work returns success only after atomic publication. The
-            // writer checks cancellation before publication; a late token
-            // cannot undo that commit. Reads and computations
-            // retain the final check.
-            if kind != OperationKind::FileWrite && result.is_ok() && token.is_cancelled() {
+
+            // File and array writers return success only after atomic
+            // publication. A late token cannot undo that commit.
+            // Reads and computations retain the final check before
+            // generator state is committed.
+            if !matches!(kind, OperationKind::FileWrite | OperationKind::Write)
+                && result.is_ok()
+                && token.is_cancelled()
+            {
                 result = Err(Error::new(
                     ErrorCode::Cancelled,
                     "The computation was cancelled.",
                 ));
             }
+            // The final cancellation check above is the random transaction's
+            // completion boundary. Keep FIFO guards until all states commit.
+            if result.is_ok() {
+                for (generator, state) in env.take_generator_states() {
+                    generator.commit(state);
+                }
+            }
+            drop(env);
             let status = match &result {
                 Ok(_) => ExecutionStatus::Succeeded,
                 Err(e) if e.code == ErrorCode::Cancelled => ExecutionStatus::Cancelled,

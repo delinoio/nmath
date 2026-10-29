@@ -171,6 +171,22 @@ loadNpz(context, path, options?: { signal?: AbortSignal }): Promise<Map<string, 
 
 All NPZ operations use native scheduled file jobs and explicit contexts. One save freezes all input arrays at a consistent execution-start snapshot boundary, including arrays that share storage. Snapshot offsets and copied payloads count against the context CPU memory budget; a save fails before publication if a required reservation does not fit. Pre-publication cancellation or failure preserves existing output, and writes reject existing destinations unless `overwrite: true`. Successful atomic publication is terminal success even if the signal aborts before Promise completion. Reads retain cancellation checks through scheduler completion. Name, compression, size, dtype and layout limits follow the runtime NPZ contract and remain visible compatibility constraints.
 
+## Random generator API
+
+`context.generator(seed)` and `numpy.random.defaultRng(context, seed)` return the same lazy PCG64 generator. The explicit seed is a nonnegative integer of at most 128 bits. Use bigint for seeds outside the safe JS integer range.
+
+Methods use an explicit shape, with `[]` for a scalar:
+
+- `random(shape, dtype = "float64")`, with float32 or float64.
+- `integers(low, high, shape, { dtype = "int64", endpoint = false } = {})`, with bool or signed/unsigned 8/16/32/64-bit dtypes. Passing `undefined` for high uses `[0, low)`. Bounds are safe JS integers or bigint; endpoint includes the upper bound. Full-width uint64 exclusive high accepts `2n ** 64n`.
+- `uniform(low, high, shape)`, returning float64.
+- `standard_normal(shape, dtype = "float64")`, with float32 or float64.
+- `normal(loc, scale, shape)` and `exponential(scale, shape)`, returning float64.
+
+Distribution parameters are scalars. Each `compute()` is a new scheduled native job. Jobs sharing a generator run in request order and commit state only on success. Invalid bounds, allocation errors and cancellation before completion preserve generator state, including cached uint32 values. No JS random kernel or Python runtime is used.
+
+Parameter broadcasting, `out`, other distributions and bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain targets. Integer float coercion is not supported: callers must supply safe integers or bigint explicitly. These methods do not establish full NumPy random compatibility or cross-platform numerical acceptance.
+
 ### CSV and JSON JS adaptations
 
 `ctx.readText(path, 'csv' | 'json', {schema?, signal?}?)` returns a Promise of `{columns, validity}` Maps. `schema` is a complete ordered `ReadonlyMap<string, TextDType>`; `TextDType` includes the current real numeric and boolean dtypes. Every returned column has a bool validity array. Dispose both values and masks. `ctx.writeText(path, format, columns, validity?, {overwrite?, signal?}?)` returns `Promise<void>` and accepts numeric lazy columns owned by the context. Paths are used exactly as supplied. Overwrite defaults to false. Both methods use one native scheduled CPU file job.

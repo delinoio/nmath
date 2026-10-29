@@ -56,7 +56,15 @@ function licenses(destination, licenseBundle) {
       "Supply NMATH_LICENSE_BUNDLE with reviewed full third-party license terms and notices.",
     );
   }
-  copyFileSync(licenseBundle, join(destination, "THIRD_PARTY_LICENSES.txt"));
+  const numpyLicenses = ["NUMPY-LICENSE.txt", "NUMPY-RANDOM-LICENSE.txt"]
+    .map((name) =>
+      readFileSync(join(root, "crates/nmath-core/src/random", name), "utf8"),
+    )
+    .join("\n\n");
+  writeFileSync(
+    join(destination, "THIRD_PARTY_LICENSES.txt"),
+    `${readFileSync(licenseBundle, "utf8")}\n\nNumPy random distribution sources\n\n${numpyLicenses}`,
+  );
   for (const name of ["LICENSE", "NOTICE"])
     copyFileSync(join(source, name), join(destination, name));
 }

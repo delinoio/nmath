@@ -440,6 +440,56 @@ impl NativeExpr {
         }
     }
 
+    #[napi(factory)]
+    pub fn random_distribution(
+        generator: &NativeGenerator,
+        shape: Vec<u32>,
+        operation: String,
+        dtype: String,
+        first: String,
+        second: String,
+        endpoint: bool,
+    ) -> Result<Self> {
+        use nmath_core::random::RandomOperation;
+        let dtype = parse_dtype(&dtype)?;
+        let invalid = || {
+            napi::Error::from_reason(
+                "NMATH_DTYPE_UNSUPPORTED: Invalid random distribution parameters.",
+            )
+        };
+        let op = match operation.as_str() {
+            "random" => RandomOperation::Random(dtype),
+            "integers" => RandomOperation::Integers {
+                low: first.parse().map_err(|_| invalid())?,
+                high: second.parse().map_err(|_| invalid())?,
+                endpoint,
+                dtype,
+            },
+            "uniform" => RandomOperation::Uniform {
+                low: first.parse().map_err(|_| invalid())?,
+                high: second.parse().map_err(|_| invalid())?,
+            },
+            "standard_normal" => RandomOperation::StandardNormal(dtype),
+            "normal" => RandomOperation::Normal {
+                loc: first.parse().map_err(|_| invalid())?,
+                scale: second.parse().map_err(|_| invalid())?,
+            },
+            "exponential" => RandomOperation::Exponential {
+                scale: first.parse().map_err(|_| invalid())?,
+            },
+            _ => return Err(invalid()),
+        };
+        Ok(Self {
+            inner: Expr::random_operation(
+                generator.context_id,
+                &generator.inner,
+                shape.into_iter().map(|d| d as usize).collect(),
+                op,
+            )
+            .map_err(to_napi)?,
+        })
+    }
+
     #[napi(getter)]
     pub fn dtype(&self) -> String {
         self.inner.dtype().id().to_string()
