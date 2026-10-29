@@ -1,5 +1,7 @@
 //! CPU kernels over dense arrays.
 
+use std::borrow::Cow;
+
 use crate::{
     buffer::{Buffer, DenseArray},
     dtype::{DType, DTypeKind},
@@ -189,18 +191,68 @@ fn binary_loop<T: Num>(
     op: BinaryOp,
     a: &[T],
     b: &[T],
-    a_off: &[usize],
-    b_off: &[usize],
+    pairs: BroadcastPairs,
     token: &CancellationToken,
 ) -> Result<Vec<T>> {
-    let mut out = Vec::with_capacity(a_off.len());
-    for (chunk_a, chunk_b) in a_off.chunks(CHUNK).zip(b_off.chunks(CHUNK)) {
-        token.check()?;
-        for (&i, &j) in chunk_a.iter().zip(chunk_b) {
-            out.push(apply(op, a[i], b[j])?);
+    let mut out = Vec::with_capacity(pairs.remaining);
+    for (n, (i, j)) in pairs.enumerate() {
+        if n % CHUNK == 0 {
+            token.check()?;
         }
+        out.push(apply(op, a[i], b[j])?);
     }
     Ok(out)
+}
+
+/// Walks a broadcast output shape in C order and yields the matching element
+/// offsets of both operands without materializing offset vectors.
+struct BroadcastPairs {
+    shape: Vec<usize>,
+    a_strides: Vec<isize>,
+    b_strides: Vec<isize>,
+    index: Vec<usize>,
+    a: isize,
+    b: isize,
+    remaining: usize,
+}
+
+impl BroadcastPairs {
+    fn new(shape: &[usize], a_strides: Vec<isize>, b_strides: Vec<isize>) -> Self {
+        Self {
+            shape: shape.to_vec(),
+            a_strides,
+            b_strides,
+            index: vec![0; shape.len()],
+            a: 0,
+            b: 0,
+            remaining: shape.iter().product(),
+        }
+    }
+}
+
+impl Iterator for BroadcastPairs {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<(usize, usize)> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        let item = (self.a as usize, self.b as usize);
+        for axis in (0..self.shape.len()).rev() {
+            self.index[axis] += 1;
+            self.a += self.a_strides[axis];
+            self.b += self.b_strides[axis];
+            if self.index[axis] < self.shape[axis] {
+                break;
+            }
+            let len = self.shape[axis] as isize;
+            self.a -= self.a_strides[axis] * len;
+            self.b -= self.b_strides[axis] * len;
+            self.index[axis] = 0;
+        }
+        Some(item)
+    }
 }
 
 fn reserve_for(
@@ -209,6 +261,20 @@ fn reserve_for(
     len: usize,
 ) -> Result<crate::memory::Reservation> {
     budget.reserve((len * dtype.item_size()) as u64)
+}
+
+/// Casts an operand to `dtype`. A matching buffer is borrowed; a converted
+/// temporary copy is charged to `budget` while it lives.
+fn cast_operand<'a>(
+    buffer: &'a Buffer,
+    dtype: DType,
+    budget: &MemoryBudget,
+) -> Result<(Cow<'a, Buffer>, crate::memory::Reservation)> {
+    if buffer.dtype() == dtype {
+        return Ok((Cow::Borrowed(buffer), crate::memory::Reservation::none()));
+    }
+    let reservation = reserve_for(budget, dtype, buffer.len())?;
+    Ok((Cow::Owned(buffer.cast(dtype)?), reservation))
 }
 
 /// Elementwise binary operation with broadcasting.
@@ -228,38 +294,36 @@ pub fn binary(
         compute_dtype
     };
     let reservation = reserve_for(budget, result_dtype, shape.iter().product())?;
-    let a = lhs.buffer.cast(work_dtype)?;
-    let b = rhs.buffer.cast(work_dtype)?;
-    let mut a_off = Vec::new();
-    let mut b_off = Vec::new();
-    for_each_offset(&shape, &broadcast_strides(&lhs.shape, &shape), 0, |o| {
-        a_off.push(o)
-    });
-    for_each_offset(&shape, &broadcast_strides(&rhs.shape, &shape), 0, |o| {
-        b_off.push(o)
-    });
-    let buffer = match (&a, &b) {
+    let (a, _a_reservation) = cast_operand(&lhs.buffer, work_dtype, budget)?;
+    let (b, _b_reservation) = cast_operand(&rhs.buffer, work_dtype, budget)?;
+    let pairs = BroadcastPairs::new(
+        &shape,
+        broadcast_strides(&lhs.shape, &shape),
+        broadcast_strides(&rhs.shape, &shape),
+    );
+    let buffer = match (a.as_ref(), b.as_ref()) {
         (Buffer::Bool(x), Buffer::Bool(y)) => {
-            token.check()?;
             let f: fn(bool, bool) -> bool = match op {
                 BinaryOp::Add => |p, q| p | q,
                 BinaryOp::Mul => |p, q| p & q,
                 _ => unreachable!("rejected by result_dtype"),
             };
-            Buffer::Bool(
-                a_off
-                    .iter()
-                    .zip(&b_off)
-                    .map(|(&i, &j)| f(x[i], y[j]))
-                    .collect(),
-            )
+            token.check()?;
+            let mut out = Vec::with_capacity(pairs.remaining);
+            for (n, (i, j)) in pairs.enumerate() {
+                if n % CHUNK == 0 {
+                    token.check()?;
+                }
+                out.push(f(x[i], y[j]));
+            }
+            Buffer::Bool(out)
         }
-        (Buffer::I32(x), Buffer::I32(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
-        (Buffer::I64(x), Buffer::I64(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
-        (Buffer::U32(x), Buffer::U32(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
-        (Buffer::U64(x), Buffer::U64(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
-        (Buffer::F32(x), Buffer::F32(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
-        (Buffer::F64(x), Buffer::F64(y)) => binary_loop(op, x, y, &a_off, &b_off, token)?.into(),
+        (Buffer::I32(x), Buffer::I32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::I64(x), Buffer::I64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::U32(x), Buffer::U32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::U64(x), Buffer::U64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::F32(x), Buffer::F32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::F64(x), Buffer::F64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         _ => unreachable!("operands were cast to one dtype"),
     };
     DenseArray::new(shape, buffer, reservation)
@@ -649,6 +713,38 @@ mod tests {
                 .code,
             ErrorCode::Cancelled
         );
+    }
+
+    #[test]
+    fn binary_broadcasts_without_offset_vectors() {
+        let (b, t) = env();
+        let col = dense(vec![2, 1], Buffer::I32(vec![10, 20]));
+        let row = dense(vec![3], Buffer::I32(vec![1, 2, 3]));
+        let r = binary(BinaryOp::Add, &col, &row, DType::Int32, &b, &t).unwrap();
+        assert_eq!(r.shape, vec![2, 3]);
+        assert_eq!(r.buffer, Buffer::I32(vec![11, 12, 13, 21, 22, 23]));
+        // Only the result is charged when no operand needs a cast.
+        assert_eq!(b.usage().peak, 24);
+    }
+
+    #[test]
+    fn binary_charges_operand_casts() {
+        // The int32 operand is cast to float64 (16 bytes) on top of the
+        // 16-byte result; 24 bytes are not enough.
+        let budget = MemoryBudget::new(Device::Cpu, 24);
+        let t = CancellationToken::new();
+        let a = dense(vec![2], Buffer::I32(vec![1, 2]));
+        let f = dense(vec![2], Buffer::F64(vec![0.5, 0.5]));
+        assert_eq!(
+            binary(BinaryOp::Add, &a, &f, DType::Float64, &budget, &t)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        let budget = MemoryBudget::new(Device::Cpu, 32);
+        let r = binary(BinaryOp::Add, &a, &f, DType::Float64, &budget, &t).unwrap();
+        assert_eq!(r.buffer, Buffer::F64(vec![1.5, 2.5]));
+        assert_eq!(budget.usage().used, 16, "the cast copy is released");
     }
 
     #[test]
