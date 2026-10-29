@@ -42,7 +42,7 @@ The transform parses `.nts` text with the standard tsrs TypeScript parser and pr
 - NMath `a[i] = value` returns the assigned value and is rewritten only inside async function bodies or module top level. Elsewhere, including parameter initializers of async functions, the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
 - Compound assignment (`+=` and others), `++` and `--` on bracket expressions are left unchanged. Comparison and bitwise operators are never rewritten.
 - These forms are also left unchanged: optional element access (`a?.[i]`), `super[k]`, element access used as a call target (`a[i](x)`, `(a[i])(x)`), `delete a[i]` (including parenthesized or type-asserted operands such as `delete (a[i])`), destructuring and `for-of` assignment targets, ordinary property access (`a.b`) and string-literal keys (`obj["key"]`). Nothing inside type positions or enums is rewritten. Unary operators applied to numeric literals (for example `-1`) count as literals.
-- Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output.
+- Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output. With the transform's extension-rewriting option enabled, this includes quoted specifiers and dynamic imports with a template literal that has no substitutions. The transform preserves the original specifier when this option is disabled. Interpolated templates are unchanged.
 
 Unsupported NMath syntax reports a diagnostic instead of silently executing ordinary JavaScript semantics.
 
