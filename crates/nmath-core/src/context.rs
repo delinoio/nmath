@@ -293,9 +293,9 @@ impl Context {
         let work: Work = Box::new(move |env| {
             let turn = ticket.wait(&env.token)?;
             env.freeze(&value)?;
-            let Value::Dense(dense) = env.eval(&value)? else {
-                unreachable!("plain values evaluate densely unless they are views")
-            };
+            // Assignment copies values, so view-valued expressions (basic
+            // indexing of an input) materialize from the frozen snapshot.
+            let dense = env.eval_dense(&value)?;
             target.assign(&turn, &selectors, &dense, &env.token)?;
             Ok(JobOutput::Unit)
         });

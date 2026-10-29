@@ -415,7 +415,9 @@ impl JobEnv {
         self.eval_dense(expr).map(Value::Dense)
     }
 
-    fn eval_dense(&mut self, expr: &Expr) -> Result<DenseArray> {
+    /// Evaluates `expr` on the CPU into a new dense array, materializing
+    /// views.
+    pub(crate) fn eval_dense(&mut self, expr: &Expr) -> Result<DenseArray> {
         self.token.check()?;
         let budget = self.budget.clone();
         let token = self.token.clone();

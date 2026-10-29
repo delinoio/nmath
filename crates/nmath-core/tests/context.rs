@@ -524,3 +524,19 @@ fn close_does_not_deadlock_on_jobs_started_from_the_queue() {
     drop(held);
     assert_eq!(wait(&queued).unwrap_err().code, ErrorCode::Cancelled);
 }
+
+#[test]
+fn assigning_a_view_valued_expression_copies_its_values() {
+    let c = ctx(1, 1);
+    let source = c
+        .array(vec![2, 2], Buffer::F64(vec![1.0, 2.0, 3.0, 4.0]))
+        .unwrap();
+    let target = c.array(vec![2], Buffer::F64(vec![0.0, 0.0])).unwrap();
+    let value = Expr::index(&Expr::input(&source), vec![Selector::Index(1)]).unwrap();
+    let (done, rx) = channel();
+    c.assign(&target, vec![], &value, CancellationToken::new(), done)
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_eq!(target.to_buffer(), Buffer::F64(vec![3.0, 4.0]));
+    assert!(!target.shares_storage(&source));
+}
