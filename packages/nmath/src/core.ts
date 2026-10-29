@@ -674,6 +674,23 @@ function raggedInput(): NMathError {
   );
 }
 
+function itemSize(dtype: ComputableDType): number {
+  switch (dtype) {
+    case "bool":
+      return 1;
+    case "int32":
+    case "uint32":
+    case "float32":
+      return 4;
+    default:
+      return 8;
+  }
+}
+
+function product(shape: readonly number[]): number {
+  return shape.reduce((a, b) => a * b, 1);
+}
+
 function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
   const length = values.length;
   let typed: ArrayBufferView;
@@ -731,6 +748,18 @@ export class NMathContext {
     return this.nativeContext.closed;
   }
 
+  /**
+   * @internal Fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before a creation helper builds
+   * input buffers for `elements` values that would not fit the CPU budget.
+   */
+  ensureCpuBudget(elements: number, dtype: ComputableDType): void {
+    native(() =>
+      this.nativeContext.checkCpuBudget(
+        BigInt(Math.max(0, elements) * itemSize(dtype)),
+      ),
+    );
+  }
+
   /** Creates an array from a typed array or nested JS arrays. */
   array<D extends ComputableDType, const S extends Shape = number[]>(
     data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
@@ -741,8 +770,10 @@ export class NMathContext {
     if (ArrayBuffer.isView(data)) {
       values = data as unknown as ArrayLike<unknown>;
       shape = options.shape ? [...options.shape] : [values.length];
+      this.ensureCpuBudget(values.length, options.dtype);
     } else {
       const inferred = inferShape(data);
+      this.ensureCpuBudget(product(inferred), options.dtype);
       const flat: unknown[] = [];
       flatten(data, inferred, 0, flat);
       values = flat;
@@ -763,11 +794,18 @@ export class NMathContext {
     value: ScalarOf<D>,
     dtype: D,
   ): NMathArray<D, S> {
-    const size = shape.reduce((a: number, b: number) => a * b, 1);
-    return this.array<D, S>(
-      Array.from({ length: size }, () => value) as Nested<ScalarOf<D>>,
-      { dtype, shape },
+    const size = product(shape);
+    this.ensureCpuBudget(size, dtype);
+    // Fill a typed array directly instead of building a JS array of `size` values.
+    const typed = filled(dtype, size, value);
+    const array = native(() =>
+      this.nativeContext.array(
+        [...shape],
+        dtype,
+        Buffer.from(typed.buffer, typed.byteOffset, typed.byteLength),
+      ),
     );
+    return new NMathArray(array, this);
   }
 
   zeros<D extends ComputableDType, const S extends Shape>(
@@ -820,6 +858,28 @@ export class NMathContext {
 
   [Symbol.asyncDispose](): Promise<void> {
     return this.close();
+  }
+}
+
+function filled(
+  dtype: ComputableDType,
+  size: number,
+  value: unknown,
+): ArrayBufferView {
+  switch (dtype) {
+    case "bool":
+      return new Uint8Array(size).fill(value ? 1 : 0);
+    case "int64":
+      return new BigInt64Array(size).fill(BigInt(value as bigint));
+    case "uint64":
+      return new BigUint64Array(size).fill(BigInt(value as bigint));
+    default:
+      return new {
+        int32: Int32Array,
+        uint32: Uint32Array,
+        float32: Float32Array,
+        float64: Float64Array,
+      }[dtype](size).fill(Number(value));
   }
 }
 

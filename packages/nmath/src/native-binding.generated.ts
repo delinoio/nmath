@@ -28,6 +28,12 @@ export declare class NativeContext {
   constructor(options: NativeContextOptions)
   get id(): number
   get closed(): boolean
+  /**
+   * Fails with `NMATH_MEMORY_BUDGET_EXCEEDED` when `bytes` more would not
+   * fit the CPU budget now. Creation helpers call it before they build
+   * input buffers.
+   */
+  checkCpuBudget(bytes: bigint): void
   array(shape: Array<number>, dtype: string, data: Buffer): NativeArray
   generator(seed: bigint): NativeGenerator
   compute(expr: NativeExpr, device: string, signal?: NativeCancellation | undefined | null): Promise<NativeArray>

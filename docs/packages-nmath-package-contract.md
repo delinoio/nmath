@@ -44,6 +44,8 @@ const ctx = createContext({
 
 All four options are required. `ctx.close(): Promise<void>` follows the runtime close contract. `ctx.metrics()` returns measurement snapshots. Contexts and arrays implement `dispose()` and `Symbol.dispose` for `using`.
 
+Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
+
 ### Expressions and compute
 
 - Functions such as `add(a, b)` and methods such as `a.add(b)` return `Expr` without computing.

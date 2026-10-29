@@ -512,6 +512,40 @@ impl NativeContext {
     }
 }
 
+impl NativeContext {
+    /// Advisory budget check before a native buffer is allocated. It cannot
+    /// reserve (the core reserves only inside `Context::array`), so a
+    /// concurrent reservation between this check and `Context::array` still
+    /// fails there with the same code. Rejections here do not increment the
+    /// core `rejected` counter. Remove this when the core exposes a
+    /// reserve-then-fill array constructor.
+    fn precheck_cpu_budget(&self, bytes: u64) -> Result<()> {
+        if self.inner.is_closed() {
+            return Err(core_err(ErrorCode::ContextClosed, "The context is closed."));
+        }
+        let usage = self.inner.metrics().cpu_memory;
+        if usage.used.saturating_add(bytes) > usage.limit {
+            tracing::debug!(
+                event = "nmath.memory.rejected",
+                device = "cpu",
+                stage = "precheck",
+                requested = bytes,
+                used = usage.used,
+                limit = usage.limit
+            );
+            return Err(core_err(
+                ErrorCode::MemoryBudgetExceeded,
+                format!(
+                    "Reserving {bytes} bytes on cpu would exceed the budget ({} of {} bytes in \
+                     use).",
+                    usage.used, usage.limit
+                ),
+            ));
+        }
+        Ok(())
+    }
+}
+
 fn token_of(signal: Option<&NativeCancellation>) -> CancellationToken {
     signal.map(|s| s.token.clone()).unwrap_or_default()
 }
@@ -541,9 +575,35 @@ impl NativeContext {
         self.inner.is_closed()
     }
 
+    /// Fails with `NMATH_MEMORY_BUDGET_EXCEEDED` when `bytes` more would not
+    /// fit the CPU budget now. Creation helpers call it before they build
+    /// input buffers.
+    #[napi]
+    pub fn check_cpu_budget(&self, bytes: BigInt) -> Result<()> {
+        self.precheck_cpu_budget(to_u64(&bytes, "bytes")?)
+    }
+
     #[napi]
     pub fn array(&self, shape: Vec<u32>, dtype: String, data: Buffer) -> Result<NativeArray> {
         let dtype = parse_dtype(&dtype)?;
+        let item_size = dtype.ensure_computable().map_err(to_napi)?.item_size();
+        let bytes = shape
+            .iter()
+            .try_fold(item_size, |acc, &d| acc.checked_mul(d as usize))
+            .ok_or_else(|| core_err(ErrorCode::ShapeMismatch, "The shape is too large."))?;
+        if data.len() != bytes {
+            return Err(core_err(
+                ErrorCode::ShapeMismatch,
+                format!(
+                    "The input has {} bytes, but shape {shape:?} with dtype {} needs {bytes}.",
+                    data.len(),
+                    dtype.id()
+                ),
+            ));
+        }
+        // Reject before copying the input into a native buffer. Context::array
+        // still makes the authoritative reservation afterwards.
+        self.precheck_cpu_budget(bytes as u64)?;
         let buffer = buffer_from_bytes(dtype, &data)?;
         let array = self
             .inner

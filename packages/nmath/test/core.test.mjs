@@ -17,6 +17,7 @@ import {
   slice,
   sub,
 } from "../dist/index.js";
+import * as np from "../dist/numpy.js";
 import { context } from "./helpers.mjs";
 
 async function rejectsWith(promise, code) {
@@ -225,6 +226,35 @@ test("memory budgets reject before allocation", async () => {
   await rejectsWith(a.add(a).compute(), "NMATH_MEMORY_BUDGET_EXCEEDED");
   assert.equal(ctx.metrics().cpuMemory.used, 32n);
   await ctx.close();
+});
+
+test("creation helpers reject over-budget input before building buffers", async () => {
+  const ctx = context({ cpuMemoryBudget: 0 });
+  // A typed array this large would exhaust memory if it were materialized.
+  throwsWith(
+    () => ctx.zeros([2 ** 40], "float64"),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  throwsWith(
+    () => ctx.array([[1, 2]], { dtype: "float64" }),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  throwsWith(
+    () => ctx.array(new Float64Array(4), { dtype: "float64" }),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  throwsWith(
+    () => np.arange(ctx, 0, 2 ** 40, 1, "float64"),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  await ctx.close();
+  // The native check rejects mismatched input before copying it.
+  const roomy = context();
+  throwsWith(
+    () => roomy.array(new Float64Array(3), { dtype: "float64", shape: [2] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  await roomy.close();
 });
 
 test("ragged nested input is rejected", async () => {

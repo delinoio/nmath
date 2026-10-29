@@ -74,6 +74,7 @@ export function arange<D extends "int32" | "uint32" | "float32" | "float64">(
     throw new RangeError("arange step must not be zero.");
   }
   const length = Math.max(0, Math.ceil((stop - start) / step));
+  context.ensureCpuBudget(length, dtype);
   const values = Array.from({ length }, (_, i) => start + i * step);
   return context.array(values as never, { dtype, shape: [length] as [number] });
 }
