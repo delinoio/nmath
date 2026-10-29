@@ -8871,6 +8871,1626 @@
           "9223372036854775807"
         ]
       }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
     }
   ],
   "files": [

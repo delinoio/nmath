@@ -62,6 +62,16 @@ for op in ['sum','mean','min','max']:
     case(op,np.array([],dtype='timedelta64[ns]'))
     case(op,np.array([9223372036854775807,1],dtype='timedelta64[ns]'))
 
+# The pinned temporal loop reinterprets uint64 bits as signed int64. Cover
+# representable results, negative reinterpretations, NaT and result overflow.
+for integer in [2**63, 2**63 + 1, 2**64 - 1]:
+    for ticks in [0, 10, -10, 1, -1, -2**63]:
+        for op in ['mul', 'div']:
+            case(op, np.array([ticks], dtype='timedelta64[ns]'),
+                 np.array([integer], dtype='uint64'))
+        case('mul', np.array([integer], dtype='uint64'),
+             np.array([ticks], dtype='timedelta64[ns]'))
+
 files=[]
 for a in [s,np.array([[-1,2],[9007199254740993,-9223372036854775808]],dtype='datetime64[ns]'),np.array([[-3,4],[0,-9223372036854775808]],dtype='timedelta64[3s]')]:
     for variant in [a,a.astype(a.dtype.newbyteorder('>')),np.asfortranarray(a)]:

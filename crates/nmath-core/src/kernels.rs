@@ -1920,7 +1920,11 @@ fn special_binary(
                 matches!(d, DType::Datetime64(_)),
             ),
             Scalar::Int(t) => Ok(t),
-            Scalar::UInt(t) => i64::try_from(t).map_err(|_| unsupported()),
+            // NumPy's temporal integer loop casts uint64 operands to int64
+            // by preserving their bits. Do not reject the operand before the
+            // operation: zero multiplication and small quotients remain valid.
+            // checked_tick below still rejects result overflow and NaT collisions.
+            Scalar::UInt(t) => Ok(t as i64),
             _ => Err(unsupported()),
         }
     };

@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "977daff01d25f47b23618b0bef9740b22fd3794b"
+COUNTERPART_REVISION = "e97c3f60ef7cdd355d595e96715c962e400104ba"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()

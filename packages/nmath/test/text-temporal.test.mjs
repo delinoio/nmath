@@ -20,9 +20,11 @@ function input(ctx, r) {
   const data =
     r.dtype === "str"
       ? r.values
-      : r.dtype === "int64" || r.unit
-        ? BigInt64Array.from(r.values, BigInt)
-        : r.values;
+      : r.dtype === "uint64"
+        ? BigUint64Array.from(r.values, BigInt)
+        : r.dtype === "int64" || r.unit
+          ? BigInt64Array.from(r.values, BigInt)
+          : r.values;
   return ctx.array(data, {
     dtype: r.dtype,
     shape: r.shape,
