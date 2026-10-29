@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "5bfb70bae773aad1402c82fd803e0a3aa3132d4d"
+COUNTERPART_REVISION = "9174b7371c7dcec0cfa0059e3f5fc953646fbfcb"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
@@ -196,6 +196,19 @@ for lib in ["pandas", "polars"]:
             ["packages/nmath/src/"+lib+".ts", "packages/nmath/src/"+("io-text" if text_format else "columnar")+".ts"],
             ["packages/nmath/test/"+("io-text" if text_format else "columnar")+".test.mjs"],
             ["crates/nmath-core/tests/fixtures/"+("io-text" if text_format else "io-columnar")+"/manifest.json"])
+
+
+# Storage support does not implement NumPy scalar constructors or namespaces.
+for name in ["numpy.array", "numpy.full", "numpy.ndarray", "numpy.ndarray.__getitem__",
+             "numpy.ndarray.__setitem__", "numpy.ndarray.astype", "numpy.save", "numpy.load",
+             "numpy.savez", "numpy.savez_compressed"]:
+    scope = SCOPES[name]
+    scope["dtypes"] += ["str", "datetime64", "timedelta64"]
+    scope["conditions"] = [line.replace("structured/extended/string/temporal dtypes", "structured/extended dtypes") for line in scope["conditions"]]
+    scope["conditions"].append("Fixed UTF-32 width and temporal kind/unit metadata only. Temporal scalars preserve bigint ticks/NaT; explicit casts change units/width. No byte/variable strings, generic temporal units, parsing or full scalar-class parity. NPY/NPZ preserve supported descriptors; other formats reject these dtypes.")
+    scope["implementation"] += ["crates/nmath-core/src/temporal.rs"]
+    scope["tests"] += ["packages/nmath/test/text-temporal.test.mjs"]
+    scope["fixtures"] += ["packages/nmath/test/fixtures/text-temporal.json"]
 
 
 def digest(data):
