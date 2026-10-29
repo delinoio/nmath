@@ -33,7 +33,7 @@ The transform parses `.nts` text with the standard tsrs TypeScript parser and pr
 | `a[[i, j]]`                                           | `__nmath.get(a, [i, j])`                                                                                                     |
 | `a[i] = value`                                        | `(await __nmath.set(a, i, value))`                                                                                           |
 
-- The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module.
+- The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module, after any shebang line and leading triple-slash directives (`/// <reference ... />`, `/// <amd-module ... />`).
 - `__nmath` operator helpers are overloaded in TypeScript declarations. An overload accepts NMath operands and returns a lazy expression; the remaining overloads accept ordinary JS operands and return the ordinary result type. A union that may be NMath or ordinary JS matches no overload, so the checker requires narrowing. The type checker, not speculative dispatch, decides the semantics. The runtime helper calls the NMath operation only when an operand is an NMath value.
 - When a lowered assignment starts an expression statement that follows a statement not ending in `;`, the transform prefixes it with `;` so semicolonless code keeps its statement boundaries.
 - A comma-expression index stays one helper argument: `a[f(), g()]` lowers to `__nmath.get(a, (f(), g()))`, and the same applies to `a[f(), g()] = value`.

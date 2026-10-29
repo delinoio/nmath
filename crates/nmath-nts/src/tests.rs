@@ -51,6 +51,43 @@ fn keeps_shebang_first() {
 }
 
 #[test]
+fn keeps_triple_slash_directives_first() {
+    let source = "/// <reference path=\"./globals.d.ts\" />\n// note\n///<reference \
+                  types=\"node\" />\nconst y = a + b;\n";
+    let output = transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    assert_eq!(
+        output.text,
+        format!(
+            "/// <reference path=\"./globals.d.ts\" />\n// note\n///<reference types=\"node\" \
+             />\n{PREFIX}const y = __nmath.add(a, b);\n"
+        )
+    );
+
+    let source = "#!/usr/bin/env node\n/* header */\n/// <reference lib=\"es2022\" />\nx = a - b;";
+    let output = transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    assert_eq!(
+        output.text,
+        format!(
+            "#!/usr/bin/env node\n/* header */\n/// <reference lib=\"es2022\" />\n{PREFIX}x = \
+             __nmath.sub(a, b);"
+        )
+    );
+
+    // A directive on the last line without a newline.
+    let source = "/// <reference path=\"./g.d.ts\" />";
+    let output = transform("a.nts", source);
+    assert_valid_span_map(source, &output);
+    assert_eq!(output.text, format!("{source}\n{PREFIX}"));
+
+    // A triple-slash comment that is not a directive does not move the import.
+    let source = "/// docs\nconst z = 1;\n";
+    let output = transform("a.nts", source);
+    assert_eq!(output.text, format!("{PREFIX}{source}"));
+}
+
+#[test]
 fn rewrites_every_binary_operator() {
     for (op, helper) in [
         ("+", "add"),

@@ -551,13 +551,7 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
         rewriter.visit(*statement, true, 1);
     }
 
-    let import_at = if source.starts_with("#!") {
-        source
-            .find('\n')
-            .map_or(source.len(), |newline| newline + 1) as u32
-    } else {
-        0
-    };
+    let import_at = runtime_import_offset(source);
     let import_text = if import_at as usize == source.len() && import_at != 0 {
         format!("\n{RUNTIME_IMPORT}\n")
     } else {
@@ -577,6 +571,45 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
         span_map,
         diagnostics,
     }
+}
+
+/// Where the runtime import goes: after a shebang line and after leading
+/// triple-slash directives (`/// <reference ... />`, `/// <amd-module ... />`),
+/// which TypeScript ignores once any statement precedes them.
+fn runtime_import_offset(source: &str) -> u32 {
+    let line_end = |from: usize| {
+        source[from..]
+            .find('\n')
+            .map_or(source.len(), |n| from + n + 1)
+    };
+    let mut at = if source.starts_with("#!") {
+        line_end(0)
+    } else {
+        0
+    };
+    let mut cursor = at;
+    loop {
+        let rest = &source[cursor..];
+        let trimmed = rest.trim_start();
+        cursor += rest.len() - trimmed.len();
+        if let Some(directive) = trimmed.strip_prefix("///") {
+            let directive = directive.trim_start();
+            cursor = line_end(cursor);
+            if directive.starts_with("<reference") || directive.starts_with("<amd-") {
+                at = cursor;
+            }
+        } else if trimmed.starts_with("//") {
+            cursor = line_end(cursor);
+        } else if let Some(comment) = trimmed.strip_prefix("/*") {
+            match comment.find("*/") {
+                Some(close) => cursor += 2 + close + 2,
+                None => break,
+            }
+        } else {
+            break;
+        }
+    }
+    at as u32
 }
 
 fn apply(source: &str, edits: &[Edit]) -> (String, SpanMap) {
