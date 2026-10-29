@@ -220,3 +220,11 @@ fn running_cancellation_releases_intermediates() {
     c.close();
     assert_eq!(c.metrics().cpu_memory.used, baseline);
 }
+
+#[test]
+fn complex_columns_reject_before_admission() {
+    let c = context(4096);
+    let a = c.array(vec![1], Buffer::C128(vec![[1.0, 2.0]])).unwrap();
+    let error = run(&c, source(&a)).err().unwrap();
+    assert_eq!(error.code, ErrorCode::DTypeUnsupported);
+}

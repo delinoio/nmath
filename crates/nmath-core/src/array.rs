@@ -220,6 +220,8 @@ impl NdArray {
         let mut source_offsets = Vec::with_capacity(offsets.len());
         for_each_offset(&target_shape, &strides, 0, |o| source_offsets.push(o));
         token.check()?;
+        let _snapshot_gate = crate::table::SNAPSHOT_GATE.lock().unwrap();
+        token.check()?;
         let mut data = self.storage.data.write().unwrap();
         for (&dst, &src) in offsets.iter().zip(&source_offsets) {
             data.set_from(dst, &source, src);

@@ -75,6 +75,16 @@ export declare class NativeExpr {
 
 export declare class NativeGenerator {}
 
+export declare class NativeTable {
+  static source(values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>): NativeTable
+  select(positions: Array<number>): NativeTable
+  filter(position: number): NativeTable
+  sort(position: number, descending: boolean, nullsLast: boolean): NativeTable
+  join(other: NativeTable, leftKey: number, rightKey: number, left: boolean, nullsEqual: boolean): NativeTable
+  group(key: number, value: number, operation: string, dropNulls: boolean, pandas: boolean): NativeTable
+  compute(context: NativeContext, signal?: NativeCancellation | undefined | null): Promise<NativeTableResult>
+}
+
 export interface NativeComplex {
   real: number
   imag: number
@@ -125,4 +135,10 @@ export interface NativeSelector {
   step?: number
   indices?: Array<number>
   mask?: Array<boolean>
+}
+
+export interface NativeTableResult {
+  values: Array<NativeArray>
+  valid: Array<NativeArray>
+  rows: number
 }

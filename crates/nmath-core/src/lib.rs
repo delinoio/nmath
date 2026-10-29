@@ -28,3 +28,5 @@ pub use memory::Device;
 pub use random::Generator;
 pub use shape::Selector;
 pub use sync::CancellationToken;
+
+pub mod table;

@@ -91,6 +91,12 @@ impl Plan {
             Self::Source(cols) => {
                 let mut len = None;
                 for c in cols {
+                    if matches!(c.values.dtype(), DType::Complex64 | DType::Complex128) {
+                        return Err(Error::new(
+                            ErrorCode::DTypeUnsupported,
+                            "Complex table columns are not supported. Use array operations.",
+                        ));
+                    }
                     if c.values.context_id().is_some_and(|id| id != context)
                         || c.valid
                             .as_ref()
@@ -520,6 +526,7 @@ fn group(
                 Scalar::UInt(n) => unsigned = unsigned.wrapping_add(n),
                 Scalar::Bool(n) => signed += i64::from(n),
                 Scalar::Float(n) => float += n,
+                Scalar::Complex(_) => return Err(invalid()),
             };
             if !matches!(s, Scalar::Float(_)) {
                 float += s.as_f64();
