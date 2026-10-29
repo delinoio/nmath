@@ -10,6 +10,7 @@
 
 mod diagnostics;
 mod rewrite;
+pub mod semantic;
 mod span_map;
 
 pub use diagnostics::{Diagnostic, DiagnosticCode, line_column, offset_of_line_character};
@@ -65,18 +66,25 @@ impl TransformOutput {
     }
 }
 
-/// Lowers `.nts` source text with the default options.
+/// Parses `.nts` source and rewrites imports with the default options.
+/// Runtime syntax is preserved without a checker-produced lowering plan.
 pub fn transform(file_name: &str, source: &str) -> TransformOutput {
     transform_with_options(file_name, source, TransformOptions::default())
 }
 
-/// Lowers `.nts` source text.
+/// Parses `.nts` source and rewrites imports. Use [`transform_with_plan`]
+/// to lower operations proved by the project checker.
 pub fn transform_with_options(
     file_name: &str,
     source: &str,
     options: TransformOptions,
 ) -> TransformOutput {
-    let output = rewrite::run(file_name, source, options);
+    let output = rewrite::run(
+        file_name,
+        source,
+        options,
+        &semantic::LoweringPlan::default(),
+    );
     tracing::debug!(
         file = file_name,
         source_len = source.len(),
@@ -95,3 +103,14 @@ pub fn is_nts_file(file_name: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+/// Applies decisions made by the project checker in original-source
+/// coordinates.
+pub fn transform_with_plan(
+    file_name: &str,
+    source: &str,
+    options: TransformOptions,
+    plan: &semantic::LoweringPlan,
+) -> TransformOutput {
+    rewrite::run(file_name, source, options, plan)
+}

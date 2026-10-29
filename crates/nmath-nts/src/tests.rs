@@ -3,7 +3,7 @@ use super::*;
 const PREFIX: &str = "import * as __nmath from \"@delinoio/nmath/nts-runtime\";\n";
 
 fn lower(source: &str) -> String {
-    let output = transform("test.nts", source);
+    let output = fixture_transform("test.nts", source);
     assert!(
         output.diagnostics.is_empty(),
         "unexpected diagnostics: {:?}",
@@ -37,13 +37,13 @@ fn assert_valid_span_map(source: &str, output: &TransformOutput) {
 
 #[test]
 fn inserts_runtime_import_at_top() {
-    let output = transform("a.nts", "const x = 1;\n");
+    let output = fixture_transform("a.nts", "const x = 1;\n");
     assert_eq!(output.text, format!("{PREFIX}const x = 1;\n"));
 }
 
 #[test]
 fn keeps_shebang_first() {
-    let output = transform("a.nts", "#!/usr/bin/env node\nconst y = a + b;\n");
+    let output = fixture_transform("a.nts", "#!/usr/bin/env node\nconst y = a + b;\n");
     assert_eq!(
         output.text,
         format!("#!/usr/bin/env node\n{PREFIX}const y = __nmath.add(a, b);\n")
@@ -54,7 +54,7 @@ fn keeps_shebang_first() {
 fn keeps_triple_slash_directives_first() {
     let source = "/// <reference path=\"./globals.d.ts\" />\n// note\n///<reference \
                   types=\"node\" />\nconst y = a + b;\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     assert_eq!(
         output.text,
@@ -65,7 +65,7 @@ fn keeps_triple_slash_directives_first() {
     );
 
     let source = "#!/usr/bin/env node\n/* header */\n/// <reference lib=\"es2022\" />\nx = a - b;";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     assert_eq!(
         output.text,
@@ -77,20 +77,20 @@ fn keeps_triple_slash_directives_first() {
 
     // A directive on the last line without a newline.
     let source = "/// <reference path=\"./g.d.ts\" />";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     assert_eq!(output.text, format!("{source}\n{PREFIX}"));
 
     // A triple-slash comment that is not a directive does not move the import.
     let source = "/// docs\nconst z = 1;\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_eq!(output.text, format!("{PREFIX}{source}"));
 }
 
 #[test]
 fn picks_a_runtime_alias_that_no_binding_can_capture() {
     let source = "function sum(__nmath, a, b) { return a + b; }\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     assert_eq!(
         output.text,
@@ -99,7 +99,7 @@ fn picks_a_runtime_alias_that_no_binding_can_capture() {
     );
 
     let source = "const __nmath_1 = 0;\nasync function f(__nmath) { a[i] = -x[j]; }\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     assert_eq!(
         output.text,
@@ -238,7 +238,7 @@ fn keeps_statement_boundaries_in_semicolonless_code() {
 #[test]
 fn reports_element_assignment_outside_async_context() {
     let source = "function f() {\n  a[i] = v;\n}\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_eq!(output.diagnostics.len(), 1);
     let diagnostic = &output.diagnostics[0];
     assert_eq!(diagnostic.code, DiagnosticCode::AssignRequiresAsync);
@@ -263,7 +263,7 @@ fn reports_element_assignment_outside_async_context() {
         "const f = async (x = (a[i] = v)) => x;",
         "class C { async m(x = (a[i] = v)) {} }",
     ] {
-        let output = transform("a.nts", source);
+        let output = fixture_transform("a.nts", source);
         assert_eq!(output.diagnostics.len(), 1, "{source}");
         assert_eq!(
             output.diagnostics[0].code,
@@ -393,7 +393,7 @@ fn import_rewriting_can_be_disabled() {
 #[test]
 fn reports_parse_errors_and_passes_text_through() {
     let source = "const x = ;\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_eq!(output.text, source);
     assert!(!output.diagnostics.is_empty());
     let diagnostic = &output.diagnostics[0];
@@ -408,7 +408,7 @@ fn reports_parse_errors_and_passes_text_through() {
 #[test]
 fn span_map_round_trips_operand_positions() {
     let source = "const total = alpha * beta + gamma[index] ** -delta;\n";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     assert_valid_span_map(source, &output);
     for name in ["alpha", "beta", "gamma", "index", "delta", "total"] {
         let original = source.find(name).unwrap() as u32;
@@ -433,7 +433,7 @@ fn span_map_round_trips_operand_positions() {
 #[test]
 fn span_map_maps_helper_calls_to_the_rewritten_expression() {
     let source = "x = a + b;";
-    let output = transform("a.nts", source);
+    let output = fixture_transform("a.nts", source);
     let helper = output.text.find("__nmath.add").unwrap() as u32;
     // The helper name maps to the start of the original `a + b` expression.
     assert_eq!(output.span_map.virtual_to_original(helper + 8), Some(4));
@@ -462,4 +462,61 @@ fn diagnostic_codes_round_trip_through_mapper_codes() {
         );
     }
     assert_eq!(DiagnosticCode::from_mapper_code(99), None);
+}
+
+// These are text-edit and span-map fixtures. Their plans explicitly authorize
+// candidate operations; project integration tests exercise checker decisions.
+fn fixture_transform(file: &str, source: &str) -> TransformOutput {
+    use tsrs_ast::{Kind, Node, SourceFileParseOptions};
+    use tsrs_core::{P, ScriptKind, tspath};
+    fn literal(node: P<Node>) -> bool {
+        match node.kind() {
+            Kind::NumericLiteral
+            | Kind::BigIntLiteral
+            | Kind::StringLiteral
+            | Kind::NoSubstitutionTemplateLiteral => true,
+            Kind::ParenthesizedExpression => {
+                literal(node.as_parenthesized_expression().expression.get())
+            }
+            Kind::PrefixUnaryExpression => literal(node.as_prefix_unary_expression().operand),
+            Kind::BinaryExpression => {
+                literal(node.as_binary_expression().left)
+                    && literal(node.as_binary_expression().right.get())
+            }
+            _ => false,
+        }
+    }
+    fn collect(node: P<Node>, source: &str, plan: &mut semantic::LoweringPlan) {
+        if !literal(node) {
+            plan.operations.insert((
+                tsrs_scanner::skip_trivia(source, node.pos().expect_source("fixture")),
+                node.end().expect_source("fixture"),
+            ));
+        }
+        for child in node.iter_children() {
+            collect(child, source, plan);
+        }
+    }
+    let region = tsrs_core::arena::Region::new(1 << 20);
+    let _scope = region.enter();
+    let parsed = tsrs_parser::parse_source_file(
+        SourceFileParseOptions {
+            file_name: "/fixture.ts".into(),
+            path: tspath::to_path("/fixture.ts", "", true),
+            external_module_indicator_options: Default::default(),
+        },
+        source,
+        ScriptKind::TS,
+    );
+    let mut plan = semantic::LoweringPlan::default();
+    collect(parsed.as_node(), source, &mut plan);
+    transform_with_plan(file, source, TransformOptions::default(), &plan)
+}
+
+#[test]
+fn no_type_evidence_preserves_all_runtime_syntax() {
+    let source = "function f(a: number[], i: number) { a[i] = i + 1; return -a[i]; }";
+    let output = super::transform("ordinary.nts", source);
+    assert_eq!(output.text, source);
+    assert!(output.diagnostics.is_empty());
 }

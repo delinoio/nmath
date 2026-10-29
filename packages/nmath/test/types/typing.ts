@@ -83,8 +83,10 @@ async function results() {
 declare const maybe: number | NMathArray<"float64", [2]>;
 // @ts-expect-error a union of NMath and JS values must be narrowed first
 nts.add(maybe, 1);
-expectType<number>(nts.add(1, 2));
-expectType<string>(nts.add("a", 1));
+// @ts-expect-error ordinary JavaScript must not call compiler helpers
+nts.add(1, 2);
+// @ts-expect-error ordinary JavaScript must not call compiler helpers
+nts.add("a", 1);
 expectType<Expr<any, any>>(nts.add(m, 1));
 void results;
 async function assignment() {

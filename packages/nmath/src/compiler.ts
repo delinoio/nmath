@@ -8,6 +8,8 @@ import { compilerPath } from "./compiler-binary.js";
 export type CompilerCode =
   | "NMATH_NTS_PARSE"
   | "NMATH_NTS_ASSIGN_REQUIRES_ASYNC"
+  | "NMATH_NTS_AMBIGUOUS_TYPE"
+  | "NMATH_NTS_UNSUPPORTED_SYNTAX"
   | "NMATH_COMPILER_CONFIG"
   | "NMATH_COMPILER_TYPE_ERROR"
   | "NMATH_COMPILER_EMIT";

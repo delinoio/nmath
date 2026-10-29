@@ -7,19 +7,27 @@ use std::fmt;
 pub enum DiagnosticCode {
     /// The `.nts` file has a syntax error.
     Parse,
+    AmbiguousType,
+    UnsupportedSyntax,
     /// A bracket assignment appears outside an async function body or module
     /// top level.
     AssignRequiresAsync,
 }
 
 impl DiagnosticCode {
-    pub const ALL: [DiagnosticCode; 2] =
-        [DiagnosticCode::Parse, DiagnosticCode::AssignRequiresAsync];
+    pub const ALL: [DiagnosticCode; 4] = [
+        DiagnosticCode::Parse,
+        DiagnosticCode::AssignRequiresAsync,
+        DiagnosticCode::AmbiguousType,
+        DiagnosticCode::UnsupportedSyntax,
+    ];
 
     /// The stable public code string.
     pub fn as_str(self) -> &'static str {
         match self {
             DiagnosticCode::Parse => "NMATH_NTS_PARSE",
+            DiagnosticCode::AmbiguousType => "NMATH_NTS_AMBIGUOUS_TYPE",
+            DiagnosticCode::UnsupportedSyntax => "NMATH_NTS_UNSUPPORTED_SYNTAX",
             DiagnosticCode::AssignRequiresAsync => "NMATH_NTS_ASSIGN_REQUIRES_ASYNC",
         }
     }
@@ -29,6 +37,8 @@ impl DiagnosticCode {
     pub fn mapper_code(self) -> i32 {
         match self {
             DiagnosticCode::Parse => 1,
+            DiagnosticCode::AmbiguousType => 3,
+            DiagnosticCode::UnsupportedSyntax => 4,
             DiagnosticCode::AssignRequiresAsync => 2,
         }
     }
@@ -42,6 +52,10 @@ impl DiagnosticCode {
     /// English recovery guidance for this code.
     pub fn recovery(self) -> &'static str {
         match self {
+            DiagnosticCode::AmbiguousType => {
+                "Narrow the operand type or use an explicit NMath API."
+            }
+            DiagnosticCode::UnsupportedSyntax => "Use an explicit NMath API for this operation.",
             DiagnosticCode::Parse => {
                 "Fix the TypeScript syntax at this location; .nts files use standard TypeScript \
                  syntax."

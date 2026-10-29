@@ -23,11 +23,7 @@ fn check_and_build_with_the_in_process_mapper() {
 
     let built = nmath_compiler::build(&options);
     assert!(built.ok, "{built:#?}");
-    assert!(
-        fixture
-            .read("dist/main.js")
-            .contains("__nmath.add(__nmath.mul(__nmath.get(xs, 0), __nmath.get(xs, 1)), 1)")
-    );
+    assert!(fixture.read("dist/main.js").contains("xs[0] * xs[1] + 1"));
 
     fixture.write("src/main.nts", "export const total: string = [1][0] * 2;\n");
     let failed = nmath_compiler::check(&options);
@@ -61,7 +57,7 @@ fn emitted_maps_locate_original_sources_and_preserve_outputs_on_error() {
     let map: Value = serde_json::from_str(&map_text).unwrap();
     assert_eq!(map["sources"], serde_json::json!(["../src/main.nts"]));
     assert_eq!(map["sourcesContent"], serde_json::json!([source]));
-    let generated = js.find("factor, 1").unwrap() as u32;
+    let generated = js.find("factor + 1").unwrap() as u32;
     let original = source.find("factor + 1").unwrap() as u32;
     let (generated_line, generated_column) = nmath_nts::line_column(&js, generated);
     let (original_line, original_column) = nmath_nts::line_column(source, original);

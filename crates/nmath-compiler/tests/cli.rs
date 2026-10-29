@@ -95,16 +95,8 @@ fn check_reports_transform_diagnostics() {
         "export function f(a: number[]) {\n  a[0] = 1;\n}\n",
     );
     let (code, result) = run_json("check", &fixture);
-    assert_eq!(code, 1, "{result:#}");
-    assert_eq!(codes(&result), ["NMATH_NTS_ASSIGN_REQUIRES_ASYNC"]);
-    assert_eq!(
-        (
-            result["diagnostics"][0]["line"].as_u64(),
-            result["diagnostics"][0]["column"].as_u64()
-        ),
-        (Some(2), Some(3))
-    );
-
+    assert_eq!(code, 0, "{result:#}");
+    assert_eq!(codes(&result), Vec::<String>::new());
     let fixture = Fixture::new("check-parse");
     fixture.write("src/main.nts", "export const x = ;\n");
     let (code, result) = run_json("check", &fixture);
@@ -147,14 +139,14 @@ fn human_output_lists_diagnostics() {
     let fixture = Fixture::new("human");
     fixture.write(
         "src/main.nts",
-        "export function f(a: number[]) {\n  a[0] = 1;\n}\n",
+        "export function f(a: number[]) {\n  a[0] = \"bad\";\n}\n",
     );
     let tsconfig = fixture.tsconfig();
     let output = run(&["check", "-p", tsconfig.to_str().unwrap()]);
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("main.nts:2:3 - error NMATH_NTS_ASSIGN_REQUIRES_ASYNC"),
+        stdout.contains("main.nts:2:3 - error NMATH_COMPILER_TYPE_ERROR"),
         "{stdout}"
     );
     assert!(stdout.contains("recovery:"), "{stdout}");
@@ -193,20 +185,11 @@ fn build_writes_javascript_declarations_and_source_maps() {
         ]
     );
     let lib = fixture.read("dist/lib.js");
-    assert!(
-        lib.starts_with("import * as __nmath from \"@delinoio/nmath/nts-runtime\";"),
-        "{lib}"
-    );
-    assert!(
-        lib.contains("__nmath.add(__nmath.mul(__nmath.get(xs, 0), k), __nmath.neg(k))"),
-        "{lib}"
-    );
+    assert!(!lib.contains("__nmath"), "{lib}");
+    assert!(lib.contains("xs[0] * k + -k"), "{lib}");
     let main = fixture.read("dist/main.js");
     assert!(main.contains("from './lib.js'"), "{main}");
-    assert!(
-        main.contains("(await __nmath.set(xs, 1, scale(xs, 2)))"),
-        "{main}"
-    );
+    assert!(main.contains("xs[1] = scale(xs, 2)"), "{main}");
     assert!(
         fixture
             .read("dist/lib.d.ts")
