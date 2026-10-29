@@ -30,6 +30,7 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 | `@delinoio/nmath/nts-runtime` | (internal)     | Helpers that compiled `.nts` output imports. Not documented for direct use.                                 |
 
 The CLI executable is `nmath-compiler`. No separate compiler package is published. The package `bin` entry is a small Node.js launcher that runs the platform's prebuilt `nmath-compiler` executable from `native/` or the platform package; `@delinoio/nmath/compiler` runs the same executable with `--json`.
+The compiler entry point, CLI launcher and compiler build script resolve or build the compiler without loading the numerical addon. A missing compiler reports compiler-specific recovery guidance. Numerical entry points still load the addon when imported.
 
 ### Contexts
 
