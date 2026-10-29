@@ -1,0 +1,594 @@
+{
+  "versions": {
+    "pandas": "3.1.0",
+    "polars": "2.1.0"
+  },
+  "input": {
+    "k": [
+      2,
+      1,
+      1,
+      null
+    ],
+    "v": [
+      20,
+      10,
+      null,
+      40
+    ],
+    "rk": [
+      1,
+      1,
+      null
+    ],
+    "rv": [
+      100,
+      101,
+      400
+    ]
+  },
+  "pandasJoin": [
+    [
+      2,
+      20,
+      null
+    ],
+    [
+      1,
+      10,
+      100
+    ],
+    [
+      1,
+      10,
+      101
+    ],
+    [
+      1,
+      null,
+      100
+    ],
+    [
+      1,
+      null,
+      101
+    ],
+    [
+      null,
+      40,
+      400
+    ]
+  ],
+  "polarsJoin": [
+    [
+      2,
+      20,
+      null
+    ],
+    [
+      1,
+      10,
+      100
+    ],
+    [
+      1,
+      10,
+      101
+    ],
+    [
+      1,
+      null,
+      100
+    ],
+    [
+      1,
+      null,
+      101
+    ],
+    [
+      null,
+      40,
+      null
+    ]
+  ],
+  "pandasGroup": [
+    [
+      1,
+      10
+    ],
+    [
+      2,
+      20
+    ]
+  ],
+  "polarsGroup": [
+    [
+      2,
+      20
+    ],
+    [
+      1,
+      10
+    ],
+    [
+      null,
+      40
+    ]
+  ],
+  "pandasSort": [
+    [
+      1,
+      10
+    ],
+    [
+      1,
+      null
+    ],
+    [
+      2,
+      20
+    ],
+    [
+      null,
+      40
+    ]
+  ],
+  "polarsSort": [
+    [
+      null,
+      40
+    ],
+    [
+      1,
+      10
+    ],
+    [
+      1,
+      null
+    ],
+    [
+      2,
+      20
+    ]
+  ],
+  "emptyGroup": [],
+  "aggregationDtypes": [
+    {
+      "input": "int8",
+      "op": "sum",
+      "pandas": "int8",
+      "polars": "int64",
+      "value": 2.0
+    },
+    {
+      "input": "int8",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "int8",
+      "op": "min",
+      "pandas": "int8",
+      "polars": "int8",
+      "value": 1.0
+    },
+    {
+      "input": "int8",
+      "op": "max",
+      "pandas": "int8",
+      "polars": "int8",
+      "value": 1.0
+    },
+    {
+      "input": "int8",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "int16",
+      "op": "sum",
+      "pandas": "int16",
+      "polars": "int64",
+      "value": 2.0
+    },
+    {
+      "input": "int16",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "int16",
+      "op": "min",
+      "pandas": "int16",
+      "polars": "int16",
+      "value": 1.0
+    },
+    {
+      "input": "int16",
+      "op": "max",
+      "pandas": "int16",
+      "polars": "int16",
+      "value": 1.0
+    },
+    {
+      "input": "int16",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "int32",
+      "op": "sum",
+      "pandas": "int32",
+      "polars": "int32",
+      "value": 2.0
+    },
+    {
+      "input": "int32",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "int32",
+      "op": "min",
+      "pandas": "int32",
+      "polars": "int32",
+      "value": 1.0
+    },
+    {
+      "input": "int32",
+      "op": "max",
+      "pandas": "int32",
+      "polars": "int32",
+      "value": 1.0
+    },
+    {
+      "input": "int32",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "int64",
+      "op": "sum",
+      "pandas": "int64",
+      "polars": "int64",
+      "value": 2.0
+    },
+    {
+      "input": "int64",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "int64",
+      "op": "min",
+      "pandas": "int64",
+      "polars": "int64",
+      "value": 1.0
+    },
+    {
+      "input": "int64",
+      "op": "max",
+      "pandas": "int64",
+      "polars": "int64",
+      "value": 1.0
+    },
+    {
+      "input": "int64",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "uint8",
+      "op": "sum",
+      "pandas": "uint8",
+      "polars": "int64",
+      "value": 2.0
+    },
+    {
+      "input": "uint8",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "uint8",
+      "op": "min",
+      "pandas": "uint8",
+      "polars": "uint8",
+      "value": 1.0
+    },
+    {
+      "input": "uint8",
+      "op": "max",
+      "pandas": "uint8",
+      "polars": "uint8",
+      "value": 1.0
+    },
+    {
+      "input": "uint8",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "uint16",
+      "op": "sum",
+      "pandas": "uint16",
+      "polars": "int64",
+      "value": 2.0
+    },
+    {
+      "input": "uint16",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "uint16",
+      "op": "min",
+      "pandas": "uint16",
+      "polars": "uint16",
+      "value": 1.0
+    },
+    {
+      "input": "uint16",
+      "op": "max",
+      "pandas": "uint16",
+      "polars": "uint16",
+      "value": 1.0
+    },
+    {
+      "input": "uint16",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "uint32",
+      "op": "sum",
+      "pandas": "uint32",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "uint32",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "uint32",
+      "op": "min",
+      "pandas": "uint32",
+      "polars": "uint32",
+      "value": 1.0
+    },
+    {
+      "input": "uint32",
+      "op": "max",
+      "pandas": "uint32",
+      "polars": "uint32",
+      "value": 1.0
+    },
+    {
+      "input": "uint32",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "uint64",
+      "op": "sum",
+      "pandas": "uint64",
+      "polars": "uint64",
+      "value": 2.0
+    },
+    {
+      "input": "uint64",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "uint64",
+      "op": "min",
+      "pandas": "uint64",
+      "polars": "uint64",
+      "value": 1.0
+    },
+    {
+      "input": "uint64",
+      "op": "max",
+      "pandas": "uint64",
+      "polars": "uint64",
+      "value": 1.0
+    },
+    {
+      "input": "uint64",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "float32",
+      "op": "sum",
+      "pandas": "float32",
+      "polars": "float32",
+      "value": 2.0
+    },
+    {
+      "input": "float32",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float32",
+      "value": 1.0
+    },
+    {
+      "input": "float32",
+      "op": "min",
+      "pandas": "float32",
+      "polars": "float32",
+      "value": 1.0
+    },
+    {
+      "input": "float32",
+      "op": "max",
+      "pandas": "float32",
+      "polars": "float32",
+      "value": 1.0
+    },
+    {
+      "input": "float32",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "float64",
+      "op": "sum",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 2.0
+    },
+    {
+      "input": "float64",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "float64",
+      "op": "min",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "float64",
+      "op": "max",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "float64",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "bool",
+      "op": "sum",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    },
+    {
+      "input": "bool",
+      "op": "mean",
+      "pandas": "float64",
+      "polars": "float64",
+      "value": 1.0
+    },
+    {
+      "input": "bool",
+      "op": "min",
+      "pandas": "bool",
+      "polars": "bool",
+      "value": 1.0
+    },
+    {
+      "input": "bool",
+      "op": "max",
+      "pandas": "bool",
+      "polars": "bool",
+      "value": 1.0
+    },
+    {
+      "input": "bool",
+      "op": "count",
+      "pandas": "int64",
+      "polars": "uint32",
+      "value": 2.0
+    }
+  ],
+  "allNullGroups": {
+    "sum": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        4
+      ]
+    ],
+    "mean": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        4
+      ]
+    ],
+    "min": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        4
+      ]
+    ],
+    "max": [
+      [
+        1,
+        null
+      ],
+      [
+        2,
+        4
+      ]
+    ],
+    "count": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        1
+      ]
+    ]
+  }
+}
