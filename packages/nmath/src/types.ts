@@ -275,6 +275,11 @@ export type PromoteWeak<
         : D
       : D;
 
+/** Boolean remainder and power use the NumPy int8 loop. */
+export type BoolArithmetic<D extends ComputableDType> = D extends "bool"
+  ? "int8"
+  : D;
+
 export type TrueDivide<D extends ComputableDType> = D extends
   FloatDType | ComplexDType
   ? D

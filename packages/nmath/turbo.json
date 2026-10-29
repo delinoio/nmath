@@ -36,6 +36,19 @@
     "test:package": {
       "dependsOn": ["build", "build:compiler"],
       "cache": false
+    },
+    "test:compatibility": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "oracle:generate": {
+      "cache": false
+    },
+    "oracle:inventory": {
+      "cache": false
+    },
+    "oracle:check": {
+      "cache": false
     }
   }
 }

@@ -46,6 +46,8 @@ Paths marked `planned` do not exist yet. A path becomes a Cargo workspace member
 - [VS Code extension contract](apps-nmath-vscode-contract.md): `nmath-vscode`.
 - [Distribution contract](packages-nmath-distribution-contract.md): `packaging/nmath/`, native package staging, release artifact workflows and distribution evidence gates, owned by `nmath-package`.
 
+The npm component also owns `packages/nmath/compatibility/` for fixed-version API inventory and oracle fixtures, `packages/nmath/scripts/compatibility/` for development-only generation and native comparison, and their package tests.
+
 ## Cross-Domain Invariants
 
 ### Stable identifiers

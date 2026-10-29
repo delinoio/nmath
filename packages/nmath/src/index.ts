@@ -9,6 +9,7 @@ import {
   type Operand,
 } from "./core.js";
 import type {
+  BoolArithmetic,
   Broadcast,
   BroadcastCheck,
   ComputableDType,
@@ -94,7 +95,7 @@ export interface RemainderFunction {
   >(
     a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
     b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
-  ): Expr<Promote<D1, D2>, Broadcast<S1, S2>>;
+  ): Expr<BoolArithmetic<Promote<D1, D2>>, Broadcast<S1, S2>>;
   <
     D extends Exclude<ComputableDType, "complex64" | "complex128">,
     S extends Shape,
@@ -102,7 +103,7 @@ export interface RemainderFunction {
   >(
     a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
     b: W,
-  ): Expr<PromoteWeak<D, W>, S>;
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
   <
     W extends Exclude<WeakScalar, Complex>,
     D extends Exclude<ComputableDType, "complex64" | "complex128">,
@@ -110,7 +111,7 @@ export interface RemainderFunction {
   >(
     a: W,
     b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  ): Expr<PromoteWeak<D, W>, S>;
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
 }
 
 /** {@link BinaryFunction} with true-division result dtypes. */
@@ -134,6 +135,26 @@ export interface DivideFunction {
   ): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
 }
 
+export interface PowerFunction {
+  <
+    D1 extends ComputableDType,
+    S1 extends Shape,
+    D2 extends ComputableDType,
+    S2 extends Shape,
+  >(
+    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
+    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
+  ): Expr<BoolArithmetic<Promote<D1, D2>>, Broadcast<S1, S2>>;
+  <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
+    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+    b: W,
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
+  <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
+    a: W,
+    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
+}
+
 export const add: BinaryFunction = (a: Operand, b: Operand) =>
   binary("add", a, b);
 export const sub: BinaryFunction = (a: Operand, b: Operand) =>
@@ -144,7 +165,7 @@ export const div: DivideFunction = (a: Operand, b: Operand) =>
   binary("div", a, b);
 export const mod: RemainderFunction = (a: Operand, b: Operand) =>
   binary("mod", a, b);
-export const pow: BinaryFunction = (a: Operand, b: Operand) =>
+export const pow: PowerFunction = (a: Operand, b: Operand) =>
   binary("pow", a, b);
 
 function binary(op: BinaryOperator, a: Operand, b: Operand): Expr<any, any> {

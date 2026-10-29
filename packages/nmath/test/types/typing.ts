@@ -134,3 +134,17 @@ expectType<number>(i8.item(0));
 
 const mixedFunctional = add(i8, u8);
 assertTrue<Equal<typeof mixedFunctional, Expr<"int16", [2]>>>();
+
+const boolValues = ctx.zeros([2], "bool");
+const boolPower = boolValues.pow(boolValues);
+const boolRemainder = boolValues.mod(true);
+assertTrue<Equal<(typeof boolPower)["dtype"], "int8">>();
+assertTrue<Equal<(typeof boolRemainder)["dtype"], "int8">>();
+assertTrue<Equal<(typeof boolPower)["shape"], [2]>>();
+assertTrue<Equal<(typeof boolRemainder)["shape"], readonly [2]>>();
+// @ts-expect-error NumPy rejects unary positive for bool arrays.
+boolValues.pos();
+// @ts-expect-error NumPy rejects unary negative for bool arrays.
+boolValues.neg();
+void boolPower;
+void boolRemainder;

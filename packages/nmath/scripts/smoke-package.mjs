@@ -8,9 +8,11 @@ import {
   mkdtempSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -65,6 +67,21 @@ try {
     JSON.stringify({ private: true, type: "module" }),
   );
   pnpm("--dir", consumer, "add", "--ignore-scripts", "--offline", ...archives);
+  const ledger = JSON.parse(
+    gunzipSync(
+      readFileSync(
+        join(consumer, "node_modules/@delinoio/nmath/compatibility.json.gz"),
+      ),
+    ).toString(),
+  );
+  assert.deepEqual(ledger.versions, {
+    numpy: "2.5.4",
+    pandas: "3.1.0",
+    polars: "2.1.0",
+  });
+  assert.equal(ledger.acceptanceStatus, "incomplete");
+  assert.ok(ledger.rows.some((row) => row.name === "numpy.add"));
+  assert.ok(ledger.rows.some((row) => row.status === "pending"));
   const program = `
     const assert = (await import('node:assert/strict')).default;
     const {createContext} = await import('@delinoio/nmath');

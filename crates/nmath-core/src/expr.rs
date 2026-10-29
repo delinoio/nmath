@@ -136,10 +136,10 @@ impl Expr {
 
     pub fn unary(op: UnaryOp, input: &Expr) -> Result<Expr> {
         let dtype = input.dtype().ensure_computable()?;
-        if op == UnaryOp::Neg && dtype == DType::Bool {
+        if dtype == DType::Bool {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
-                "The negative operator is not supported for bool operands.",
+                "Unary arithmetic is not supported for bool operands.",
             ));
         }
         Ok(Expr::node(
