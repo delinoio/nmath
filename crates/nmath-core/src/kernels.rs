@@ -498,7 +498,19 @@ fn reserve_for(
     dtype: DType,
     len: usize,
 ) -> Result<crate::memory::Reservation> {
-    budget.reserve((len * dtype.item_size()) as u64)
+    budget.reserve(checked_reduction_bytes(len, dtype.item_size())?)
+}
+
+fn checked_reduction_bytes(len: usize, item_size: usize) -> Result<u64> {
+    len.checked_mul(item_size)
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .filter(|&bytes| bytes <= isize::MAX as u64)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "Reduction allocation size exceeds the supported vector capacity.",
+            )
+        })
 }
 
 /// Casts an operand to `dtype`. A matching buffer is borrowed; a converted
@@ -615,9 +627,16 @@ pub fn unary(
 }
 
 /// Normalizes reduction axes; `None` reduces every axis.
-pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+fn reduce_axes_with_check(
+    rank: usize,
+    axes: Option<&[i64]>,
+    mut check: impl FnMut() -> Result<()>,
+) -> Result<Vec<bool>> {
     let mut reduced = vec![axes.is_none(); rank];
-    for &axis in axes.unwrap_or(&[]) {
+    for (position, &axis) in axes.unwrap_or(&[]).iter().enumerate() {
+        if position % CHUNK == 0 {
+            check()?;
+        }
         let a = if axis < 0 { axis + rank as i64 } else { axis };
         if a < 0 || a >= rank as i64 {
             return Err(Error::new(
@@ -633,16 +652,30 @@ pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
         }
         reduced[a as usize] = true;
     }
+    check()?;
     Ok(reduced)
 }
 
+pub fn reduce_axes(rank: usize, axes: Option<&[i64]>) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || Ok(()))
+}
+
+fn reduce_axes_cancellable(
+    rank: usize,
+    axes: Option<&[i64]>,
+    token: &CancellationToken,
+) -> Result<Vec<bool>> {
+    reduce_axes_with_check(rank, axes, || token.check())
+}
+
 pub fn reduce_shape(shape: &[usize], reduced: &[bool]) -> Vec<usize> {
-    shape
-        .iter()
-        .zip(reduced)
-        .filter(|(_, r)| !**r)
-        .map(|(d, _)| *d)
-        .collect()
+    let mut result = Vec::with_capacity(reduced.iter().filter(|&&r| !r).count());
+    for (&dimension, &is_reduced) in shape.iter().zip(reduced) {
+        if !is_reduced {
+            result.push(dimension);
+        }
+    }
+    result
 }
 
 pub fn reduce(
@@ -652,13 +685,10 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
-    let reduced = reduce_axes(input.shape.len(), axes)?;
-    let out_shape = reduce_shape(&input.shape, &reduced);
-    let out_len: usize = out_shape.iter().product();
-    let in_dtype = input.dtype();
-    let dtype = op.result_dtype(in_dtype);
-    // Only an empty reduced dimension lacks an identity; empty kept dimensions
-    // simply produce an empty result.
+    let rank = input.shape.len();
+    let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
+    // An empty reduced dimension has no min/max identity, regardless of the
+    // available budget.
     let empty_reduction = input
         .shape
         .iter()
@@ -673,7 +703,35 @@ pub fn reduce(
             ),
         ));
     }
-    let reservation = reserve_for(budget, dtype, out_len)?;
+    // Reduced flags and the four rank-sized vectors in BroadcastPairs and
+    // its stride input all remain live until the reduction buffer is built.
+    let metadata_bytes = checked_reduction_bytes(rank, 1 + 4 * std::mem::size_of::<usize>())?;
+    let _metadata_reservation = budget.reserve(metadata_bytes)?;
+    let kept = reduced.iter().filter(|&&is_reduced| !is_reduced).count();
+    let shape_bytes = checked_reduction_bytes(kept, std::mem::size_of::<usize>())?;
+    let out_len: usize = input
+        .shape
+        .iter()
+        .zip(&reduced)
+        .filter(|(_, is_reduced)| !**is_reduced)
+        .map(|(dimension, _)| *dimension)
+        .try_fold(1usize, |product, dimension| product.checked_mul(dimension))
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "Reduction result size overflows.",
+            )
+        })?;
+    let data_bytes = checked_reduction_bytes(out_len, op.result_dtype(input.dtype()).item_size())?;
+    let reservation = budget.reserve(data_bytes.checked_add(shape_bytes).ok_or_else(|| {
+        Error::new(
+            ErrorCode::MemoryBudgetExceeded,
+            "Reduction result size overflows.",
+        )
+    })?)?;
+    let out_shape = reduce_shape(&input.shape, &reduced);
+    let in_dtype = input.dtype();
+    let dtype = op.result_dtype(in_dtype);
     // Map each input element to its output slot.
     let mut out_strides = vec![0isize; input.shape.len()];
     let mut acc = 1isize;
@@ -885,28 +943,36 @@ mod tests {
 
     #[test]
     fn reductions_reserve_casts_and_release_scratch() {
+        assert_eq!(
+            checked_reduction_bytes(usize::MAX, std::mem::size_of::<i64>())
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
         let input = dense(vec![2, 2], Buffer::I32(vec![1, 2, 3, 4]));
         let token = CancellationToken::new();
         for op in [ReduceOp::Sum, ReduceOp::Mean] {
-            // Two 64-bit outputs plus four widened inputs: 16 + 32 bytes.
-            let tight = MemoryBudget::new(Device::Cpu, 47);
-            assert_eq!(
-                reduce(op, &input, Some(&[0]), &tight, &token)
-                    .unwrap_err()
-                    .code,
-                ErrorCode::MemoryBudgetExceeded
-            );
-            assert_eq!(tight.usage().used, 0);
-            let fits = MemoryBudget::new(Device::Cpu, 48);
+            // Rank metadata (66), output data and shape (24), and cast (32).
+            for limit in [65, 89, 121] {
+                let tight = MemoryBudget::new(Device::Cpu, limit);
+                assert_eq!(
+                    reduce(op, &input, Some(&[0]), &tight, &token)
+                        .unwrap_err()
+                        .code,
+                    ErrorCode::MemoryBudgetExceeded
+                );
+                assert_eq!(tight.usage().used, 0);
+            }
+            let fits = MemoryBudget::new(Device::Cpu, 122);
             let result = reduce(op, &input, Some(&[0]), &fits, &token).unwrap();
-            assert_eq!(fits.usage().peak, 48);
-            assert_eq!(fits.usage().used, 16);
+            assert_eq!(fits.usage().peak, 122);
+            assert_eq!(fits.usage().used, 24);
             drop(result);
             assert_eq!(fits.usage().used, 0);
         }
         // Min/max borrow the input, with one byte per output for
         // initialization.
-        let tight = MemoryBudget::new(Device::Cpu, 9);
+        let tight = MemoryBudget::new(Device::Cpu, 83);
         assert_eq!(
             reduce(ReduceOp::Min, &input, Some(&[0]), &tight, &token)
                 .unwrap_err()
@@ -914,18 +980,28 @@ mod tests {
             ErrorCode::MemoryBudgetExceeded
         );
         assert_eq!(tight.usage().used, 0);
-        let fits = MemoryBudget::new(Device::Cpu, 10);
+        let fits = MemoryBudget::new(Device::Cpu, 84);
         let result = reduce(ReduceOp::Max, &input, Some(&[0]), &fits, &token).unwrap();
-        assert_eq!(fits.usage().peak, 10);
-        assert_eq!(fits.usage().used, 8);
+        assert_eq!(fits.usage().peak, 84);
+        assert_eq!(fits.usage().used, 16);
         drop(result);
         assert_eq!(fits.usage().used, 0);
+
+        let large = dense(vec![100_000], Buffer::I32(vec![1; 100_000]));
+        let tiny = MemoryBudget::new(Device::Cpu, 8);
+        assert_eq!(
+            reduce(ReduceOp::Sum, &large, None, &tiny, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tiny.usage().used, 0);
     }
 
     #[test]
     fn complex_reduction_borrows_without_input_sized_scratch() {
         let input = dense(vec![100_000], Buffer::C64(vec![[1.0, 2.0]; 100_000]));
-        let budget = MemoryBudget::new(Device::Cpu, 8);
+        let budget = MemoryBudget::new(Device::Cpu, 41);
         let result = reduce(
             ReduceOp::Sum,
             &input,
@@ -935,7 +1011,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.buffer, Buffer::C64(vec![[100_000.0, 200_000.0]]));
-        assert_eq!(budget.usage().peak, 8);
+        assert_eq!(budget.usage().peak, 41);
         drop(result);
         assert_eq!(budget.usage().used, 0);
     }
@@ -1118,6 +1194,27 @@ mod tests {
     }
 
     #[test]
+    fn reduction_axis_validation_honors_cancellation() {
+        let rank = 100_000;
+        let input = dense(vec![1; rank], Buffer::I32(vec![1]));
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let token = CancellationToken::new();
+        token.cancel();
+        let axes: Vec<i64> = (0..rank as i64).collect();
+        assert_eq!(
+            reduce(ReduceOp::Sum, &input, Some(&axes), &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+        assert_eq!(
+            reduce_axes(3, Some(&[0, -3])).unwrap_err().code,
+            ErrorCode::IndexInvalid
+        );
+    }
+
+    #[test]
     fn cancellation_interrupts_a_running_complex_matmul() {
         let input = dense(vec![512, 512], Buffer::C64(vec![[1.0, 2.0]; 512 * 512]));
         let (budget, token) = env();
@@ -1226,6 +1323,17 @@ mod tests {
         // np.zeros((0, 2)).max(axis=0) raises ValueError.
         let (b, t) = env();
         let empty = dense(vec![0, 2], Buffer::F64(vec![]));
+        let zero_budget = MemoryBudget::new(Device::Cpu, 0);
+        let empty_vector = dense(vec![0], Buffer::F64(vec![]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            assert_eq!(
+                reduce(op, &empty_vector, None, &zero_budget, &t)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ShapeMismatch
+            );
+            assert_eq!(zero_budget.usage().used, 0);
+        }
         for op in [ReduceOp::Min, ReduceOp::Max] {
             let r = reduce(op, &empty, Some(&[1]), &b, &t).unwrap();
             assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::F64(vec![])));
