@@ -33,3 +33,4 @@ pub use sync::CancellationToken;
 pub mod table;
 
 pub mod io_text;
+pub mod io_columnar;

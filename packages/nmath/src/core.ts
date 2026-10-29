@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import {
   readText,
   writeText,
@@ -5,8 +6,14 @@ import {
   type TextWriteOptions,
   type TextFormat,
 } from "./io-text.js";
+import {
+  readColumnar,
+  writeColumnar,
+  type ColumnarFormat,
+  type ColumnarReadOptions,
+  type ColumnarWriteOptions,
+} from "./columnar.js";
 import type { Column, Validity } from "./frame.js";
-// SPDX-License-Identifier: Apache-2.0
 import { NMathError, native, nativeAsync } from "./errors.js";
 import { binding } from "./native.js";
 import type {
@@ -998,7 +1005,6 @@ export class NMathContext {
     return new NMathArray(array, this);
   }
 
-  /** Writes named arrays to an exact NPZ path in Map insertion order. */
   readText(path: string, format: TextFormat, options?: TextReadOptions) {
     return readText(this, path, format, options);
   }
@@ -1012,6 +1018,24 @@ export class NMathContext {
     return writeText(this, path, format, columns, validity, options);
   }
 
+  readColumnar(
+    path: string,
+    format: ColumnarFormat,
+    options: ColumnarReadOptions = {},
+  ) {
+    return readColumnar(this, path, format, options);
+  }
+  writeColumnar(
+    path: string,
+    format: ColumnarFormat,
+    columns: ReadonlyMap<string, Column>,
+    validity: Validity = new Map(),
+    options: ColumnarWriteOptions = {},
+  ) {
+    return writeColumnar(this, path, format, columns, validity, options);
+  }
+
+  /** Writes named arrays to an exact NPZ path in Map insertion order. */
   saveNpz(
     path: string,
     arrays: ReadonlyMap<string, NMathArray<any, any>>,
