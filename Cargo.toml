@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/nmath-core", "crates/nmath-node", "crates/nmath-nts"]
+members = ["crates/nmath-core", "crates/nmath-node", "crates/nmath-nts", "crates/nmath-compiler"]
 
 [workspace.package]
 version = "0.0.0"
@@ -11,6 +11,10 @@ publish = false
 
 [workspace.dependencies]
 nmath-core = { path = "crates/nmath-core" }
+nmath-nts = { path = "crates/nmath-nts" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing = "0.1"
 # tsrs is pinned to one commit; see docs/crates-nmath-compiler-contract.md before changing it.
 tsrs_ast = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
@@ -18,3 +22,8 @@ tsrs_core = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb445407
 tsrs_parser = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
 tsrs_scanner = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
 tsrs_spanmap = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_contentmapper = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_diagnostics = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_execute = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_ipc = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }
+tsrs_vfs = { git = "https://github.com/oxc-project/tsrs", rev = "77d3cddb44540734abc33a42ccca4d3f33bee527" }

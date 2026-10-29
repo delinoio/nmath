@@ -32,7 +32,7 @@ Component IDs:
 | `crates`   | `crates/nmath-core/`     | `nmath-core`     | active  |
 | `crates`   | `crates/nmath-node/`     | `nmath-node`     | active  |
 | `crates`   | `crates/nmath-nts/`      | `nmath-nts`      | active  |
-| `crates`   | `crates/nmath-compiler/` | `nmath-compiler` | planned |
+| `crates`   | `crates/nmath-compiler/` | `nmath-compiler` | active  |
 | `packages` | `packages/nmath/`        | `nmath-package`  | active  |
 | `apps`     | `apps/nmath-vscode/`     | `nmath-vscode`   | planned |
 
