@@ -161,6 +161,8 @@ node "out/main.js"
 
 The CLI is included in this package. When using a local installation with pnpm, invoke it with `pnpm exec nmath-compiler`. `check` reports diagnostics without emitting files. `build` emits ESM JavaScript, declarations and source maps; type or transform errors leave existing output unchanged. Add `--json` for structured diagnostics. Exit codes are 0 for success, 1 for diagnostics and 2 for usage or configuration errors.
 
+The compiler API and CLI can run when the numerical addon is unavailable, provided the compiler executable is installed. If the compiler executable is missing, reinstall the package or build the compiler from source with `pnpm --filter @delinoio/nmath build:compiler`.
+
 The programmatic API runs the same compiler:
 
 ```ts
