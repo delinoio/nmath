@@ -408,6 +408,31 @@ export async function prepare(stage, cache, fetchSources = false) {
       ],
     ),
   );
+  const importedRoot = "crates/nmath-core/src/random";
+  const importedNotices = ["NUMPY-LICENSE.txt", "NUMPY-RANDOM-LICENSE.txt"].map(
+    (name) => {
+      const bytes = readFileSync(join(root, importedRoot, name));
+      return { path: `${importedRoot}/${name}`, sha256: hash(bytes), bytes };
+    },
+  );
+  components.push(
+    stageComponent(
+      stage,
+      {
+        id: "imported:numpy-random@2.5.4",
+        kind: "imported-source",
+        name: "NumPy random sources",
+        version: "2.5.4",
+        declaredLicense: "BSD-3-Clause",
+        provenance: {
+          sourceRecordSha256: hash(
+            readFileSync(join(root, importedRoot, "SOURCES.txt")),
+          ),
+        },
+      },
+      importedNotices,
+    ),
+  );
   const inputPaths = sorted(
     new Set([
       "Cargo.lock",

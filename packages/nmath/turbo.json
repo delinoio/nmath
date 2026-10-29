@@ -67,6 +67,18 @@
     "test:benchmarks": {
       "cache": false,
       "dependsOn": ["build", "build:compiler"]
+    },
+    "license:prepare": {
+      "cache": false,
+      "passThroughEnv": ["GH_TOKEN"]
+    },
+    "license:render": {
+      "cache": false
+    },
+    "test:package:licenses": {
+      "dependsOn": ["build", "build:compiler"],
+      "cache": false,
+      "env": ["NMATH_LICENSE_BUNDLE"]
     }
   }
 }

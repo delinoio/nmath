@@ -5,3 +5,4 @@
 !language-configuration.json
 !dist/extension.js
 !dist/THIRD_PARTY_LICENSES.txt
+!dist/THIRD_PARTY_LICENSES.txt.json

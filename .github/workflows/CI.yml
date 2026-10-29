@@ -100,6 +100,16 @@ jobs:
       - name: Test installed native package
         if: needs.changes.outputs.fixtures == 'true'
         run: pnpm exec turbo run test:package --filter=@delinoio/nmath
+      - name: Prepare actual license sources and test installed notices
+        if: needs.changes.outputs.fixtures == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NMATH_LICENSE_BUNDLE: ${{ runner.temp }}/nmath-third-party-licenses.txt
+        run: |
+          cargo fetch --locked
+          pnpm exec turbo run license:prepare --filter=@delinoio/nmath -- "$RUNNER_TEMP/nmath-license-stage" "$RUNNER_TEMP/nmath-license-cache" --fetch-sources
+          pnpm exec turbo run license:render --filter=@delinoio/nmath -- "$RUNNER_TEMP/nmath-license-stage" "$NMATH_LICENSE_BUNDLE"
+          pnpm exec turbo run test:package:licenses --filter=@delinoio/nmath
       - name: Record validation result
         if: always()
         env:

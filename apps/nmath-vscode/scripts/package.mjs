@@ -5,13 +5,19 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { verifyBundle } from "../../../packages/nmath/scripts/license-bundle.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const bundle = process.env.NMATH_LICENSE_BUNDLE;
 if (!bundle || !readFileSync(bundle, "utf8").trim())
   throw new Error(
     "NMATH_LICENSE_BUNDLE must contain reviewed third-party terms and notices for the bundled extension dependencies.",
   );
+verifyBundle(bundle);
 mkdirSync(join(root, "dist"), { recursive: true });
+copyFileSync(
+  `${bundle}.json`,
+  join(root, "dist/THIRD_PARTY_LICENSES.txt.json"),
+);
 copyFileSync(bundle, join(root, "dist/THIRD_PARTY_LICENSES.txt"));
 await build({
   entryPoints: [join(root, "src/extension.ts")],
