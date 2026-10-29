@@ -67,6 +67,7 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
 - Jobs that share a generator serialize. A job reads state at start and commits the advanced state only on success.
+- CPU random evaluation checks the element count, float64 byte count and vector capacity before reserving or allocating the result. Unrepresentable sizes fail through the job callback with `NMATH_MEMORY_BUDGET_EXCEEDED`; a zero-length dimension produces an empty result even when other dimensions are large. Failed jobs do not advance generator state.
 
 ### Measurements
 
