@@ -43,6 +43,54 @@ export function bundleRelativePath(directory, file, paths = pathApi) {
   return relative.split(paths.sep).join("/");
 }
 
+// Include untracked, non-ignored inputs: Cargo can discover build.rs before git add.
+export function sourceInputPaths(sourceRoot = root) {
+  return sorted(
+    new Set([
+      "Cargo.lock",
+      "pnpm-lock.yaml",
+      "Cargo.toml",
+      "rust-toolchain",
+      "packaging/nmath/targets.json",
+      "packaging/nmath/license-policy.json",
+      "packages/nmath/package.json",
+      "apps/nmath-vscode/package.json",
+      ...run(
+        "git",
+        [
+          "ls-files",
+          "--cached",
+          "--others",
+          "--exclude-standard",
+          "-z",
+          "--",
+          "crates",
+          "packages/nmath/src",
+          "packages/nmath/bin",
+          "apps/nmath-vscode/src",
+        ],
+        sourceRoot,
+      )
+        .split("\0")
+        .filter(Boolean),
+    ]),
+  );
+}
+
+export function verifySourceInputs(inputs, sourceRoot = root) {
+  const current = sourceInputPaths(sourceRoot);
+  const recorded = sorted(Object.keys(inputs));
+  if (
+    current.length !== recorded.length ||
+    current.some((file, i) => file !== recorded[i])
+  )
+    throw new Error(
+      "License source inventory membership changed; prepare and review again",
+    );
+  for (const file of current)
+    checkDigest(readFileSync(join(sourceRoot, file)), inputs[file]);
+}
+
 export function checkDigest(bytes, expected) {
   if (hash(bytes) !== expected)
     throw new Error("License input digest mismatch");
@@ -449,29 +497,11 @@ export async function prepare(stage, cache, fetchSources = false) {
       importedNotices,
     ),
   );
-  const inputPaths = sorted(
-    new Set([
-      "Cargo.lock",
-      "pnpm-lock.yaml",
-      "Cargo.toml",
-      "rust-toolchain",
-      "packaging/nmath/targets.json",
-      "packaging/nmath/license-policy.json",
-      "packages/nmath/package.json",
-      "apps/nmath-vscode/package.json",
-      ...run("git", [
-        "ls-files",
-        "crates",
-        "packages/nmath/src",
-        "packages/nmath/bin",
-        "apps/nmath-vscode/src",
-      ])
-        .trim()
-        .split("\n"),
-    ]),
-  );
   const inputs = Object.fromEntries(
-    inputPaths.map((file) => [file, hash(readFileSync(join(root, file)))]),
+    sourceInputPaths().map((file) => [
+      file,
+      hash(readFileSync(join(root, file))),
+    ]),
   );
   const inventory = {
     schemaVersion: 1,
@@ -543,8 +573,7 @@ export function render(stage, output, reviewFile) {
     !inventory.components.length
   )
     throw new Error("Invalid actual-source inventory");
-  for (const [file, digest] of Object.entries(inventory.locks))
-    checkDigest(readFileSync(join(root, file)), digest);
+  verifySourceInputs(inventory.locks);
   const review = reviewFile ? json(reviewFile) : undefined;
   if (review) {
     checkDigest(inventoryBytes, review.inventorySha256);
@@ -638,8 +667,7 @@ export function verifyBundle(bundle, { allowPending = false } = {}) {
   )
     throw new Error("A reviewed actual-source license bundle is required");
   checkDigest(readFileSync(bundle), receipt.bundleSha256);
-  for (const [file, digest] of Object.entries(receipt.locks))
-    checkDigest(readFileSync(join(root, file)), digest);
+  verifySourceInputs(receipt.locks);
   return receipt;
 }
 

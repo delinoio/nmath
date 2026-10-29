@@ -17,6 +17,8 @@ import {
   bundleRelativePath,
   render,
   verifyBundle,
+  sourceInputPaths,
+  verifySourceInputs,
 } from "../../packages/nmath/scripts/license-bundle.mjs";
 
 const digest = (text) => createHash("sha256").update(text).digest("hex");
@@ -31,11 +33,12 @@ function fixture(t) {
     schemaVersion: 1,
     kind: "actual-source-inventory",
     revision: "a".repeat(40),
-    locks: {
-      "Cargo.lock": digest(
-        readFileSync(new URL("../../Cargo.lock", import.meta.url)),
-      ),
-    },
+    locks: Object.fromEntries(
+      sourceInputPaths().map((file) => [
+        file,
+        digest(readFileSync(new URL("../../" + file, import.meta.url))),
+      ]),
+    ),
     components: [
       {
         id: "synthetic:component",
@@ -173,4 +176,46 @@ test("Windows bundle containment rejects a different drive or UNC share", () => 
     ),
     "lib/file.js",
   );
+});
+
+test("source membership rejects added build scripts and notices before and after staging", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "license-membership-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  execFileSync("git", ["init", "--quiet", dir]);
+  for (const file of sourceInputPaths(dir)) {
+    mkdirSync(join(dir, file, ".."), { recursive: true });
+    writeFileSync(join(dir, file), "fixture");
+  }
+  const locks = Object.fromEntries(
+    sourceInputPaths(dir).map((file) => [
+      file,
+      digest(readFileSync(join(dir, file))),
+    ]),
+  );
+  verifySourceInputs(locks, dir);
+  for (const name of ["build.rs", "IMPORTED-NOTICE.txt"]) {
+    const file = `crates/nmath-core/${name}`;
+    mkdirSync(join(dir, "crates/nmath-core"), { recursive: true });
+    writeFileSync(join(dir, file), "new input");
+    assert.throws(() => verifySourceInputs(locks, dir), /membership changed/);
+    execFileSync("git", ["-C", dir, "add", file]);
+    assert.throws(() => verifySourceInputs(locks, dir), /membership changed/);
+    execFileSync("git", ["-C", dir, "rm", "--cached", file]);
+    rmSync(join(dir, file));
+    verifySourceInputs(locks, dir);
+  }
+});
+test("render and bundle verification reject incomplete source inventories", (t) => {
+  const f = fixture(t);
+  render(f.stage, f.output);
+  const receipt = JSON.parse(readFileSync(`${f.output}.json`, "utf8"));
+  delete receipt.locks["Cargo.toml"];
+  writeFileSync(`${f.output}.json`, JSON.stringify(receipt));
+  assert.throws(
+    () => verifyBundle(f.output, { allowPending: true }),
+    /membership changed/,
+  );
+  delete f.inventory.locks["Cargo.toml"];
+  f.save();
+  assert.throws(() => render(f.stage, f.output), /membership changed/);
 });
