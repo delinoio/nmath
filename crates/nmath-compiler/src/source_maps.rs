@@ -13,36 +13,24 @@ pub(crate) type Sources = BTreeMap<String, (String, String, TransformOutput)>;
 
 // The emitter counts ECMAScript line terminators in source maps. LSP uses a
 // separate CR/LF line model, so keep these conversions local to composition.
-fn ecma_lines(text: &str) -> Vec<(usize, usize)> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((index, ch)) = chars.next() {
-        let end = match ch {
-            '\r' => {
-                if chars.peek().is_some_and(|(_, next)| *next == '\n') {
-                    chars.next();
-                    index + 2
-                } else {
-                    index + 1
-                }
-            }
-            '\n' => index + 1,
-            '\u{2028}' | '\u{2029}' => index + ch.len_utf8(),
-            _ => continue,
-        };
-        lines.push((start, index));
-        start = end;
-    }
-    lines.push((start, text.len()));
-    lines
-}
-
 fn ecma_offset_of_line_character(text: &str, line: u32, character: u32) -> u32 {
-    let lines = ecma_lines(text);
-    let &(start, end) = lines
-        .get(line as usize)
-        .unwrap_or_else(|| lines.last().unwrap());
+    let starts = tsrs_core::compute_ecma_line_starts(text);
+    let line = (line as usize).min(starts.len() - 1);
+    let start = starts[line] as usize;
+    let end = if let Some(&next) = starts.get(line + 1) {
+        let before_next = &text[..next as usize];
+        let terminator_len = if before_next.ends_with("\r\n") {
+            2
+        } else if before_next.ends_with('\r') || before_next.ends_with('\n') {
+            1
+        } else {
+            // The pinned ECMA line map only has these two remaining breaks.
+            '\u{2028}'.len_utf8()
+        };
+        next as usize - terminator_len
+    } else {
+        text.len()
+    };
     let mut units = 0;
     for (index, ch) in text[start..end].char_indices() {
         if units >= character {
@@ -55,9 +43,9 @@ fn ecma_offset_of_line_character(text: &str, line: u32, character: u32) -> u32 {
 
 fn ecma_line_character(text: &str, offset: u32) -> (u32, u32) {
     let offset = (offset as usize).min(text.len());
-    let lines = ecma_lines(text);
-    let line = lines.partition_point(|(start, _)| *start <= offset) - 1;
-    let start = lines[line].0;
+    let starts = tsrs_core::compute_ecma_line_starts(text);
+    let line = starts.partition_point(|start| *start as usize <= offset) - 1;
+    let start = starts[line] as usize;
     let mut end = offset;
     while !text.is_char_boundary(end) {
         end -= 1;
