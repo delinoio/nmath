@@ -29,7 +29,7 @@ Component IDs:
 
 | Domain     | Canonical path           | Component ID     | Status  |
 | ---------- | ------------------------ | ---------------- | ------- |
-| `crates`   | `crates/nmath-core/`     | `nmath-core`     | planned |
+| `crates`   | `crates/nmath-core/`     | `nmath-core`     | active  |
 | `crates`   | `crates/nmath-node/`     | `nmath-node`     | planned |
 | `crates`   | `crates/nmath-nts/`      | `nmath-nts`      | planned |
 | `crates`   | `crates/nmath-compiler/` | `nmath-compiler` | planned |
