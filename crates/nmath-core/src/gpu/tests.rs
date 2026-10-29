@@ -136,7 +136,7 @@ fn native_cancellation_after_submission_drains_before_release() {
 
 #[test]
 #[ignore = "requires an actual supported native GPU"]
-fn native_precision_guard_rejects_observed_loss() {
+fn native_precision_guard_verifies_integer_preservation() {
     let cpu = MemoryBudget::new(Device::Cpu, 1024);
     let gpu = MemoryBudget::new(Device::Gpu, 1024);
     let token = CancellationToken::new();
@@ -160,12 +160,100 @@ fn native_precision_guard_rejects_observed_loss() {
     let result = runtime.run(&e, &a, Some(&b)).unwrap();
     let words = runtime.read_words(&result, 2).unwrap();
     eprintln!("Float32 preservation probe: actual {words:08x?}, required [00000002, 00400000]");
-    if words == [2, 0x00400000] {
-        runtime.require_float32_preservation().unwrap();
-    } else {
-        assert_eq!(
-            runtime.require_float32_preservation().unwrap_err().code,
-            ErrorCode::GpuUnavailable
-        );
+    assert_eq!(words, [2, 0x00400000]);
+    runtime.require_float32_preservation().unwrap();
+}
+
+// This diagnostic deliberately uses native pow, outside the production
+// integer kernels. A passing diagnostic is not power acceptance: it records
+// device behavior and verifies that the unimplemented operation stays rejected.
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_power_precision_diagnostic() {
+    let cpu = MemoryBudget::new(Device::Cpu, 1024);
+    let gpu = MemoryBudget::new(Device::Gpu, 1024);
+    let token = CancellationToken::new();
+    let runtime = Runtime::new(&cpu, &gpu, &token).unwrap();
+    let a = runtime
+        .upload(&Buffer::F32(vec![
+            f32::from_bits(1),
+            1.0,
+            2.0f32.powi(-70),
+            2.0,
+        ]))
+        .unwrap();
+    let out = runtime
+        .allocate(
+            8,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            false,
+        )
+        .unwrap();
+    let module = runtime
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("native power diagnostic"),
+            source: wgpu::ShaderSource::Wgsl(
+                r#"
+            @group(0) @binding(0) var<storage, read> a: array<f32>;
+            @group(0) @binding(1) var<storage, read_write> out: array<u32>;
+            @compute @workgroup_size(1) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+                out[id.x] = bitcast<u32>(pow(a[id.x * 2u], a[id.x * 2u + 1u]));
+            }
+        "#
+                .into(),
+            ),
+        });
+    let pipeline = runtime
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("native power diagnostic"),
+            layout: None,
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+    let bind = runtime
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: a.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: out.buffer.as_entire_binding(),
+                },
+            ],
+        });
+    let mut encoder = runtime.device.create_command_encoder(&Default::default());
+    {
+        let mut pass = encoder.begin_compute_pass(&Default::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind, &[]);
+        pass.dispatch_workgroups(2, 1, 1);
     }
+    runtime.queue.submit([encoder.finish()]);
+    runtime.drain().unwrap();
+    let words = runtime.read_words(&out, 2).unwrap();
+    eprintln!(
+        "Native pow diagnostic: actual {words:08x?}, NumPy 2.5.4 required [00000001, 00000200]"
+    );
+    let input = Expr::input(&NdArray::from_dense(
+        0,
+        DenseArray::new(vec![1], Buffer::F32(vec![2.0]), Reservation::none()).unwrap(),
+    ));
+    let power = Expr::binary(kernels::BinaryOp::Pow, &input, &input).unwrap();
+    assert_eq!(
+        validate(&power).unwrap_err().code,
+        ErrorCode::GpuUnsupportedOperation
+    );
+    assert_eq!(
+        shader::generate(&power).unwrap_err().code,
+        ErrorCode::GpuUnsupportedOperation
+    );
 }

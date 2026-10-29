@@ -328,3 +328,185 @@ fn native_integer_matmul_and_broadcast() {
         Buffer::I32(vec![1200])
     );
 }
+
+#[path = "gpu/float32_edges.rs"]
+mod float32_edges;
+
+fn assert_float_words(actual: Buffer, expected: &[u32], label: &str) {
+    let Buffer::F32(actual) = actual else {
+        panic!("Expected float32")
+    };
+    assert_eq!(actual.len(), expected.len());
+    for (i, (actual, &expected)) in actual.iter().zip(expected).enumerate() {
+        if f32::from_bits(expected).is_nan() {
+            assert!(actual.is_nan(), "{label} at {i}: {actual:?}");
+        } else {
+            assert_eq!(actual.to_bits(), expected, "{label} at {i}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_exact_edge_oracles() {
+    let cases = float32_edges::CASES;
+    let a = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[0])).collect()),
+    );
+    let b = input(
+        vec![cases.len()],
+        Buffer::F32(cases.iter().map(|r| f32::from_bits(r[1])).collect()),
+    );
+    for (column, op) in [
+        BinaryOp::Add,
+        BinaryOp::Sub,
+        BinaryOp::Mul,
+        BinaryOp::Div,
+        BinaryOp::Mod,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let result = execute(&Expr::binary(op, &a, &b).unwrap()).unwrap();
+        assert_float_words(
+            result.buffer,
+            &cases.iter().map(|r| r[column + 2]).collect::<Vec<_>>(),
+            &format!("{op:?}"),
+        );
+    }
+    for op in [UnaryOp::Pos, UnaryOp::Neg] {
+        let result = execute(&Expr::unary(op, &a).unwrap()).unwrap();
+        // Unary operations are bit operations, including NaN payloads.
+        let Buffer::F32(actual) = result.buffer else {
+            panic!()
+        };
+        for (v, row) in actual.iter().zip(cases) {
+            assert_eq!(
+                v.to_bits(),
+                row[0] ^ if op == UnaryOp::Neg { 0x80000000 } else { 0 }
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_subnormal_reductions_and_matmul() {
+    let a = input(vec![2, 600], Buffer::F32(vec![f32::from_bits(1); 1200]));
+    for (op, bits) in [
+        (ReduceOp::Sum, 600),
+        (ReduceOp::Mean, 1),
+        (ReduceOp::Min, 1),
+        (ReduceOp::Max, 1),
+    ] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, Some(vec![1])).unwrap())
+                .unwrap()
+                .buffer,
+            &[bits, bits],
+            &format!("{op:?}"),
+        );
+    }
+    let b = input(vec![600], Buffer::F32(vec![2.0; 600]));
+    assert_float_words(
+        execute(&Expr::matmul(&a, &b).unwrap()).unwrap().buffer,
+        &[1200, 1200],
+        "subnormal dot",
+    );
+    let a = input(
+        vec![2, 2],
+        Buffer::F32(vec![
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+        ]),
+    );
+    let b = input(vec![2, 2], Buffer::F32(vec![0.5, 0.0, 0.0, 0.5]));
+    assert_float_words(
+        execute(&Expr::matmul(&a, &b).unwrap()).unwrap().buffer,
+        &[0x00400000, 0x80400000, 0x00400000, 0x80400000],
+        "normal input underflow",
+    );
+    let a = input(
+        vec![4],
+        Buffer::F32(vec![
+            f32::from_bits(1),
+            f32::from_bits(0x80000001),
+            0.0,
+            -0.0,
+        ]),
+    );
+    for (op, bits) in [(ReduceOp::Min, 0x80000001), (ReduceOp::Max, 1)] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, None).unwrap())
+                .unwrap()
+                .buffer,
+            &[bits],
+            "subnormal order",
+        );
+    }
+}
+
+#[test]
+fn float32_power_rejects_before_execution() {
+    let a = input(vec![1], Buffer::F32(vec![2.0]));
+    let power = Expr::binary(BinaryOp::Pow, &a, &a).unwrap();
+    assert_eq!(
+        gpu::validate(&power).unwrap_err().code,
+        error::ErrorCode::GpuUnsupportedOperation
+    );
+    assert_eq!(
+        gpu::validate(&Expr::unary(UnaryOp::Neg, &power).unwrap())
+            .unwrap_err()
+            .code,
+        error::ErrorCode::GpuUnsupportedOperation
+    );
+}
+
+#[test]
+#[ignore = "requires an actual supported native GPU"]
+fn native_float32_reduction_special_oracles() {
+    // NumPy 2.5.4, float32, axis=1. In particular min/max distinguish
+    // opposite signed zeros independently of their order in these rows.
+    let a = input(
+        vec![6, 2],
+        Buffer::F32(vec![
+            f32::NAN,
+            1.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            -0.0,
+            0.0,
+            0.0,
+            -0.0,
+            f32::from_bits(1),
+            f32::from_bits(0x80000001),
+            f32::MAX,
+            f32::MAX,
+        ]),
+    );
+    for (op, expected) in [
+        (ReduceOp::Sum, [0x7fc00000, 0x7fc00000, 0, 0, 0, 0x7f800000]),
+        (
+            ReduceOp::Mean,
+            [0x7fc00000, 0x7fc00000, 0, 0, 0, 0x7f800000],
+        ),
+        (
+            ReduceOp::Min,
+            [
+                0x7fc00000, 0xff800000, 0x80000000, 0x80000000, 0x80000001, 0x7f7fffff,
+            ],
+        ),
+        (ReduceOp::Max, [0x7fc00000, 0x7f800000, 0, 0, 1, 0x7f7fffff]),
+    ] {
+        assert_float_words(
+            execute(&Expr::reduce(op, &a, Some(vec![1])).unwrap())
+                .unwrap()
+                .buffer,
+            &expected,
+            &format!("{op:?}"),
+        );
+    }
+}

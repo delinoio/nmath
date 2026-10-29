@@ -10,7 +10,7 @@ use crate::{
 
 fn ty(dtype: DType) -> &'static str {
     match dtype {
-        DType::Float32 => "f32",
+        DType::Float32 => "u32",
         DType::Int32 => "i32",
         _ => "u32",
     }
@@ -40,59 +40,22 @@ fn index(shape: &[usize], output: &[usize], linear: &str) -> String {
     }
 }
 
-const FLOAT_HELPERS: &str = r#"
-fn nan(x: f32) -> bool { return (bitcast<u32>(x) & 0x7fffffffu) > 0x7f800000u; }
-fn inf(x: f32) -> bool { return (bitcast<u32>(x) & 0x7fffffffu) == 0x7f800000u; }
-fn zero(x: f32) -> bool { return (bitcast<u32>(x) & 0x7fffffffu) == 0u; }
-fn qnan() -> f32 { return bitcast<f32>(0x7fc00000u); }
-fn signedzero(x: f32) -> f32 { return bitcast<f32>(bitcast<u32>(x) & 0x80000000u); }
-fn divf(x: f32, y: f32) -> f32 {
-    let sign = (bitcast<u32>(x) ^ bitcast<u32>(y)) & 0x80000000u;
-    if nan(x) || nan(y) || (zero(x) && zero(y)) || (inf(x) && inf(y)) { return qnan(); }
-    if zero(y) || inf(x) { return bitcast<f32>(sign | 0x7f800000u); }
-    if zero(x) || inf(y) { return bitcast<f32>(sign); }
-    return x / y;
-}
-fn modf(x: f32, y: f32) -> f32 {
-    if nan(x) || nan(y) || zero(y) || inf(x) { return qnan(); }
-    var r = x % y;
-    if inf(y) { r = x; }
-    if zero(r) { return signedzero(y); }
-    if (r < 0.0) != (y < 0.0) { r += y; }
-    return r;
-}
-fn powf(x: f32, y: f32) -> f32 {
-    if zero(y) || x == 1.0 { return 1.0; }
-    if nan(x) || nan(y) { return qnan(); }
-    let odd = abs(y) < 16777216.0 && (abs(y) % 2.0) == 1.0;
-    if x < 0.0 && !inf(x) && !inf(y) && trunc(y) != y { return qnan(); }
-    if abs(x) == 1.0 && inf(y) { return 1.0; }
-    var r = pow(abs(x), y);
-    if zero(x) { r = select(bitcast<f32>(0x7f800000u), 0.0, y > 0.0); }
-    if inf(x) { r = select(0.0, bitcast<f32>(0x7f800000u), y > 0.0); }
-    if inf(y) { r = select(0.0, bitcast<f32>(0x7f800000u), (abs(x) > 1.0) == (y > 0.0)); }
-    if (bitcast<u32>(x) & 0x80000000u) != 0u && odd { r = -r; }
-    return r;
-}
-fn minf(x: f32, y: f32) -> f32 {
-    if nan(x) { return x; } if nan(y) { return y; }
-    return select(y, x, x < y);
-}
-fn maxf(x: f32, y: f32) -> f32 {
-    if nan(x) { return x; } if nan(y) { return y; }
-    return select(y, x, x > y);
-}
-"#;
+const FLOAT_HELPERS: &str = include_str!("float32.wgsl");
 
 fn binary(op: BinaryOp, dtype: DType) -> String {
     let t = ty(dtype);
     let body = match op {
+        BinaryOp::Add if dtype == DType::Float32 => "return addf(x, y);".into(),
+        BinaryOp::Sub if dtype == DType::Float32 => "return addf(x, y ^ 0x80000000u);".into(),
+        BinaryOp::Mul if dtype == DType::Float32 => "return mulf(x, y);".into(),
         BinaryOp::Add => "return x + y;".into(),
         BinaryOp::Sub => "return x - y;".into(),
         BinaryOp::Mul => "return x * y;".into(),
         BinaryOp::Div => "return divf(x, y);".into(),
         BinaryOp::Mod if dtype == DType::Float32 => "return modf(x, y);".into(),
-        BinaryOp::Pow if dtype == DType::Float32 => "return powf(x, y);".into(),
+        BinaryOp::Pow if dtype == DType::Float32 => {
+            unreachable!("float32 power is rejected before shader generation")
+        }
         BinaryOp::Mod if dtype == DType::Int32 => {
             "if y == 0 || (x == bitcast<i32>(0x80000000u) && y == -1) { return 0; } var r = x % y; \
              if r != 0 && ((r < 0) != (y < 0)) { r += y; } return r;"
@@ -113,6 +76,19 @@ fn binary(op: BinaryOp, dtype: DType) -> String {
 }
 
 pub(super) fn generate(expr: &Expr) -> Result<String> {
+    if expr.dtype() == DType::Float32
+        && matches!(
+            expr.kind(),
+            ExprKind::Binary {
+                op: BinaryOp::Pow,
+                ..
+            }
+        )
+    {
+        return Err(unsupported(
+            "Float32 power has no precision-preserving GPU shader.",
+        ));
+    }
     let t = ty(expr.dtype());
     let count = elements(expr.shape())?;
     let mut source = format!(
@@ -125,6 +101,14 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
         source.push_str(FLOAT_HELPERS);
     }
     let body = match expr.kind() {
+        ExprKind::Unary(op, _) if expr.dtype() == DType::Float32 => format!(
+            "out[i] = a[i] ^ {}u;",
+            if *op == UnaryOp::Neg {
+                0x80000000u32
+            } else {
+                0
+            }
+        ),
         ExprKind::Unary(op, _) => format!(
             "out[i] = {}a[i];",
             if *op == UnaryOp::Neg {
@@ -193,12 +177,31 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
                 _ => format!("{t}(0)"),
             };
             let update = match op {
+                ReduceOp::Sum | ReduceOp::Mean if expr.dtype() == DType::Float32 => {
+                    "v = addf(v, x);".into()
+                }
                 ReduceOp::Sum | ReduceOp::Mean => "v += x;".into(),
-                ReduceOp::Min => format!("v = {}(v, x);", if t == "f32" { "minf" } else { "min" }),
-                ReduceOp::Max => format!("v = {}(v, x);", if t == "f32" { "maxf" } else { "max" }),
+                ReduceOp::Min => format!(
+                    "v = {}(v, x);",
+                    if expr.dtype() == DType::Float32 {
+                        "minf"
+                    } else {
+                        "min"
+                    }
+                ),
+                ReduceOp::Max => format!(
+                    "v = {}(v, x);",
+                    if expr.dtype() == DType::Float32 {
+                        "maxf"
+                    } else {
+                        "max"
+                    }
+                ),
             };
             let finish = if *op == ReduceOp::Mean {
-                format!("out[i] = v; if params[3] == {n}u {{ out[i] = divf(v, f32({n}u)); }}")
+                format!(
+                    "out[i] = v; if params[3] == {n}u {{ out[i] = divf(v, pack(0u, {n}u, 26)); }}"
+                )
             } else {
                 "out[i] = v;".into()
             };
@@ -224,11 +227,16 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
             let batch = crate::shape::broadcast_shapes(ab, bb)?;
             let ai = index(ab, &batch, "batch");
             let bi = index(bb, &batch, "batch");
+            let accumulate = if expr.dtype() == DType::Float32 {
+                format!("v = addf(v, mulf(a[abase + row * {k}u + j], b[bbase + j * {n}u + col]));")
+            } else {
+                format!("v += a[abase + row * {k}u + j] * b[bbase + j * {n}u + col];")
+            };
             format!(
                 "let batch = i / {}u; let row = (i / {}u) % {}u; let col = i % {}u; let abase = \
                  ({ai}) * {}u; let bbase = ({bi}) * {}u; var v = {t}(0); if params[2] != 0u {{ v \
-                 = out[i]; }} for (var j = params[2]; j < params[3]; j++) {{ v += a[abase + row * \
-                 {k}u + j] * b[bbase + j * {n}u + col]; }} out[i] = v;",
+                 = out[i]; }} for (var j = params[2]; j < params[3]; j++) {{ {accumulate} }} \
+                 out[i] = v;",
                 (m * n).max(1),
                 n.max(1),
                 m.max(1),

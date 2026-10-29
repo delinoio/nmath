@@ -90,8 +90,14 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             lhs,
             rhs,
             compute_dtype,
-            ..
+            op,
         } => {
+            if *compute_dtype == DType::Float32 && *op == kernels::BinaryOp::Pow {
+                return Err(unsupported(
+                    "Float32 GPU power lacks a validated precision-preserving implementation. Use \
+                     explicit CPU execution.",
+                ));
+            }
             if !supported_dtype(*compute_dtype) {
                 return Err(unsupported(
                     "Binary promotion requires an unsupported GPU dtype.",
@@ -231,11 +237,9 @@ impl<'a> Runtime<'a> {
         })
     }
 
-    /// WGSL permits flushing subnormals. Reject a device that demonstrably
-    /// loses float32 precision instead of returning silently narrowed values.
-    /// This probe is only a rejection guard, not numerical or release
-    /// acceptance. Remove it only when the kernels preserve subnormal
-    /// arithmetic themselves.
+    /// Verify the integer preservation kernel on the selected device. This
+    /// rejection guard is not full numerical acceptance or a hardware
+    /// allowlist.
     fn require_float32_preservation(&self) -> Result<()> {
         let left_charge = self.cpu.reserve(8)?;
         let left = DenseArray::new(
