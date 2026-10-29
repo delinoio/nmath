@@ -446,6 +446,7 @@ dependencies = [
  "tsrs_diagnostics",
  "tsrs_execute",
  "tsrs_ipc",
+ "tsrs_sourcemap",
  "tsrs_spanmap",
  "tsrs_vfs",
 ]

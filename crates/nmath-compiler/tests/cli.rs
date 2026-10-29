@@ -179,12 +179,15 @@ fn build_writes_javascript_declarations_and_source_maps() {
         files,
         [
             "lib.d.ts",
+            "lib.d.ts.map",
             "lib.js",
             "lib.js.map",
             "main.d.ts",
+            "main.d.ts.map",
             "main.js",
             "main.js.map",
             "plain.d.ts",
+            "plain.d.ts.map",
             "plain.js",
             "plain.js.map"
         ]

@@ -159,7 +159,16 @@ fn run_inner(command: ProjectCommand, options: &ProjectOptions) -> CompilerResul
     match command {
         ProjectCommand::Check => args.push("--noEmit".to_string()),
         ProjectCommand::Build => {
-            args.extend(["--declaration", "--sourceMap", "--noEmit", "false"].map(String::from));
+            args.extend(
+                [
+                    "--declaration",
+                    "--declarationMap",
+                    "--sourceMap",
+                    "--noEmit",
+                    "false",
+                ]
+                .map(String::from),
+            );
         }
     }
     let names = FileNames {
@@ -282,10 +291,10 @@ fn run_pass(
 /// owned by the external content mapper or build tool"). After the checked pass
 /// succeeds, a second tsrs pass compiles the lowered TypeScript of each `.nts`
 /// file as a virtual `.ts` file next to it with `--noCheck`, so the output
-/// layout and compiler options match the project. Its source maps point at the
-/// lowered TypeScript (embedded with `--inlineSources`), not at original `.nts`
-/// positions. Remove this pass if tsrs gains a mapper-owned JavaScript
-/// emit hook at a pinned commit.
+/// layout and compiler options match the project. Compose its source maps with
+/// the transform maps before publishing any output, so debugging uses `.nts`.
+/// Remove this pass if tsrs gains a mapper-owned JavaScript emit hook at a
+/// pinned commit.
 fn emit_nts_javascript(
     nts_files: &BTreeSet<String>,
     names: &FileNames,
@@ -297,6 +306,7 @@ fn emit_nts_javascript(
     }
     let mut virtual_files = BTreeMap::new();
     let mut virtual_to_nts = BTreeMap::new();
+    let mut mapped_sources = BTreeMap::new();
     let mut errors = Vec::new();
     for nts in nts_files {
         let lowered_path = format!(
@@ -326,10 +336,9 @@ fn emit_nts_javascript(
                 continue;
             }
         };
-        virtual_files.insert(
-            lowered_path.clone(),
-            nmath_nts::transform(nts, &source).text,
-        );
+        let transformed = nmath_nts::transform(nts, &source);
+        virtual_files.insert(lowered_path.clone(), transformed.text.clone());
+        mapped_sources.insert(lowered_path.clone(), (nts.clone(), source, transformed));
         virtual_to_nts.insert(lowered_path, nts.clone());
     }
     if !errors.is_empty() {
@@ -354,6 +363,12 @@ fn emit_nts_javascript(
         "false",
         "--sourceMap",
         "--inlineSources",
+        "--inlineSourceMap",
+        "false",
+        "--sourceRoot",
+        "",
+        "--mapRoot",
+        "",
         "--noEmit",
         "false",
     ]
@@ -382,7 +397,19 @@ fn emit_nts_javascript(
             })
             .collect());
     }
-    Ok(pass.writes)
+    let mut writes = pass.writes;
+    for (path, text) in &mut writes {
+        if path.ends_with(".js.map") {
+            *text =
+                crate::source_maps::compose(path, text, &mapped_sources).map_err(|message| {
+                    vec![CompilerDiagnostic::without_location(
+                        CompilerCode::Emit,
+                        message,
+                    )]
+                })?;
+        }
+    }
+    Ok(writes)
 }
 
 /// Drops compiler syntax errors that repeat an `NMATH_NTS_PARSE` diagnostic at
