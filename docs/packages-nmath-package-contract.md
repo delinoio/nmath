@@ -195,6 +195,38 @@ The pandas and Polars entry points export `read_csv(context, path, options?)` an
 
 The numeric token, validity, memory, cancellation, atomic publication and unsupported-option limits are defined in the runtime text-file contract. Unsupported orientations/options, richer dtypes and upstream default-policy differences remain open compatibility obligations. No Python runtime is required.
 
+## Workflow benchmark protocol
+
+The development-only harness in `packages/nmath/scripts/benchmarks/` runs three synthetic workflows: a 128 by 128 float32 matrix product, a 32,768-row int64 group sum with 64 groups through both pandas and Polars APIs, and an 8,192-element float32 Horner polynomial authored in `.nts`. The seed is 20261029. Each stream starts from that seed and uses the unsigned 32-bit recurrence `state = 1664525 * state + 1013904223`; values are `(state >>> 24) % 16 - 8`. The matrix right operand is the transpose of the left. Table keys are row index modulo 64. The algorithm is `(x * 2 + 3) * x + 1`.
+
+Small integer-valued inputs keep every float32 intermediate exact. Full-output SHA-256 digests cover comma-separated decimal integer values, with schema and missing-value checks performed separately. Exact equality is a workload-specific criterion, not a tolerance decision for general floating-point operations. An independent integer reference checks generated oracle results. The checked-in fixture records NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0; regeneration rejects other versions. No Python dependency is needed for native benchmark execution or its correctness checks.
+
+Run with Node.js 24 and the pinned pnpm from the repository root:
+
+```sh
+pnpm exec turbo run benchmark --filter=@delinoio/nmath -- --output /tmp/nmath-cpu.json
+pnpm exec turbo run benchmark --filter=@delinoio/nmath -- --device gpu --output /tmp/nmath-gpu.json
+pnpm exec turbo run test:benchmarks --filter=@delinoio/nmath
+```
+
+The output parent directory must exist. Each run replaces the requested report with atomic complete JSON snapshots. Use a separate output path for each experiment. On POSIX hosts, SIGINT/SIGTERM abort native work or compilation and preserve completed measurements and an interrupted status. Windows forced termination does not provide this guarantee; its SIGTERM test is skipped. Errors produce a failed report and a nonzero exit. SIGKILL or a power loss cannot produce a final status; a running report is incomplete evidence.
+
+`benchmark` and `test:benchmarks` depend on the package and compiler builds and are uncached. `benchmark:originals` is uncached and development-only. Put a dedicated environment containing the exact versions in `compatibility/oracle-requirements.txt` on PATH before running it:
+
+```sh
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 POLARS_MAX_THREADS=1 VECLIB_MAXIMUM_THREADS=1 pnpm exec turbo run benchmark:originals --filter=@delinoio/nmath -- --output /tmp/nmath-originals.json
+```
+
+To regenerate the fixture, append `--fixture test/fixtures/benchmarks/originals.json`; that path is relative to the owning package. Turbo passes the five listed thread controls explicitly. The report records their values and NumPy build configuration. Missing original environments or mismatched versions fail rather than substitute other releases. Python RSS high-water measurement is unavailable on platforms without the `resource` module and is reported as null.
+
+Default runs use two warmups and nine measured executions, configurable with `--warmup` and `--samples`. Each native workload checks all output values, shape, dtype and validity before timing, and checks every measured result outside the timed interval. The harness reports raw samples, median, nearest-rank p95, median absolute deviation and extrema without deleting outliers. Run performance experiments separately from test suites and other workloads; repeat independent process runs when studying variance. These small representative inputs do not establish scaling behavior for all dataset sizes.
+
+Native reports separate import, compilation, setup/input construction, first execution, compute wall time and output extraction. Native execution metrics include snapshots and scheduler work within their existing boundary. Wall minus queue and execution metrics is a signed residual estimate, not an isolated N-API timer. A one-element probe exposes a small dispatch workload. RSS samples, process-lifetime maximum RSS and cumulative context CPU/GPU allocation peaks have different accounting scopes; none is advertised as a kernel-only memory measurement. Original benchmarks exclude imports, input generation, correctness checks and output extraction from timed compute, and expose first execution separately.
+
+GPU requests apply only to numerical arrays. Tabular measurements remain CPU. A full-array identity probe reports transfer-inclusive time and logical input/output bytes. Isolated upload/download times are null because public metrics provide no transfer timestamps; that measurement gap remains explicit. Device initialization and pipeline setup may occur in first execution. No automatic fallback, retry, official GPU allowlist approval or speedup claim follows from a completed report. Known unaccepted GPU power differences remain outside this workload and are not waived.
+
+Reports record source revision, dirty-tree state, script/fixture/algorithm/native-binary hashes, exact software and hardware metadata, commands, versions and seed. Original-library reports obtain Linux CPU models from `/proc/cpuinfo` and macOS models from `sysctl`. They record identification status and source; an unavailable model is null with an explicit reason, never an architecture substituted as a model. Keep local reports and logs in external validation artifacts, not source-of-truth contracts. Cross-platform execution and wider numerical acceptance remain separate release requirements.
+
 ### Columnar file API
 
 `ctx.readColumnar(path, 'arrow' | 'parquet', {signal}?)` returns a Promise of `{columns, validity, rows}`. Columns are context-owned materialized `NMathArray` instances keyed by name; validity masks are materialized boolean arrays. Their public types expose scalar reads, TypedArray conversion and disposal. `ctx.writeColumnar(path, format, columns, validity?, {overwrite, signal}?)` returns `Promise<void>`. The exact local path is used; suffixes are not added. `overwrite` defaults to false. Dispose returned value and validity arrays when finished.

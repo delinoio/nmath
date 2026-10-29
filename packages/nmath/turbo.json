@@ -49,6 +49,24 @@
     },
     "oracle:check": {
       "cache": false
+    },
+    "benchmark": {
+      "dependsOn": ["build", "build:compiler"],
+      "cache": false
+    },
+    "benchmark:originals": {
+      "cache": false,
+      "env": [
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "POLARS_MAX_THREADS",
+        "VECLIB_MAXIMUM_THREADS"
+      ]
+    },
+    "test:benchmarks": {
+      "cache": false,
+      "dependsOn": ["build", "build:compiler"]
     }
   }
 }

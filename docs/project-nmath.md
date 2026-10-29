@@ -101,3 +101,7 @@ The npm component also owns `packages/nmath/compatibility/` for fixed-version AP
 - [Project template](project-template.md)
 
 Numeric CSV/JSON file adapters belong to the existing core, pandas and Polars entry points. The [runtime contract](crates-nmath-runtime-contract.md#numeric-csv-and-json-records) owns numeric codecs and scheduled publication; the [package contract](packages-nmath-package-contract.md#csv-and-json-js-adaptations) owns explicit-context JS adaptation and schema fidelity.
+
+## Reproducible workflow benchmarks
+
+The npm component owns `packages/nmath/scripts/benchmarks/`, `packages/nmath/test/fixtures/benchmarks/` and `packages/nmath/test/benchmarks.test.mjs`. These development tools measure matrix calculation, pandas/Polars tabular aggregation, and a compiled `.nts` numerical algorithm. The [package contract](packages-nmath-package-contract.md#workflow-benchmark-protocol) defines the protocol and evidence limits.
