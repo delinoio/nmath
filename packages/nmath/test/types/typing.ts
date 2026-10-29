@@ -55,6 +55,30 @@ const s0 = m.sum(0);
 assertTrue<Equal<(typeof s0)["shape"], [3]>>();
 const vtotal = v.sum();
 assertTrue<Equal<(typeof vtotal)["dtype"], "int64">>();
+const numpySum = np.sum(v);
+const numpyMean = np.mean(v);
+const numpyMin = np.min(v);
+const numpyMax = np.max(v);
+assertTrue<Equal<typeof numpySum, Expr<"int64", []>>>();
+assertTrue<Equal<typeof numpyMean, Expr<"float64", []>>>();
+assertTrue<Equal<typeof numpyMin, Expr<"int32", []>>>();
+assertTrue<Equal<typeof numpyMax, Expr<"int32", []>>>();
+
+// Literal axes keep the remaining dimensions and each operation's dtype.
+const numpyRows = ctx.zeros([2, 3] as const, "float32");
+assertTrue<Equal<typeof numpyRows, NMathArray<"float32", readonly [2, 3]>>>();
+const sumAxis0 = np.sum(numpyRows, 0);
+const meanAxis1 = np.mean(numpyRows, 1);
+const minAxis0 = np.min(numpyRows, 0);
+const maxAxis1 = np.max(numpyRows, 1);
+assertTrue<Equal<typeof sumAxis0, Expr<"float32", [3]>>>();
+assertTrue<Equal<typeof meanAxis1, Expr<"float32", [2]>>>();
+assertTrue<Equal<typeof minAxis0, Expr<"float32", [3]>>>();
+assertTrue<Equal<typeof maxAxis1, Expr<"float32", [2]>>>();
+declare const dynamicAxis: number;
+const dynamicSum = np.sum(numpyRows, dynamicAxis);
+assertTrue<Equal<typeof dynamicSum, Expr<"float32", number[]>>>();
+
 const mm = m.matmul(ctx.zeros([3, 5], "float32"));
 assertTrue<Equal<(typeof mm)["shape"], [2, 5]>>();
 // @ts-expect-error core dimensions 3 and 4 do not match
@@ -76,6 +100,26 @@ assertTrue<Equal<(typeof d)["shape"], number[]>>();
 async function results() {
   expectType<number>(await m.sum().compute());
   expectType<bigint>(await v.sum().compute());
+  expectType<bigint>(await numpySum.compute());
+  expectType<number>(await numpyMean.compute());
+  expectType<number>(await numpyMin.compute());
+  expectType<number>(await numpyMax.compute());
+  // @ts-expect-error rank-zero sum returns a bigint, not an array
+  (await numpySum.compute()).toArray();
+  // @ts-expect-error rank-zero mean returns a number, not an array
+  (await numpyMean.compute()).toArray();
+  // @ts-expect-error rank-zero min returns a number, not an array
+  (await numpyMin.compute()).toArray();
+  // @ts-expect-error rank-zero max returns a number, not an array
+  (await numpyMax.compute()).toArray();
+  expectType<Expr<"int64", []>>(np.sum(v, undefined));
+  expectType<Expr<"float64", []>>(np.mean(v, undefined));
+  expectType<Expr<"int32", []>>(np.min(v, undefined));
+  expectType<Expr<"int32", []>>(np.max(v, undefined));
+  expectType<Expr<"float32", number[]>>(np.sum(numpyRows, dynamicAxis));
+  expectType<Expr<"float32", number[]>>(np.mean(numpyRows, dynamicAxis));
+  expectType<Expr<"float32", number[]>>(np.min(numpyRows, dynamicAxis));
+  expectType<Expr<"float32", number[]>>(np.max(numpyRows, dynamicAxis));
   expectType<NMathArray<"float32", readonly [2, 3]>>(await m.neg().compute());
 }
 

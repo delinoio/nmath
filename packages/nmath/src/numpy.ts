@@ -93,16 +93,32 @@ export function negative<T extends Lazy<ComputableDType, Shape>>(x: T) {
 export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
   return x.pos();
 }
-export function sum(x: Lazy<ComputableDType, Shape>, axis?: number) {
+export function sum<
+  D extends ComputableDType,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
   return x.sum(axis);
 }
-export function mean(x: Lazy<ComputableDType, Shape>, axis?: number) {
+export function mean<
+  D extends ComputableDType,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
   return x.mean(axis);
 }
-export function min(x: Lazy<ComputableDType, Shape>, axis?: number) {
+export function min<
+  D extends ComputableDType,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
   return x.min(axis);
 }
-export function max(x: Lazy<ComputableDType, Shape>, axis?: number) {
+export function max<
+  D extends ComputableDType,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
   return x.max(axis);
 }
 export function matmul(

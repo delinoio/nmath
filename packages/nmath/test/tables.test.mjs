@@ -185,6 +185,103 @@ test("pandas dropna excludes float NaN keys while Polars retains them", async ()
     await ctx.close();
   }
 });
+test("join coalesces only the right key after resolving retained names", async () => {
+  const ctx = context();
+  try {
+    for (const [suffix, leftName] of [
+      [undefined, "k_right"],
+      ["_rhs", "k_rhs"],
+    ]) {
+      const left = new pl.DataFrame([
+        series(ctx, "k", [1, 2]),
+        series(ctx, leftName, [7, null]),
+      ]);
+      const right = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "w", [9]),
+      ]);
+      const options = { how: "left", suffix };
+      for (const result of [
+        await left.toPandas().merge(right.toPandas(), "k", options),
+        await left.lazy().join(right.lazy(), "k", options).collect(),
+      ]) {
+        assert.deepEqual(result.columns, ["k", leftName, "w"]);
+        assert.deepEqual(rows(result), [
+          [1, 7, 9],
+          [2, null, null],
+        ]);
+        const retained =
+          result instanceof pd.DataFrame
+            ? result.get(leftName)
+            : result.getColumn(leftName);
+        assert.ok(retained.validity);
+        assert.equal(retained.validity.item(1), false);
+      }
+    }
+    const left = new pl.DataFrame([
+      series(ctx, "k", [1, 1]),
+      series(ctx, "k_right", [7, 8]),
+    ]);
+    const right = new pl.DataFrame([
+      series(ctx, "k", [1, 1]),
+      series(ctx, "w", [9, 10]),
+    ]);
+    for (const result of [
+      await left.toPandas().merge(right.toPandas(), "k"),
+      await left.lazy().join(right.lazy(), "k").collect(),
+    ]) {
+      assert.deepEqual(result.columns, ["k", "k_right", "w"]);
+      assert.deepEqual(rows(result), [
+        [1, 7, 9],
+        [1, 7, 10],
+        [1, 8, 9],
+        [1, 8, 10],
+      ]);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("join rejects retained collisions and preserves differently named keys", async () => {
+  const ctx = context();
+  try {
+    for (const suffix of [undefined, "_rhs", ""]) {
+      const overlapping = "v" + (suffix ?? "_right");
+      const left = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "v", [2]),
+        ...(suffix === "" ? [] : [series(ctx, overlapping, [3])]),
+      ]);
+      const right = new pl.DataFrame([
+        series(ctx, "k", [1]),
+        series(ctx, "v", [4]),
+      ]);
+      for (const join of [
+        () => left.toPandas().merge(right.toPandas(), "k", { suffix }),
+        () => left.lazy().join(right.lazy(), "k", { suffix }),
+      ]) {
+        await assert.rejects(
+          async () => join(),
+          (error) => error.code === "NMATH_INDEX_INVALID",
+        );
+      }
+    }
+    const left = new pl.DataFrame([series(ctx, "k", [1])]);
+    const right = new pl.DataFrame([
+      series(ctx, "r", [1]),
+      series(ctx, "w", [9]),
+    ]);
+    for (const result of [
+      await left.toPandas().merge(right.toPandas(), "k", { rightKey: "r" }),
+      await left.lazy().join(right.lazy(), "k", { rightKey: "r" }).collect(),
+    ]) {
+      assert.deepEqual(result.columns, ["k", "r", "w"]);
+      assert.deepEqual(rows(result), [[1, 1, 9]]);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
 test("one native execution per multi-column plan and independent repeated collection", async () => {
   const ctx = context();
   try {
@@ -232,6 +329,108 @@ test("pandas labels align, filter/sort retain labels, conversions preserve masks
     assert.equal(roundtrip.validity.item(1), false);
     assert.equal(roundtrip.values.dtype, "int64");
     await assert.rejects(nullable.toPandas().toArray(), /NMATH_INDEX_INVALID/);
+  } finally {
+    await ctx.close();
+  }
+});
+test("pandas Series arithmetic rejects mismatched duplicate labels in either operand", async () => {
+  const ctx = context();
+  try {
+    const make = (values, index, name = "left") =>
+      new pd.Series(ctx.array(values, { dtype: "float64" }), name, index);
+    const duplicate = make([10, 20], ["a", "a"]);
+    const unique = make([1, 2], ["a", "b"], "right");
+    const reordered = make([1, 2, 3], ["a", "a", "b"]);
+    const differentlyOrdered = make([1, 2, 3], ["a", "b", "a"]);
+    const operations = ["add", "sub", "mul", "div", "mod", "pow"];
+
+    for (const operation of operations) {
+      assert.throws(
+        () => duplicate[operation](unique),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: duplicate left index`,
+      );
+      assert.throws(
+        () => unique[operation](duplicate),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: duplicate right index`,
+      );
+      assert.throws(
+        () => reordered[operation](differentlyOrdered),
+        (error) => error.code === "NMATH_INDEX_INVALID",
+        `${operation}: differently ordered duplicate indexes`,
+      );
+    }
+
+    const sameLabels = make([1, 2], ["a", "a"], "right");
+    const leftUnique = make([10, 20], ["a", "b"]);
+    const rightReordered = make([1, 2], ["b", "a"], "right");
+    const expected = {
+      add: [
+        [11, 22],
+        [12, 21],
+      ],
+      sub: [
+        [9, 18],
+        [8, 19],
+      ],
+      mul: [
+        [10, 40],
+        [20, 20],
+      ],
+      div: [
+        [10, 10],
+        [5, 20],
+      ],
+      mod: [
+        [0, 0],
+        [0, 0],
+      ],
+      pow: [
+        [10, 400],
+        [100, 20],
+      ],
+    };
+    for (const operation of operations) {
+      const positional = duplicate[operation](sameLabels);
+      assert.equal(positional.name, "left");
+      assert.deepEqual(positional.index, ["a", "a"]);
+      assert.deepEqual(
+        (await positional.toArray()).toArray(),
+        expected[operation][0],
+        `${operation}: identical duplicate indexes align positionally`,
+      );
+
+      const aligned = leftUnique[operation](rightReordered);
+      assert.equal(aligned.name, "left");
+      assert.deepEqual(aligned.index, ["a", "b"]);
+      assert.deepEqual(
+        (await aligned.toArray()).toArray(),
+        expected[operation][1],
+        `${operation}: unique matching indexes reorder right-hand values`,
+      );
+    }
+    assert.throws(
+      () => unique.add(make([1, 2], ["a", "c"])),
+      (error) => error.code === "NMATH_INDEX_INVALID",
+    );
+
+    const numeric = make([3, 4], [1, 2]).add(make([5, 6], [2, 1]));
+    assert.deepEqual(numeric.index, [1, 2]);
+    assert.deepEqual((await numeric.toArray()).toArray(), [9, 9]);
+    const empty = make([], []).add(make([], []));
+    assert.deepEqual((await empty.toArray()).toArray(), []);
+    assert.deepEqual((await unique.add(2).toArray()).toArray(), [3, 4]);
+    const nullable = new pd.Series(
+      ctx.array([1, 2], { dtype: "float64" }),
+      "nullable",
+      ["a", "b"],
+      ctx.array([true, false], { dtype: "bool" }),
+    );
+    assert.throws(
+      () => nullable.add(unique),
+      (error) => error.code === "NMATH_INDEX_INVALID",
+    );
   } finally {
     await ctx.close();
   }

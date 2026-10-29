@@ -16,6 +16,8 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 - JavaScript and TypeScript developers who use NMath from Node.js 24.
 - `.nts` output produced by `nmath-compiler`, which imports `@delinoio/nmath/nts-runtime`.
 
+When the `.nts` transform's extension-rewriting option is enabled, source-relative `.nts` specifiers in quoted imports and static template dynamic imports become `.js` specifiers. The [compiler contract](crates-nmath-compiler-contract.md) owns this behavior and its span mapping.
+
 ## Interfaces and Contracts
 
 ### Entry points
@@ -30,6 +32,7 @@ This contract owns the `nmath-package` component of the [`nmath` project](projec
 | `@delinoio/nmath/nts-runtime` | (internal)     | Helpers that compiled `.nts` output imports. Not documented for direct use.                                 |
 
 The CLI executable is `nmath-compiler`. No separate compiler package is published. The package `bin` entry is a small Node.js launcher that runs the platform's prebuilt `nmath-compiler` executable from `native/` or the platform package; `@delinoio/nmath/compiler` runs the same executable with `--json`.
+The compiler entry point, CLI launcher and compiler build script resolve or build the compiler without loading the numerical addon. A missing compiler reports compiler-specific recovery guidance. Numerical entry points still load the addon when imported.
 
 ### Contexts
 
@@ -43,8 +46,11 @@ const ctx = createContext({
 ```
 
 All four options are required. `ctx.close(): Promise<void>` follows the runtime close contract. `ctx.metrics()` returns measurement snapshots. Contexts and arrays implement `dispose()` and `Symbol.dispose` for `using`.
+Native jobs release their execution slot before they settle their result Promise. Promise handlers can close the context or submit another job under the normal admission rules.
 
 Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
+
+Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ctx.generator(seed).random(shape)` must be finite integers from `0` through `4294967295`, inclusive. Their NumPy wrappers use the same rule. Invalid dimensions fail with `NMATH_SHAPE_MISMATCH` before budget arithmetic, input allocation or native shape conversion. Rank-zero shape `[]` and zero dimensions remain valid. A valid shape whose data length differs from its element count also fails with `NMATH_SHAPE_MISMATCH`.
 
 ### Expressions and compute
 
@@ -65,6 +71,8 @@ Complex arithmetic, unary operations, reductions, indexing, writes, copies, expl
 ### Typing
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
+
+The NumPy `sum`, `mean`, `min` and `max` wrappers preserve the core methods' dtype and shape inference. Omitting the axis, or passing `undefined`, produces a scalar result type. A literal axis removes its dimension from a tuple shape. A dynamic axis retains the result dtype and uses a dynamic shape because its result rank is not known at type-check time.
 
 ### Errors
 
@@ -96,6 +104,8 @@ The package does not log by default. `NMATH_LOG` enables native `tracing` output
 
 `packages/nmath/scripts/compatibility/` generates and checks fixtures from the exact development-only versions in `compatibility/oracle-requirements.txt`. Runtime builds and native comparisons do not need Python. `oracle:generate`, `oracle:inventory` and `oracle:check` are uncached package tasks run through root Turbo; inventory and reproducibility tasks take explicit pinned upstream source-directory arguments. Run them with the pinned oracle environment on PATH. Do not regenerate fixtures from unpinned originals or silently change numerical criteria.
 
+`oracle:check` compares two fresh generations byte for byte. It then checks the committed mutation, primitive and random fixture JSON files. The checker validates and reports the committed and fresh `environment` records separately, and compares every other fixture field. Each record requires nonempty `python`, `system` and `machine` strings and a `byteorder` of `little` or `big`. Inventory artifacts and the artifact file set must still match exactly. Host provenance differences alone can pass this comparison, but platform-dependent inventory aliases or numerical results can still fail it. Keep both provenance records in the artifacts and check output; do not replace them with a reference host. This check does not establish cross-platform acceptance.
+
 `test:compatibility` depends on the native package build, runs through root Turbo without caching, and returns failure for native mismatches. It accepts an optional report output path and records actual source revision and environment. Fixture equality alone is not full numerical acceptance; operation/dtype-specific criteria and unperformed scenarios remain recorded.
 
 The published package includes `compatibility.json.gz`, a gzip-compressed JSON object with fixed `versions`, `acceptanceStatus` and API `rows`. This is the public inventory artifact. It preserves pending and excluded states and ships no Python tooling, oracle environment or input fixtures.
@@ -116,7 +126,7 @@ The published package includes `compatibility.json.gz`, a gzip-compressed JSON o
 - [Repository defaults](repository-defaults.md)
 - [Repository workflow](repository-workflow-contract.md)
 
-Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics.
+Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics. Bracket access used as a constructor target, including through parentheses and type-only wrappers, keeps its JavaScript grouping.
 
 ## Numeric tables
 
@@ -130,7 +140,7 @@ For pandas grouping, the default `dropna:true` also drops float32 and float64 Na
 
 Polars Series accept an optional validity column. LazyFrame supports named `select`, `filter`, `sort`, `join` and `groupBy`, followed by `collect`. Polars has positional rows, retains null groups and defaults to unmatched null join keys. `nullsEqual:true` enables null-key matching. Group results retain first-seen key order. Arithmetic projections are available before row operations on non-nullable columns. Computed projections after row operations or on nullable inputs remain targets and fail explicitly. Named selection on nullable inputs is supported.
 
-Joins use a single key and `how:'inner'|'left'`. `rightKey` chooses a differently named right key. An equal-name join key is coalesced to the left key. Other overlapping right names receive `suffix`, defaulting to `_right`; collisions fail with a stable error. This suffix option is an explicit JS adaptation, not the full pandas suffix API. Group aggregate dtype selection differs between entry points: pandas retains narrow integer sums when they fit and widens on overflow; Polars widens 8/16-bit sums to int64 and returns uint32 counts. Polars float32 mean remains float32, while pandas mean is float64.
+Joins use a single key and `how:'inner'|'left'`. `rightKey` chooses a differently named right key. An equal-name join key is coalesced to the left key by removing only the right key column. Other overlapping right names receive `suffix`, defaulting to `_right`; collisions among retained output names fail with a stable error. This suffix option is an explicit JS adaptation, not the full pandas suffix API. Group aggregate dtype selection differs between entry points: pandas retains narrow integer sums when they fit and widens on overflow; Polars widens 8/16-bit sums to int64 and returns uint32 counts. Polars float32 mean remains float32, while pandas mean is float64.
 
 `Series.toPolars`, `DataFrame.toPolars`, `Series.toPandas` and `DataFrame.toPandas` preserve names, numeric dtypes and validity expressions. These synchronous conversions wrap the same lazy column handles; they do not copy buffers or move data between contexts. Calling compute/collect makes a native execution snapshot and returns independent result storage. pandas-to-Polars conversion rejects a non-default index unless `dropIndex:true` explicitly authorizes label loss. pandas `Series.toColumn()` returns the name, values, validity and labels together. `toArray()` explicitly drops the name and rejects nullable Series; use `toColumn()` to preserve the mask. Cross-context copies remain explicit array operations and require copying both values and validity columns.
 
@@ -157,7 +167,7 @@ loadNpz(context, path, options?: { signal?: AbortSignal }): Promise<Map<string, 
 
 `savez` uses stored members; `savez_compressed` uses DEFLATE. Both append `.npz` when the path does not already end with that exact suffix. They insert named entries in Map order, followed by positional entries named `arr_0`, `arr_1`, and so on. A positional name that collides with a named entry rejects with `TypeError` before native submission. Omitted inputs produce an empty archive. There is no pickle option. Existing `load` remains NPY-only; NPZ uses the explicit `loadNpz` method.
 
-All NPZ operations use native scheduled file jobs and explicit contexts. Pre-publication cancellation or failure preserves existing output, and writes reject existing destinations unless `overwrite: true`. Successful atomic publication is terminal success even if the signal aborts before Promise completion. Reads retain cancellation checks through scheduler completion. Name, compression, size, dtype and layout limits follow the runtime NPZ contract and remain visible compatibility constraints.
+All NPZ operations use native scheduled file jobs and explicit contexts. One save freezes all input arrays at a consistent execution-start snapshot boundary, including arrays that share storage. Snapshot offsets and copied payloads count against the context CPU memory budget; a save fails before publication if a required reservation does not fit. Pre-publication cancellation or failure preserves existing output, and writes reject existing destinations unless `overwrite: true`. Successful atomic publication is terminal success even if the signal aborts before Promise completion. Reads retain cancellation checks through scheduler completion. Name, compression, size, dtype and layout limits follow the runtime NPZ contract and remain visible compatibility constraints.
 
 ### CSV and JSON JS adaptations
 

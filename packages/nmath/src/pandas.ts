@@ -52,6 +52,7 @@ function unwrap(value: Series | Operand, source: Series): Operand {
     return value.values;
   if (
     source.index.length !== value.index.length ||
+    new Set(source.index).size !== source.index.length ||
     new Set(value.index).size !== value.index.length
   )
     throw tableError(

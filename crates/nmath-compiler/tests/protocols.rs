@@ -399,6 +399,95 @@ fn semantic_lsp_refreshes_dependents_and_restores_disk_after_close() {
 }
 
 #[test]
+fn semantic_lsp_keeps_inherited_ambient_roots_and_unsaved_overlays() {
+    let fixture = common::Fixture::new("semantic-lsp-roots");
+    fixture.write("tsconfig.json", r#"{"extends":"./config/base.json"}"#);
+    fixture.write(
+        "config/base.json",
+        r#"{"compilerOptions":{"strict":true,"target":"esnext"},"files":["../src/globals.d.ts","../src/main.nts"],"include":["../src/main.nts"],"exclude":["../src/ignored.nts"]}"#,
+    );
+    let ambient = "declare const ambientValue: number;\n";
+    fixture.write("src/globals.d.ts", ambient);
+    let source = "export const result: number = ambientValue;\n";
+    fixture.write("src/main.nts", source);
+    let extra = "export const other: number = ambientValue;\n";
+    fixture.write("src/extra.nts", extra);
+    fixture.write("src/ignored.nts", "declare const excludedValue: number;\n");
+    let uri = format!("file://{}", fixture.path("src/main.nts").display());
+    let ambient_uri = format!("file://{}", fixture.path("src/globals.d.ts").display());
+    let extra_uri = format!("file://{}", fixture.path("src/extra.nts").display());
+    let mut lsp = Session::start("lsp");
+    lsp.call(1, "initialize", json!({"capabilities":{}}));
+    open_document(&mut lsp, &uri, source);
+    assert_eq!(lsp.receive()["params"]["diagnostics"], json!([]));
+    let definition = lsp.call(
+        2,
+        "textDocument/definition",
+        json!({"textDocument":{"uri":uri},"position":at(source,"ambientValue")}),
+    );
+    assert_eq!(definition["result"][0]["uri"], ambient_uri, "{definition}");
+    assert_eq!(
+        definition["result"][0]["range"]["start"],
+        at(ambient, "ambientValue")
+    );
+
+    let edited = "declare const ambientValue: string;\n";
+    open_document(&mut lsp, &ambient_uri, edited);
+    let reports = [lsp.receive(), lsp.receive()];
+    let main = reports.iter().find(|r| r["params"]["uri"] == uri).unwrap();
+    assert!(
+        main["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == 2322),
+        "{main}"
+    );
+    let completion = lsp.call(
+        3,
+        "textDocument/completion",
+        json!({"textDocument":{"uri":uri},"position":at(source,"ambientValue")}),
+    );
+    assert!(
+        completion["result"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["label"] == "ambientValue"),
+        "{completion}"
+    );
+    lsp.send(&notification(
+        "textDocument/didClose",
+        json!({"textDocument":{"uri":ambient_uri}}),
+    ));
+    assert_eq!(lsp.receive()["params"]["diagnostics"], json!([]));
+    assert_eq!(lsp.receive()["params"]["diagnostics"], json!([]));
+
+    open_document(&mut lsp, &extra_uri, extra);
+    let reports = [lsp.receive(), lsp.receive()];
+    assert!(
+        reports
+            .iter()
+            .all(|r| r["params"]["diagnostics"] == json!([])),
+        "{reports:?}"
+    );
+    change_document(&mut lsp, &uri, 2, "export const missing = excludedValue;\n");
+    let reports = [lsp.receive(), lsp.receive()];
+    let main = reports.iter().find(|r| r["params"]["uri"] == uri).unwrap();
+    assert!(
+        main["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == 2304),
+        "{main}"
+    );
+    lsp.call(4, "shutdown", Value::Null);
+    lsp.send(&notification("exit", Value::Null));
+    assert_eq!(lsp.finish(), 0);
+}
+
+#[test]
 fn semantic_lsp_resolves_lexical_scope_and_plain_typescript_imports() {
     let fixture = common::Fixture::new("semantic-lsp-scope");
     let declaration =
@@ -459,6 +548,11 @@ fn semantic_lsp_resolves_lexical_scope_and_plain_typescript_imports() {
 #[test]
 fn language_server_lowers_inferred_nmath_operations() {
     let fixture = common::Fixture::new("lsp-lowering");
+    fixture.write("tsconfig.json", r#"{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler"},"files":["src/ambient.d.ts","src/main.nts"]}"#);
+    fixture.write(
+        "src/ambient.d.ts",
+        "declare const a: import('@delinoio/nmath').NMathArray;\n",
+    );
     fixture.write("node_modules/@delinoio/nmath/package.json", r#"{"name":"@delinoio/nmath","type":"module","exports":{".":"./core.d.ts","./nts-runtime":"./nts-runtime.d.ts"}}"#);
     fixture.write(
         "node_modules/@delinoio/nmath/core.d.ts",
@@ -472,8 +566,7 @@ fn language_server_lowers_inferred_nmath_operations() {
          set<T>(a:NMathArray,i:number,v:T):Promise<T>;\n",
     );
     let uri = format!("file://{}", fixture.path("src/main.nts").display());
-    let source = "import {NMathArray} from '@delinoio/nmath';\ndeclare const a:NMathArray;\nconst \
-                  b=a+a;\nexport const c=b+b;\nexport function update(){ a[0]=1; }\n";
+    let source = "const b=a+a;\nexport const c=b+b;\nexport function update(){ a[0]=1; }\n";
     let mut lsp = Session::start("lsp");
     lsp.call(1, "initialize", json!({"capabilities":{}}));
     open_document(&mut lsp, &uri, source);
@@ -483,11 +576,42 @@ fn language_server_lowers_inferred_nmath_operations() {
         diagnostics
             .iter()
             .any(|d| d["code"] == "NMATH_NTS_ASSIGN_REQUIRES_ASYNC"
-                && d["range"]["start"]["line"] == 4),
+                && d["range"]["start"]["line"] == 2),
         "{published}"
     );
     let edited = source.replace("function update", "async function update");
     change_document(&mut lsp, &uri, 2, &edited);
+    let published = lsp.receive();
+    assert_eq!(published["params"]["diagnostics"], json!([]), "{published}");
+    lsp.call(2, "shutdown", Value::Null);
+    lsp.send(&notification("exit", Value::Null));
+    assert_eq!(lsp.finish(), 0);
+}
+
+#[test]
+fn language_server_recognizes_inherited_nmath_identity() {
+    let fixture = common::Fixture::new("lsp-inherited-nmath");
+    fixture.write("node_modules/@delinoio/nmath/package.json", r#"{"name":"@delinoio/nmath","type":"module","exports":{".":"./core.d.ts","./nts-runtime":"./nts-runtime.d.ts"}}"#);
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.d.ts",
+        "export declare const lazyBrand: unique symbol;\nexport declare class NMathArray { \
+         readonly [lazyBrand]: true; }\nexport declare class Expr { readonly [lazyBrand]: true; \
+         }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.d.ts",
+        "import { NMathArray, Expr } from './core.js';\nexport declare function add(a: NMathArray \
+         | Expr, b: number): Expr;\nexport declare function get(a: NMathArray | Expr, i: number): \
+         Expr;\n",
+    );
+    let uri = format!("file://{}", fixture.path("src/main.nts").display());
+    let source = "import { NMathArray } from '@delinoio/nmath';\ninterface Vector extends \
+                  NMathArray {}\ndeclare const a: Vector;\nexport const b = a + 1;\nexport const \
+                  c = a[0];\n";
+    fixture.write("src/main.nts", source);
+    let mut lsp = Session::start("lsp");
+    lsp.call(1, "initialize", json!({"capabilities":{}}));
+    open_document(&mut lsp, &uri, source);
     let published = lsp.receive();
     assert_eq!(published["params"]["diagnostics"], json!([]), "{published}");
     lsp.call(2, "shutdown", Value::Null);
