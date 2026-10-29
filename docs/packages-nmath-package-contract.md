@@ -236,3 +236,9 @@ pandas exports `read_parquet(context, path, options?)` and `read_feather(context
 Polars exports `read_parquet(context, path, options?)` and `read_ipc(context, path, options?)`; DataFrame methods are `write_parquet(context, path, options?)` and `write_ipc(context, path, options?)`. They preserve supported column names, dtypes, nullability and positional rows. File options currently contain only `signal` and, for writes, `overwrite`. Engine, compression, column projection and original-library options not listed here remain targets rather than silently ignored options. All file adapters use scheduled native CPU work and completed Promise results. Format, codec, metadata and dtype limits follow the runtime contract.
 
 DataFrame columnar read adapters reject nonempty zero-column tables with `NMATH_DTYPE_UNSUPPORTED` because their constructors cannot preserve an explicit row count. `ctx.readColumnar` retains that row count for direct callers.
+
+### Linear algebra and FFT adaptation
+
+The NumPy entry point exports `linalg.solve(a, b)`, `linalg.inv(a)`, `linalg.det(a)` and `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, `fft.irfft`. Arguments are contextual lazy arrays or expressions; results are lazy expressions and use normal `compute()` and complex transport. FFT options are `{n?, axis?, norm?: "backward" | "forward" | "ortho"}`. Unknown options, including `out`, fail explicitly. The native runtime contract owns batch, dtype, normalization and resource behavior. Singular linear systems use `NMATH_LINALG_SINGULAR`.
+
+Linalg declarations preserve batch/result shape and reject known nonsquare matrices and incompatible solve core dimensions. FFT declarations preserve unchanged dimensions for omitted or positive literal axes and axis `-1`. Real-transform axis lengths and other negative/dynamic axis inference remain conservative; exact inference for those forms remains a target. These APIs do not establish full linear-algebra or FFT family coverage.

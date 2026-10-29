@@ -394,3 +394,9 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
 
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
+
+### Linear algebra and FFT
+
+The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
+
+`fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, and `fft.irfft` accept `{ n?, axis?, norm? }`. The default axis is `-1`; normalization is `"backward"`, `"forward"`, or `"ortho"`. Length crops or zero-pads input. `rfft` requires real input. `irfft` defaults to `2 * (inputLength - 1)`; pass `n` to recover an odd original length. Call `.compute()` to execute on CPU. GPU execution and `out` buffers are unsupported. Complex output uses `Complex` values and interleaved typed arrays. Other linear-algebra and FFT functions remain compatibility targets.

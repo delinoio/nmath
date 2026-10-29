@@ -1,0 +1,706 @@
+{
+  "numpy": "2.5.4",
+  "source_hashes": {
+    "numpy/linalg/tests/test_linalg.py": "bb095c76c8a65a960a5e31a5ad77bebcfb49c52cde4b3ba9a55d9724f113e559",
+    "numpy/fft/tests/test_pocketfft.py": "0530e76ed387693f3246a0a5f401f79208b49766d24c559069f7c340d7910f2b",
+    "numpy/testing/_private/utils.py": "b55731515d2b64349472e88dbefbf18b7791e14fb5234c7d0b10f9ece07cbfcc"
+  },
+  "cases": [
+    {
+      "family": "linalg",
+      "op": "solve",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            2.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            -3.0,
+            0.0
+          ],
+          [
+            2.5,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 6,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "inv",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            -2.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ],
+          [
+            1.5,
+            0.0
+          ],
+          [
+            -0.5,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 6,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "det",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float32",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [],
+        "dtype": "float32",
+        "values": [
+          [
+            -2.0,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "eigenvalue_decimal",
+      "decimal": 6,
+      "reference": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          [
+            -1.9999999999999998,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "family": "linalg",
+      "op": "solve",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            2.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            -2.999999999999999,
+            0.0
+          ],
+          [
+            2.4999999999999996,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 12,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "inv",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            -1.9999999999999996,
+            0.0
+          ],
+          [
+            0.9999999999999998,
+            0.0
+          ],
+          [
+            1.4999999999999998,
+            0.0
+          ],
+          [
+            -0.4999999999999999,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 12,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "det",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float64",
+        "values": [
+          [
+            1.0,
+            0.0
+          ],
+          [
+            2.0,
+            0.0
+          ],
+          [
+            3.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [],
+        "dtype": "float64",
+        "values": [
+          [
+            -2.0000000000000004,
+            0.0
+          ]
+        ]
+      },
+      "criterion": "eigenvalue_decimal",
+      "decimal": 12,
+      "reference": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          [
+            -1.9999999999999998,
+            0.0
+          ]
+        ]
+      }
+    },
+    {
+      "family": "linalg",
+      "op": "solve",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            2.0,
+            1.0
+          ],
+          [
+            1.0,
+            2.0
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            -1.75,
+            1.75
+          ],
+          [
+            1.75,
+            -1.25
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 6,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "inv",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            -1.25,
+            1.0
+          ],
+          [
+            0.75,
+            -0.5
+          ],
+          [
+            1.0,
+            -0.75
+          ],
+          [
+            -0.5,
+            0.25
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 6,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "det",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex64",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [],
+        "dtype": "complex64",
+        "values": [
+          [
+            3.3750779525088285e-16,
+            -4.0
+          ]
+        ]
+      },
+      "criterion": "eigenvalue_decimal",
+      "decimal": 6,
+      "reference": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          [
+            3.5841415884740444e-15,
+            -4.0
+          ]
+        ]
+      }
+    },
+    {
+      "family": "linalg",
+      "op": "solve",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": {
+        "shape": [
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            2.0,
+            1.0
+          ],
+          [
+            1.0,
+            2.0
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            -1.75,
+            1.7500000000000004
+          ],
+          [
+            1.75,
+            -1.2500000000000002
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 12,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "inv",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            -1.25,
+            1.0000000000000002
+          ],
+          [
+            0.75,
+            -0.5000000000000002
+          ],
+          [
+            1.0,
+            -0.7500000000000001
+          ],
+          [
+            -0.5,
+            0.2500000000000001
+          ]
+        ]
+      },
+      "criterion": "residual_decimal",
+      "decimal": 12,
+      "reference": null
+    },
+    {
+      "family": "linalg",
+      "op": "det",
+      "a": {
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128",
+        "values": [
+          [
+            1.0,
+            2.0
+          ],
+          [
+            2.0,
+            3.0
+          ],
+          [
+            3.0,
+            4.0
+          ],
+          [
+            4.0,
+            5.0
+          ]
+        ]
+      },
+      "b": null,
+      "expected": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          [
+            3.375077994860475e-16,
+            -4.0
+          ]
+        ]
+      },
+      "criterion": "eigenvalue_decimal",
+      "decimal": 12,
+      "reference": {
+        "shape": [],
+        "dtype": "complex128",
+        "values": [
+          [
+            3.5841415884740444e-15,
+            -4.0
+          ]
+        ]
+      }
+    }
+  ]
+}
