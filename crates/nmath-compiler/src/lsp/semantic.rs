@@ -69,7 +69,7 @@ pub fn query(
         "contentMappers": [{"package":package,"extensions":[".nts"]}],
         "compilerOptions": {"rewriteRelativeImportExtensions":true}
     });
-    if let Some(config) = config {
+    if let Some(config) = &config {
         settings["extends"] = json!(config.to_string_lossy());
     } else {
         settings["files"] = json!([file]);
@@ -77,12 +77,36 @@ pub fn query(
         settings["compilerOptions"]["target"] = json!("esnext");
         settings["compilerOptions"]["module"] = json!("nodenext");
     }
-    settings["files"] = json!([file]);
     files.insert(wrapper.clone(), settings.to_string());
     files.insert(format!("{cwd}/node_modules/{package}/package.json"), json!({
         "name":package,"version":"0.0.0",
         "typescript":{"contentMapper":{"exec":["nmath-in-process"],"outputExtensions":{".nts":".js"}}}
     }).to_string());
+    if config.is_some() {
+        let fs: Arc<dyn FS> = Arc::new(Snapshot::new(files.clone()));
+        let host = ConfigHost {
+            fs,
+            cwd: cwd.clone(),
+        };
+        let (parsed, errors) = tsrs_tsoptions::get_parsed_command_line_of_config_file(
+            &wrapper, None, None, &host, None,
+        );
+        let parsed = parsed.ok_or_else(|| {
+            errors
+                .iter()
+                .map(|d| d.localize())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+        if !parsed.file_names().contains(&file) {
+            // Keep the effective roots, whose paths tsrs resolved against their
+            // owning configs. The query may be outside the configured project.
+            let mut roots = parsed.file_names().to_vec();
+            roots.push(file.clone());
+            settings["files"] = json!(roots);
+            files.insert(wrapper.clone(), settings.to_string());
+        }
+    }
     let plans =
         crate::project::analyze_project(&files.clone().into_iter().collect(), &wrapper, &cwd)?;
     let original_diagnostics = files

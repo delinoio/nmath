@@ -67,6 +67,7 @@ Every diagnostic reports the original `.nts` file and 1-based line and column, a
 - `nmath-compiler check -p <tsconfig>`: type-check the project. Exit code 0 on success, 1 on diagnostics, 2 on usage or configuration errors.
 - `nmath-compiler build -p <tsconfig>`: emit ESM JavaScript, declaration files and source maps. On any type or transform error, write nothing and keep existing outputs.
 - `nmath-compiler lsp`: run a generic Language Server Protocol server over stdio with semantic type diagnostics, completion and cross-file go-to-definition for `.nts` files. Locations use original-source UTF-16 coordinates. Full-document synchronization overlays unsaved buffers on disk content; changes refresh dependent diagnostics, and closing a document restores its disk content. Stale document versions do not replace newer buffers.
+- Each language-server semantic snapshot keeps the effective project roots from the selected `tsconfig.json`, including inherited declarations and include/exclude rules. It adds the queried document once if that document is outside the root set. Unsaved document text takes precedence over disk text for all roots.
 - `nmath-compiler content-mapper`: internal tsrs content-mapper process. Not a public interface.
 - `--json` prints the structured result `{ ok, diagnostics: [{ code, file, line, column, message, recovery }], outputFiles: [] }`.
 
