@@ -47,6 +47,8 @@ export declare class NativeContext {
   copyFrom(source: NativeArray, signal?: NativeCancellation | undefined | null): Promise<NativeArray>
   saveNpy(array: NativeArray, path: string, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
   loadNpy(path: string, signal?: NativeCancellation | undefined | null): Promise<NativeArray>
+  saveNpz(names: Array<string>, arrays: Array<NativeArray>, path: string, compressed: boolean, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
+  loadNpz(path: string, signal?: NativeCancellation | undefined | null): Promise<Array<{ name: string; array: NativeArray }>>
   /**
    * Closes the context on a helper thread and resolves when cleanup
    * finishes.
@@ -124,6 +126,11 @@ export interface NativeMetrics {
   totalRejected: number
   cpuMemory: NativeMemoryUsage
   gpuMemory: NativeMemoryUsage
+}
+
+export interface NativeNpzEntry {
+  name: string
+  array: NativeArray
 }
 
 export interface NativeSelector {

@@ -572,3 +572,57 @@ fn invalid_output_and_publication_failure_leave_no_temporary_files() {
     );
     assert_eq!(tight.usage().used, 0);
 }
+
+#[test]
+fn complex_numpy_interchange_preserves_component_bits() {
+    for fixture in [
+        include_bytes!("../tests/fixtures/io-npz/complex-stored.npz").as_slice(),
+        include_bytes!("../tests/fixtures/io-npz/complex-deflated.npz").as_slice(),
+    ] {
+        let budget = budget();
+        let archive = io_npz::decode_npz(fixture, &budget, &token()).unwrap();
+        assert_eq!(archive.arrays.len(), 5);
+        assert_eq!(
+            archive.arrays[0].array.buffer.dtype(),
+            nmath_core::DType::Complex64
+        );
+        assert_eq!(
+            archive.arrays[1].array.buffer.dtype(),
+            nmath_core::DType::Complex128
+        );
+        assert_eq!(archive.arrays[2].array.shape, Vec::<usize>::new());
+        assert_eq!(archive.arrays[3].array.shape, vec![2, 0, 3]);
+        assert_eq!(archive.arrays[4].array.shape, vec![2, 2]);
+        for compression in [NpzCompression::Stored, NpzCompression::Deflated] {
+            let (bytes, charge) =
+                io_npz::encode_npz(&archive.arrays, compression, &budget, &token()).unwrap();
+            let decoded = io_npz::decode_npz(&bytes, &budget, &token()).unwrap();
+            for (a, b) in archive.arrays.iter().zip(&decoded.arrays) {
+                assert_eq!(a.name, b.name);
+                // Compare encoded NPY bytes to preserve NaN payloads and signed
+                // zeros; floating equality would not test this contract.
+                assert_eq!(
+                    nmath_core::io::encode_npy(&a.array.shape, &a.array.buffer).unwrap(),
+                    nmath_core::io::encode_npy(&b.array.shape, &b.array.buffer).unwrap(),
+                );
+            }
+            if let Some(directory) = std::env::var_os("NMATH_NPZ_ORACLE_OUTPUT") {
+                let suffix = if compression == NpzCompression::Stored {
+                    "stored"
+                } else {
+                    "deflated"
+                };
+                fs::write(
+                    std::path::Path::new(&directory).join(format!("rust-complex-{suffix}.npz")),
+                    &bytes,
+                )
+                .unwrap();
+            }
+            drop(decoded);
+            drop(bytes);
+            drop(charge);
+        }
+        drop(archive);
+        assert_eq!(budget.usage().used, 0);
+    }
+}

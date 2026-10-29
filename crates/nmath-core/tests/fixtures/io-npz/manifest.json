@@ -2,6 +2,8 @@
   "numpy": "2.5.4",
   "files": {
     "bomb.npz": "e4714a8283159ab50c2d4ebbfc84c4ee5a0a703c9658eab36a6d3b091c6f1d32",
+    "complex-deflated.npz": "983821c976cca615d8fecee4f2e0def6644d89da4521f0233a5afab9024ce128",
+    "complex-stored.npz": "a2be9b4d90f69a945dca25a72dafca1b97b71a8df9286e0e7fb192d35f2b304e",
     "deflated.npz": "d49de5503ef474d9f003d2f374b7e94c090d2774c1ba67989e066dd2dcfb551b",
     "object.npz": "f0dabe6e04faed1ef129a350dcb34aa17d466cd53921cfd9ba0f04c2b72fae58",
     "positional.npz": "9fed0f973e947647dbab837378605ecf64a1f1b9ba03524bad2d0d6f4b8de542",

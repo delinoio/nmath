@@ -990,6 +990,38 @@ export class NMathContext {
     return new NMathArray(array, this);
   }
 
+  /** Writes named arrays to an exact NPZ path in Map insertion order. */
+  saveNpz(
+    path: string,
+    arrays: ReadonlyMap<string, NMathArray<any, any>>,
+    options: SignalOptions & { overwrite?: boolean; compressed?: boolean } = {},
+  ): Promise<void> {
+    const entries = [...arrays];
+    return withSignal(options.signal, (cancel) =>
+      this.nativeContext.saveNpz(
+        entries.map(([name]) => name),
+        entries.map(([, array]) => array.nativeArray),
+        path,
+        options.compressed ?? false,
+        options.overwrite ?? false,
+        cancel,
+      ),
+    );
+  }
+
+  /** Reads an NPZ archive. Rank-zero members remain arrays. */
+  async loadNpz(
+    path: string,
+    options: SignalOptions = {},
+  ): Promise<Map<string, NMathArray<ComputableDType, number[]>>> {
+    const entries = await withSignal(options.signal, (cancel) =>
+      this.nativeContext.loadNpz(path, cancel),
+    );
+    return new Map(
+      entries.map(({ name, array }) => [name, new NMathArray(array, this)]),
+    );
+  }
+
   metrics(): ContextMetrics {
     return this.nativeContext.metrics() as ContextMetrics;
   }
