@@ -71,6 +71,8 @@ export declare class NativeExpr {
   static unary(op: string, input: NativeExpr): NativeExpr
   static reduce(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static matmul(lhs: NativeExpr, rhs: NativeExpr): NativeExpr
+  static linalg(op: string, input: NativeExpr, rhs?: NativeExpr | undefined | null): NativeExpr
+  static fft(op: string, input: NativeExpr, n: number | undefined | null, axis: number, norm: string): NativeExpr
   static index(input: NativeExpr, selectors: Array<NativeSelector>): NativeExpr
   static cast(input: NativeExpr, dtype: string): NativeExpr
   static random(generator: NativeGenerator, shape: Array<number>): NativeExpr

@@ -31,6 +31,8 @@ pub enum ExprKind {
     },
     Reduce(ReduceOp, Expr, Option<Vec<i64>>),
     MatMul(Expr, Expr),
+    Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
+    Fft(crate::fft::FftOptions, Expr),
     Index(Expr, Vec<Selector>),
     Cast(Expr, DType),
     /// `Generator.random(shape)` in float64.
@@ -221,6 +223,28 @@ impl Expr {
         ))
     }
 
+    pub fn linalg(op: crate::linalg::LinalgOp, a: &Expr, b: Option<&Expr>) -> Result<Expr> {
+        let context = join_context(a.context_id(), b.and_then(Expr::context_id))?;
+        let (shape, dtype) =
+            crate::linalg::infer(op, a.shape(), a.dtype(), b.map(|v| (v.shape(), v.dtype())))?;
+        Ok(Expr::node(
+            ExprKind::Linalg(op, a.clone(), b.cloned()),
+            dtype,
+            shape,
+            context,
+        ))
+    }
+
+    pub fn fft(options: crate::fft::FftOptions, input: &Expr) -> Result<Expr> {
+        let (shape, dtype, _, _) = options.infer(input.shape(), input.dtype())?;
+        Ok(Expr::node(
+            ExprKind::Fft(options, input.clone()),
+            dtype,
+            shape,
+            input.context_id(),
+        ))
+    }
+
     pub fn index(input: &Expr, selectors: Vec<Selector>) -> Result<Expr> {
         let shape = index_shape(input.shape(), &selectors)?;
         Ok(Expr::node(
@@ -250,6 +274,8 @@ impl Expr {
             ExprKind::Binary { op, .. } => op.id(),
             ExprKind::Reduce(op, _, _) => op.id(),
             ExprKind::MatMul(..) => "matmul",
+            ExprKind::Linalg(op, ..) => op.id(),
+            ExprKind::Fft(options, ..) => options.op.id(),
             ExprKind::Index(..) => "index",
             ExprKind::Cast(..) => "cast",
             ExprKind::Random(..) => "random",
@@ -259,6 +285,8 @@ impl Expr {
     fn children(&self) -> Vec<&Expr> {
         match &self.0.kind {
             ExprKind::Input(_) | ExprKind::Scalar(_) | ExprKind::Random(..) => vec![],
+            ExprKind::Linalg(_, a, b) => std::iter::once(a).chain(b.as_ref()).collect(),
+            ExprKind::Fft(_, e) => vec![e],
             ExprKind::Unary(_, e)
             | ExprKind::Reduce(_, e, _)
             | ExprKind::Index(e, _)
@@ -501,6 +529,15 @@ impl JobEnv {
                 let a = self.eval_dense(l)?;
                 let b = self.eval_dense(r)?;
                 kernels::matmul(&a, &b, expr.dtype(), &budget, &token)
+            }
+            ExprKind::Linalg(op, a, b) => {
+                let a = self.eval_dense(a)?;
+                let b = b.as_ref().map(|v| self.eval_dense(v)).transpose()?;
+                crate::linalg::execute(*op, &a, b.as_ref(), &budget, &token)
+            }
+            ExprKind::Fft(options, input) => {
+                let input = self.eval_dense(input)?;
+                crate::fft::execute(*options, &input, &budget, &token)
             }
             ExprKind::Index(e, selectors) => {
                 let v = self.eval_dense(e)?;

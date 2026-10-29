@@ -8,6 +8,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+num-complex = { version = "=0.4.6", default-features = false, features = ["std"] }
 serde.workspace = true
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
 base64 = { version = "=0.23.1", default-features = false, features = ["alloc"] }

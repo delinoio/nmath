@@ -987,6 +987,7 @@ dependencies = [
  "flate2",
  "half",
  "naga",
+ "num-complex",
  "parquet",
  "pollster",
  "serde",

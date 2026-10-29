@@ -14,6 +14,7 @@ pub enum ErrorCode {
     MemoryBudgetExceeded,
     ShapeBroadcast,
     ShapeMismatch,
+    LinalgSingular,
     DTypeUnsupported,
     IndexOutOfBounds,
     IndexInvalid,
@@ -29,7 +30,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    pub const ALL: [ErrorCode; 21] = [
+    pub const ALL: [ErrorCode; 22] = [
         ErrorCode::ContextInvalidOptions,
         ErrorCode::ContextMismatch,
         ErrorCode::ContextClosed,
@@ -39,6 +40,7 @@ impl ErrorCode {
         ErrorCode::MemoryBudgetExceeded,
         ErrorCode::ShapeBroadcast,
         ErrorCode::ShapeMismatch,
+        ErrorCode::LinalgSingular,
         ErrorCode::DTypeUnsupported,
         ErrorCode::IndexOutOfBounds,
         ErrorCode::IndexInvalid,
@@ -64,6 +66,7 @@ impl ErrorCode {
             ErrorCode::MemoryBudgetExceeded => "NMATH_MEMORY_BUDGET_EXCEEDED",
             ErrorCode::ShapeBroadcast => "NMATH_SHAPE_BROADCAST",
             ErrorCode::ShapeMismatch => "NMATH_SHAPE_MISMATCH",
+            ErrorCode::LinalgSingular => "NMATH_LINALG_SINGULAR",
             ErrorCode::DTypeUnsupported => "NMATH_DTYPE_UNSUPPORTED",
             ErrorCode::IndexOutOfBounds => "NMATH_INDEX_OUT_OF_BOUNDS",
             ErrorCode::IndexInvalid => "NMATH_INDEX_INVALID",
@@ -82,6 +85,7 @@ impl ErrorCode {
     /// English recovery guidance appended to every message.
     pub fn recovery(self) -> &'static str {
         match self {
+            ErrorCode::LinalgSingular => "Use a nonsingular square matrix.",
             ErrorCode::ContextInvalidOptions => {
                 "Pass positive maxConcurrentJobs and non-negative queue and memory limits."
             }

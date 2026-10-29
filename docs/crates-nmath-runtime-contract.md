@@ -87,29 +87,30 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 
 ### Error codes
 
-| Code                              | Meaning                                                  |
-| --------------------------------- | -------------------------------------------------------- |
-| `NMATH_CONTEXT_INVALID_OPTIONS`   | Context options are missing or invalid.                  |
-| `NMATH_CONTEXT_MISMATCH`          | Values from different contexts were combined directly.   |
-| `NMATH_CONTEXT_CLOSED`            | The context is closed.                                   |
-| `NMATH_DISPOSED`                  | The object was disposed.                                 |
-| `NMATH_SCHED_QUEUE_FULL`          | The context queue is full.                               |
-| `NMATH_CANCELLED`                 | The job was cancelled.                                   |
-| `NMATH_MEMORY_BUDGET_EXCEEDED`    | An allocation does not fit the device budget.            |
-| `NMATH_SHAPE_BROADCAST`           | Shapes cannot broadcast.                                 |
-| `NMATH_SHAPE_MISMATCH`            | A shape does not match the operation requirement.        |
-| `NMATH_DTYPE_UNSUPPORTED`         | The dtype is not supported for the operation or device.  |
-| `NMATH_INDEX_OUT_OF_BOUNDS`       | An index is outside the axis.                            |
-| `NMATH_INDEX_INVALID`             | A selector is malformed.                                 |
-| `NMATH_GPU_UNAVAILABLE`           | No supported GPU adapter is available.                   |
-| `NMATH_GPU_UNSUPPORTED_OPERATION` | The operation or dtype is outside the GPU subset.        |
-| `NMATH_GPU_DEVICE_LOST`           | The GPU device was lost during execution.                |
-| `NMATH_GPU_OUT_OF_MEMORY`         | The GPU driver reported memory exhaustion.               |
-| `NMATH_IO_EXISTS`                 | The output file exists and overwrite was not requested.  |
-| `NMATH_IO_FORMAT`                 | The input file is malformed or unsupported.              |
-| `NMATH_IO_MODIFIED`               | A change to an input file was detected during execution. |
-| `NMATH_IO_FAILED`                 | An operating-system I/O operation failed.                |
-| `NMATH_NATIVE_LOAD`               | The prebuilt native binary could not load.               |
+| Code                              | Meaning                                                              |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `NMATH_CONTEXT_INVALID_OPTIONS`   | Context options are missing or invalid.                              |
+| `NMATH_CONTEXT_MISMATCH`          | Values from different contexts were combined directly.               |
+| `NMATH_CONTEXT_CLOSED`            | The context is closed.                                               |
+| `NMATH_DISPOSED`                  | The object was disposed.                                             |
+| `NMATH_SCHED_QUEUE_FULL`          | The context queue is full.                                           |
+| `NMATH_CANCELLED`                 | The job was cancelled.                                               |
+| `NMATH_MEMORY_BUDGET_EXCEEDED`    | An allocation does not fit the device budget.                        |
+| `NMATH_SHAPE_BROADCAST`           | Shapes cannot broadcast.                                             |
+| `NMATH_SHAPE_MISMATCH`            | A shape does not match the operation requirement.                    |
+| `NMATH_LINALG_SINGULAR`           | A square matrix cannot be solved or inverted because it is singular. |
+| `NMATH_DTYPE_UNSUPPORTED`         | The dtype is not supported for the operation or device.              |
+| `NMATH_INDEX_OUT_OF_BOUNDS`       | An index is outside the axis.                                        |
+| `NMATH_INDEX_INVALID`             | A selector is malformed.                                             |
+| `NMATH_GPU_UNAVAILABLE`           | No supported GPU adapter is available.                               |
+| `NMATH_GPU_UNSUPPORTED_OPERATION` | The operation or dtype is outside the GPU subset.                    |
+| `NMATH_GPU_DEVICE_LOST`           | The GPU device was lost during execution.                            |
+| `NMATH_GPU_OUT_OF_MEMORY`         | The GPU driver reported memory exhaustion.                           |
+| `NMATH_IO_EXISTS`                 | The output file exists and overwrite was not requested.              |
+| `NMATH_IO_FORMAT`                 | The input file is malformed or unsupported.                          |
+| `NMATH_IO_MODIFIED`               | A change to an input file was detected during execution.             |
+| `NMATH_IO_FAILED`                 | An operating-system I/O operation failed.                            |
+| `NMATH_NATIVE_LOAD`               | The prebuilt native binary could not load.                           |
 
 Every error message is English and includes recovery guidance.
 
@@ -222,3 +223,13 @@ Writes serialize 4,096-row batches into a sibling temporary file, flush each Par
 Runtime dependencies use Arrow component crates and Parquet 60.1.0 with default features disabled. Parquet enables `arrow` and `snap` only. `base64` validates embedded Arrow metadata. Python and PyArrow are fixture-generation tools only.
 
 Float16 file interchange currently uses NPY and NPZ. The CSV/JSON and Arrow/Parquet readers do not accept float16 schemas; callers must explicitly cast to a supported type for those formats.
+
+## Square linear algebra and one-axis transforms
+
+CPU lazy nodes provide `solve`, `inv`, `det`, `fft`, `ifft`, `rfft`, and `irfft`. Linear algebra uses the final two square axes and broadcasts batch axes. Only a rank-one solve right-hand side is a vector; all other right-hand sides are matrices. Empty matrices and batches retain NumPy shapes. Float16 linear algebra is rejected. Integer and boolean inputs compute as float64; float32/complex64 results retain their dtype unless an operand requires double precision. Singular solve/inverse fails with `NMATH_LINALG_SINGULAR`; singular determinants return zero.
+
+Transforms accept one axis, optional positive length, and backward/forward/ortho normalization. They crop or zero-pad the selected axis. `irfft` on float16 returns float16. Other float16/float32/complex64 transforms use single-precision output; other supported numeric inputs use double precision. `rfft` rejects complex inputs. `irfft` defaults to twice the input axis length minus two, ignores the DC imaginary part and, for even output lengths, the Nyquist imaginary part, and reconstructs conjugate frequencies.
+
+The kernels execute through the existing scheduler and graph snapshots, with precharged output and workspace. Linear algebra uses partial-pivot elimination and double-component workspace. Transforms use radix-two butterflies and Bluestein convolution with double-component workspace. Native loops check cancellation cooperatively. GPU submission fails before admission. Other factorizations, FFT convenience functions, output buffers, extended precision and full-family compatibility remain targets. Non-finite and extreme-scale numerical criteria remain pending.
+
+`num-complex` 0.4.6 supplies scalar complex arithmetic with default features disabled and `std` enabled. Its MIT/Apache-2.0 license terms remain part of the native distribution license bundle.

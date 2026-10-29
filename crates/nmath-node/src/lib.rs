@@ -416,6 +416,67 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn linalg(op: String, input: &NativeExpr, rhs: Option<&NativeExpr>) -> Result<Self> {
+        use nmath_core::linalg::LinalgOp;
+        let op = match op.as_str() {
+            "solve" => LinalgOp::Solve,
+            "inv" => LinalgOp::Inv,
+            "det" => LinalgOp::Det,
+            _ => {
+                return Err(to_napi(nmath_core::Error::new(
+                    nmath_core::ErrorCode::DTypeUnsupported,
+                    "Unknown linalg operation.",
+                )));
+            }
+        };
+        Ok(Self {
+            inner: Expr::linalg(op, &input.inner, rhs.map(|v| &v.inner)).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn fft(
+        op: String,
+        input: &NativeExpr,
+        n: Option<u32>,
+        axis: i64,
+        norm: String,
+    ) -> Result<Self> {
+        use nmath_core::fft::{FftOp, FftOptions, Norm};
+        let invalid = || {
+            to_napi(nmath_core::Error::new(
+                nmath_core::ErrorCode::DTypeUnsupported,
+                "Unknown FFT operation or normalization.",
+            ))
+        };
+        let op = match op.as_str() {
+            "fft" => FftOp::Fft,
+            "ifft" => FftOp::Ifft,
+            "rfft" => FftOp::Rfft,
+            "irfft" => FftOp::Irfft,
+            _ => return Err(invalid()),
+        };
+        let norm = match norm.as_str() {
+            "backward" => Norm::Backward,
+            "forward" => Norm::Forward,
+            "ortho" => Norm::Ortho,
+            _ => return Err(invalid()),
+        };
+        Ok(Self {
+            inner: Expr::fft(
+                FftOptions {
+                    op,
+                    n: n.map(|v| v as usize),
+                    axis,
+                    norm,
+                },
+                &input.inner,
+            )
+            .map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn index(input: &NativeExpr, selectors: Vec<NativeSelector>) -> Result<Self> {
         Ok(Self {
             inner: Expr::index(&input.inner, to_selectors(selectors)?).map_err(to_napi)?,
