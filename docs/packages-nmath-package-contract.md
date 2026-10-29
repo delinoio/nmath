@@ -177,7 +177,7 @@ The numeric token, validity, memory, cancellation, atomic publication and unsupp
 
 ### Columnar file API
 
-`ctx.readColumnar(path, 'arrow' | 'parquet', {signal}?)` returns a Promise of `{columns, validity, rows}`. Columns and validity masks are context-owned lazy array handles keyed by name. `ctx.writeColumnar(path, format, columns, validity?, {overwrite, signal}?)` returns `Promise<void>`. The exact local path is used; suffixes are not added. `overwrite` defaults to false. Dispose returned value and validity arrays when finished.
+`ctx.readColumnar(path, 'arrow' | 'parquet', {signal}?)` returns a Promise of `{columns, validity, rows}`. Columns are context-owned materialized `NMathArray` instances keyed by name; validity masks are materialized boolean arrays. Their public types expose scalar reads, TypedArray conversion and disposal. `ctx.writeColumnar(path, format, columns, validity?, {overwrite, signal}?)` returns `Promise<void>`. The exact local path is used; suffixes are not added. `overwrite` defaults to false. Dispose returned value and validity arrays when finished.
 
 pandas exports `read_parquet(context, path, options?)` and `read_feather(context, path, options?)`, each returning `Promise<DataFrame>`. DataFrame methods `to_parquet(context, path, options?)` and `to_feather(context, path, options?)` return `Promise<void>` and reject non-default index labels before submission. This explicit-context argument is a JS adaptation. The default index is reconstructed on read. The file adapter preserves numeric dtype and null masks instead of applying pandas' default nullable-integer-to-float inference; compare this representation with pandas `dtype_backend="numpy_nullable"`. Unsupported pandas metadata files fail explicitly.
 
