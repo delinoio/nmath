@@ -405,3 +405,47 @@ fn queued_write_snapshots_at_actual_start() {
         Scalar::Int(i64::MAX)
     );
 }
+
+#[test]
+fn writer_rejects_unreadable_schema_before_publication() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("output");
+    let b = budget();
+    let token = CancellationToken::new();
+    let fields = (0..1024)
+        .map(|i| Field::new(i.to_string(), DataType::Int32, false))
+        .collect::<Vec<_>>();
+    check_schema(&Schema::new(fields.clone())).unwrap();
+    check_schema(&Schema::new(vec![Field::new(
+        "é".repeat(2048),
+        DataType::Int32,
+        false,
+    )]))
+    .unwrap();
+    let mut excessive = fields;
+    excessive.push(Field::new("extra", DataType::Int32, false));
+    for schema in [
+        Schema::new(excessive),
+        Schema::new(vec![Field::new("é".repeat(2049), DataType::Int32, false)]),
+    ] {
+        for format in [Format::ArrowIpc, Format::Parquet] {
+            fs::write(&path, b"original").unwrap();
+            let error = write(
+                &path,
+                format,
+                Arc::new(schema.clone()),
+                &Table {
+                    columns: vec![],
+                    rows: 0,
+                },
+                WriteMode::Overwrite,
+                &b,
+                &token,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, ErrorCode::DTypeUnsupported);
+            assert_eq!(fs::read(&path).unwrap(), b"original");
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+        }
+    }
+}

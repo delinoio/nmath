@@ -108,12 +108,13 @@ fn arrow_dtype(t: DType) -> Result<DataType> {
     })
 }
 fn check_schema(schema: &Schema) -> Result<()> {
-    if !schema.metadata().is_empty() {
+    if !schema.metadata().is_empty() || schema.fields().len() > 1024 {
         return Err(unsupported());
     }
     for (i, f) in schema.fields().iter().enumerate() {
         dtype(f.data_type())?;
-        if !f.metadata().is_empty()
+        if f.name().len() > 4096
+            || !f.metadata().is_empty()
             || schema.fields()[..i]
                 .iter()
                 .any(|old| old.name() == f.name())
