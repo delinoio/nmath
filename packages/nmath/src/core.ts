@@ -1018,10 +1018,11 @@ export class NMathContext {
   ): NMathArray<"float16", S> {
     if (!(bits instanceof Uint16Array))
       throw new TypeError("Binary16 bits must be a Uint16Array.");
+    const shape = validatedShape(options.shape ?? [bits.length]);
     this.ensureCpuBudget(bits.length, "float16");
     const array = native(() =>
       this.nativeContext.array(
-        options.shape ? [...options.shape] : [bits.length],
+        shape,
         "float16",
         Buffer.from(bits.buffer, bits.byteOffset, bits.byteLength),
       ),
