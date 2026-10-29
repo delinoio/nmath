@@ -9,6 +9,11 @@ use nmath_nts::{Segment, SegmentKind, TransformOutput};
 use serde_json::Value;
 use tsrs_sourcemap::{decode_mappings, new_generator};
 
+#[cfg(test)]
+thread_local! {
+    static INDEX_BUILDS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
 pub(crate) type Sources = BTreeMap<String, (String, String, TransformOutput)>;
 
 // The emitter counts ECMAScript line terminators. LSP has a separate CR/LF
@@ -22,6 +27,11 @@ struct EcmaCoordinateIndex {
 
 impl EcmaCoordinateIndex {
     fn new(text: &str) -> Self {
+        #[cfg(test)]
+        INDEX_BUILDS.with(|builds| {
+            let (coordinates, spans) = builds.get();
+            builds.set((coordinates + 1, spans));
+        });
         let starts = tsrs_core::compute_ecma_line_starts(text);
         let content_ends = starts
             .iter()
@@ -98,6 +108,11 @@ struct SpanLookup<'a> {
 
 impl<'a> SpanLookup<'a> {
     fn new(segments: &'a [Segment]) -> Self {
+        #[cfg(test)]
+        INDEX_BUILDS.with(|builds| {
+            let (coordinates, spans) = builds.get();
+            builds.set((coordinates, spans + 1));
+        });
         let mut inclusive_ends = Vec::new();
         for (index, segment) in segments.iter().enumerate() {
             if segment.kind == SegmentKind::Verbatim
@@ -572,5 +587,32 @@ mod tests {
         assert_eq!(composed["sourcesContent"][0], original);
         assert_eq!(composed["sourcesContent"][1], "ordinary source");
         assert_eq!(composed["names"][0], "answer");
+    }
+
+    #[test]
+    fn many_long_line_mappings_build_indexes_once_per_mapped_source() {
+        for count in [128, 256] {
+            let original = "a😀".repeat(count);
+            let transformed = nmath_nts::transform_with_plan(
+                "/project/src/main.nts",
+                &original,
+                nmath_nts::TransformOptions::default(),
+                &nmath_nts::semantic::LoweringPlan::default(),
+            );
+            let sources = BTreeMap::from([(
+                "/project/src/main.ts".into(),
+                ("/project/src/main.nts".into(), original, transformed),
+            )]);
+            let mut emitter = new_generator("main.js", "", "", Default::default());
+            let id = emitter.add_source("../src/main.ts");
+            for column in 0..count as u32 {
+                emitter
+                    .add_source_mapping(0, column, id, 0, column * 3)
+                    .unwrap();
+            }
+            INDEX_BUILDS.with(|builds| builds.set((0, 0)));
+            compose("/project/out/main.js.map", &emitter.string(), &sources).unwrap();
+            assert_eq!(INDEX_BUILDS.with(std::cell::Cell::get), (2, 1));
+        }
     }
 }
