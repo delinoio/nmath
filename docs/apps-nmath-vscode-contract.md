@@ -41,6 +41,7 @@ Server output goes to the standard `NMath Language Server` output channel.
 - `pnpm --filter nmath-vscode build` compiles to `dist/`.
 - `pnpm --filter nmath-vscode test` runs unit tests for path resolution and manifest checks.
 - Keyboard and screen-reader accessibility are verified manually through standard VS Code UI and recorded in pull requests.
+- `pnpm exec turbo run package:vsix --filter=nmath-vscode` bundles runtime dependencies and builds a VSIX with reviewed third-party terms. Packaging, Marketplace publication and actual editor/accessibility acceptance remain separate under the [distribution contract](packages-nmath-distribution-contract.md).
 
 ## Dependencies and Integrations
 

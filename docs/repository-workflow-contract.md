@@ -2,7 +2,7 @@
 
 ## Scope
 
-The base repository contains shared instructions, skills, documentation templates and formatting infrastructure. It has no runtime projects, native build workspace, generated protocol bindings, deployment targets or release credentials.
+The repository contains shared instructions, skills, documentation templates and formatting infrastructure, plus the NMath Rust workspace, npm package and VS Code extension. The NMath project and distribution contracts own runtime build and release preparation boundaries. Release credentials remain outside source control.
 
 ## Installation
 
@@ -10,7 +10,7 @@ Use Node.js 24 from `.nvmrc` and pnpm 10.26.2 from `package.json`. Run `pnpm ins
 
 ## Task orchestration
 
-The pinned `turbo` dependency and root `turbo.json` orchestrate packages selected by `pnpm-workspace.yaml`: `apps/*`, `packages/*` and `servers/*`. The base has no runtime packages yet; commands only run tasks that exist in package scripts.
+The pinned `turbo` dependency and root `turbo.json` orchestrate packages selected by `pnpm-workspace.yaml`: `apps/*`, `packages/*` and `servers/*`. Commands run the tasks declared by the active workspace packages.
 
 Root `pnpm build`, `pnpm dev`, `pnpm lint` and `pnpm typecheck` delegate to `turbo run`. Root `pnpm test` runs workspace tests and the repository-wide `test:tooling` task. The latter runs the existing formatter and hook fixtures directly and is registered as `//#test:tooling`. It is uncached so each invocation checks the current Git and hook environment. `prepare`, `format` and `format:check` remain direct commands: hook installation has side effects, and formatting depends on Git revisions, staged changes and untracked files rather than package inputs.
 
@@ -40,9 +40,15 @@ Each CI run records the validation revision, comparison revisions, commands and 
 
 The `ci-result` job aggregates validation through `needs`, including `changes` and `quality`. It runs with `always()` so dependency failures do not skip the aggregate check. Failed or cancelled dependencies fail `ci-result`. The `changes` job must succeed; a skipped `quality` job passes only when the planner selected no validation. Successful dependencies and other skipped dependencies pass. Every new PR validation job must be included in `ci-result.needs`. The aggregate job runs on Ubuntu for the same PR, main-push and manual-dispatch events.
 
+## NMath distribution validation
+
+The [NMath distribution contract](packages-nmath-distribution-contract.md) owns native tarball staging, VSIX packaging and evidence validation. The affected planner also selects fixtures for NMath package and extension paths, Rust crate paths, Cargo manifests/lockfile, the Rust toolchain selector, packaging targets and NMath release workflows. Affected quality validation runs an installed-package smoke through root Turbo in addition to existing checks.
+
+Dedicated prerelease artifact builds use the eight labeled native release environments; they are separate from PRs, main pushes and affected manual CI. The manual distribution evidence gate runs on Ubuntu against the selected source revision and actual tested artifact hashes. Neither workflow publishes packages or substitutes build results for native/GPU/editor acceptance.
+
 ## Assets and licensing
 
-Every repository-owned `dist` directory is ignored generated output and must be removed after validation. Assets at least 512 KiB require exact-path Git LFS attributes and hydration before use. There are no LFS assets in this base.
+Every repository-owned `dist` directory is ignored generated output and must be removed after validation. Assets at least 512 KiB require exact-path Git LFS attributes and hydration before use. Hydrate any tracked LFS assets before compilation, testing or packaging.
 
 ## Dependency updates
 
