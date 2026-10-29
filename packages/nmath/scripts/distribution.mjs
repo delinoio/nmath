@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   copyFileSync,
   cpSync,
   mkdirSync,
@@ -12,6 +13,8 @@ import {
 import { gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { verifyBundle } from "./license-bundle.mjs";
 
 export const root = fileURLToPath(new URL("../../../", import.meta.url));
 export const targets = JSON.parse(
@@ -47,6 +50,7 @@ export function platformManifest(target, version = manifest.version) {
       "LICENSE",
       "NOTICE",
       "THIRD_PARTY_LICENSES.txt",
+      "THIRD_PARTY_LICENSES.txt.json",
     ],
   };
 }
@@ -56,15 +60,28 @@ function licenses(destination, licenseBundle) {
       "Supply NMATH_LICENSE_BUNDLE with reviewed full third-party license terms and notices.",
     );
   }
-  const numpyLicenses = ["NUMPY-LICENSE.txt", "NUMPY-RANDOM-LICENSE.txt"]
-    .map((name) =>
+  const numpyLicenses = ["NUMPY-LICENSE.txt", "NUMPY-RANDOM-LICENSE.txt"].map(
+    (name) =>
       readFileSync(join(root, "crates/nmath-core/src/random", name), "utf8"),
-    )
-    .join("\n\n");
-  writeFileSync(
-    join(destination, "THIRD_PARTY_LICENSES.txt"),
-    `${readFileSync(licenseBundle, "utf8")}\n\nNumPy random distribution sources\n\n${numpyLicenses}`,
   );
+  if (existsSync(`${licenseBundle}.json`)) {
+    verifyBundle(licenseBundle, { allowPending: true });
+    const bundled = readFileSync(licenseBundle, "utf8");
+    if (numpyLicenses.some((license) => !bundled.includes(license)))
+      throw new Error("License bundle omits imported NumPy random notices.");
+    copyFileSync(
+      `${licenseBundle}.json`,
+      join(destination, "THIRD_PARTY_LICENSES.txt.json"),
+    );
+    copyFileSync(licenseBundle, join(destination, "THIRD_PARTY_LICENSES.txt"));
+  } else {
+    // Synthetic staging fixtures do not have a receipt. Preserve their notice
+    // and include the imported source terms without claiming release review.
+    writeFileSync(
+      join(destination, "THIRD_PARTY_LICENSES.txt"),
+      `${readFileSync(licenseBundle, "utf8")}\n\n${numpyLicenses.join("\n\n")}`,
+    );
+  }
   for (const name of ["LICENSE", "NOTICE"])
     copyFileSync(join(source, name), join(destination, name));
 }
@@ -123,6 +140,7 @@ export function stagePublic(output, licenseBundle) {
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_LICENSES.txt",
+    "THIRD_PARTY_LICENSES.txt.json",
     "compatibility.json.gz",
   ];
   published.optionalDependencies = Object.fromEntries(
@@ -138,6 +156,7 @@ if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
+  verifyBundle(process.env.NMATH_LICENSE_BUNDLE);
   const triple = process.env.NMATH_TARGET;
   const target = targetFor(triple);
   const output = join(root, "packaging/nmath/dist");
@@ -147,6 +166,7 @@ if (
     [
       "build",
       "--locked",
+      "--offline",
       "--release",
       "--target",
       target.rust,

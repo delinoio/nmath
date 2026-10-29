@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "repositoryLicense": "Apache-2.0",
+  "reviewBoundaries": [
+    "license-choices-and-source-headers",
+    "repository-imported-material",
+    "compiler-embedded-material",
+    "vsix-bundler-inputs",
+    "native-toolchain-and-system-libraries"
+  ],
+  "supplementTemplate": {
+    "name": "",
+    "source": "",
+    "sha256": "",
+    "notes": ""
+  },
+  "status": "pending",
+  "notes": "This template records review requirements. It does not declare that a license permits distribution or that a platform has passed acceptance. Preserve upstream terms and notices without rewriting them."
+}
