@@ -130,16 +130,9 @@ fn frozen_columns_use_one_environment_and_retain_values() {
     ]);
     let budget = crate::memory::MemoryBudget::new(Device::Cpu, 4096);
     let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
-    let mut inputs = Vec::new();
-    p.sources(&mut inputs);
-    {
-        let _gate = SNAPSHOT_GATE.lock().unwrap();
-        for input in &inputs {
-            env.freeze(input).unwrap();
-        }
-    }
+    let frozen = streaming::Frozen::new(&p, &mut env).unwrap();
     write(&a, 99);
-    let out = execute(&p, &mut env).unwrap();
+    let out = execute(&p, &mut env, &frozen).unwrap();
     assert_eq!(out.columns[0].values.buffer, Buffer::I64(vec![1, 2]));
     assert_eq!(out.columns[1].values.buffer, Buffer::I64(vec![11, 12]));
 }
@@ -227,4 +220,323 @@ fn complex_columns_reject_before_admission() {
     let a = c.array(vec![1], Buffer::C128(vec![[1.0, 2.0]])).unwrap();
     let error = run(&c, source(&a)).err().unwrap();
     assert_eq!(error.code, ErrorCode::DTypeUnsupported);
+}
+
+#[test]
+fn batched_arithmetic_filter_projection_fits_without_full_intermediates() {
+    const N: usize = 8193;
+    // Inputs + atomic snapshots fit. A full input copy and arithmetic result
+    // would exceed this budget even before materializing masks and selection.
+    let c = context(250_000);
+    let a = c
+        .array(vec![N], Buffer::I64((0..N as i64).collect()))
+        .unwrap();
+    let mask = c
+        .array(
+            vec![N],
+            Buffer::Bool((0..N).map(|i| i % 1024 == 0).collect()),
+        )
+        .unwrap();
+    let valid = c
+        .array(vec![N], Buffer::Bool((0..N).map(|i| i != 1024).collect()))
+        .unwrap();
+    let mut expr = Expr::input(&a);
+    for _ in 0..12 {
+        expr = Expr::binary(crate::BinaryOp::Add, &expr, &Expr::scalar(Scalar::Int(1))).unwrap();
+    }
+    let p = Plan::Source(vec![
+        Column {
+            values: expr,
+            valid: Some(Expr::input(&valid)),
+        },
+        Column {
+            values: Expr::input(&mask),
+            valid: Some(Expr::input(&valid)),
+        },
+    ]);
+    // The projected predicate refers to a different position than at source.
+    let p = Plan::Select(Box::new(p), vec![1, 0, 0]);
+    let p = Plan::Filter(Box::new(p), 0);
+    let p = Plan::Select(Box::new(p), vec![2, 1]);
+    let baseline = c.metrics().cpu_memory.used;
+    let out = run(&c, p).unwrap();
+    let expected = Buffer::I64(
+        (0..N)
+            .filter(|i| i % 1024 == 0 && *i != 1024)
+            .map(|i| i as i64 + 12)
+            .collect(),
+    );
+    assert_eq!(out.rows, 8);
+    assert_eq!(out.columns[0].values.buffer, expected);
+    assert_eq!(out.columns[1].values.buffer, expected);
+    assert_eq!(out.columns[0].valid.buffer, Buffer::Bool(vec![true; 8]));
+    assert!(c.metrics().cpu_memory.peak <= 250_000);
+    drop(out);
+    c.close();
+    assert_eq!(c.metrics().cpu_memory.used, baseline);
+}
+
+#[test]
+fn batch_snapshot_includes_masks_and_tail_and_repeated_execution() {
+    let c = context(200_000);
+    let n = 2051;
+    let a = c.array(vec![n], Buffer::I64(vec![3; n])).unwrap();
+    let m = c.array(vec![n], Buffer::Bool(vec![true; n])).unwrap();
+    let p = Plan::Source(vec![Column {
+        values: Expr::input(&a),
+        valid: Some(Expr::input(&m)),
+    }]);
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 200_000);
+    let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
+    let frozen = streaming::Frozen::new(&p, &mut env).unwrap();
+    write(&a, 99);
+    write(&m, 0);
+    let out = execute(&p, &mut env, &frozen).unwrap();
+    assert_eq!(out.columns[0].values.buffer, Buffer::I64(vec![3; n]));
+    assert_eq!(out.columns[0].valid.buffer, Buffer::Bool(vec![true; n]));
+    let out = run(&c, p).unwrap();
+    assert_eq!(out.columns[0].values.buffer.get(0), Scalar::Int(99));
+    assert!(!out.columns[0].valid(0));
+    assert_eq!(out.columns[0].values.buffer.get(n - 1), Scalar::Int(3));
+}
+
+#[test]
+fn batched_rejection_and_cancellation_release_all_charges() {
+    let c = context(100_000);
+    let a = c.array(vec![4096], Buffer::I64(vec![1; 4096])).unwrap();
+    let baseline = c.metrics().cpu_memory.used;
+    // Snapshot and its offsets fit, but the completed result plus a batch do
+    // not.
+    let error = run(&c, source(&a)).err().unwrap();
+    assert_eq!(error.code, ErrorCode::MemoryBudgetExceeded);
+    c.close();
+    assert_eq!(c.metrics().cpu_memory.used, baseline);
+
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 1_000_000);
+    let token = CancellationToken::new();
+    let mut env = JobEnv::new(Device::Cpu, budget.clone(), token.clone());
+    let p = source(&a);
+    let frozen = streaming::Frozen::new(&p, &mut env).unwrap();
+    token.cancel();
+    assert_eq!(
+        execute(&p, &mut env, &frozen).err().unwrap().code,
+        ErrorCode::Cancelled
+    );
+    drop(frozen);
+    drop(env);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn hash_join_preserves_duplicate_nan_zero_and_null_order() {
+    let c = context(100_000);
+    let keys = c
+        .array(vec![5], Buffer::F64(vec![f64::NAN, -0.0, 0.0, 5.0, 8.0]))
+        .unwrap();
+    let mask = c
+        .array(vec![5], Buffer::Bool(vec![true, true, true, false, true]))
+        .unwrap();
+    let ids = c.array(vec![5], Buffer::I64(vec![0, 1, 2, 3, 4])).unwrap();
+    let p = Plan::Source(vec![
+        Column {
+            values: Expr::input(&keys),
+            valid: Some(Expr::input(&mask)),
+        },
+        Column {
+            values: Expr::input(&ids),
+            valid: None,
+        },
+    ]);
+    for nulls in [true, false] {
+        let out = run(
+            &c,
+            Plan::Join(Box::new(p.clone()), Box::new(p.clone()), 0, 0, true, nulls),
+        )
+        .unwrap();
+        assert_eq!(out.rows, 7);
+        assert_eq!(
+            out.columns[1].values.buffer,
+            Buffer::I64(vec![0, 1, 1, 2, 2, 3, 4])
+        );
+        assert_eq!(
+            out.columns[3].values.buffer,
+            Buffer::I64(vec![0, 1, 2, 1, 2, if nulls { 3 } else { 0 }, 4])
+        );
+        assert_eq!(out.columns[3].valid(5), nulls);
+    }
+    let out = run(
+        &c,
+        Plan::Group(Box::new(p), 0, 1, Aggregate::Sum, false, Flavor::Polars),
+    )
+    .unwrap();
+    assert_eq!(out.columns[1].values.buffer, Buffer::I64(vec![0, 3, 3, 4]));
+    assert!(!out.columns[0].valid(2));
+}
+
+#[test]
+fn hash_groups_scale_with_distinct_keys_and_keep_first_seen_order() {
+    let c = context(4_000_000);
+    let n = 20_000;
+    let a = c
+        .array(vec![n], Buffer::I64((0..n as i64).rev().collect()))
+        .unwrap();
+    let out = run(
+        &c,
+        Plan::Group(
+            Box::new(source(&a)),
+            0,
+            0,
+            Aggregate::Count,
+            false,
+            Flavor::Polars,
+        ),
+    )
+    .unwrap();
+    assert_eq!(out.rows, n);
+    assert_eq!(
+        out.columns[0].values.buffer,
+        Buffer::I64((0..n as i64).rev().collect())
+    );
+    assert_eq!(out.columns[1].values.buffer, Buffer::U32(vec![1; n]));
+}
+
+#[test]
+fn batch_kernels_match_dense_broadcast_cast_and_strided_snapshots() {
+    let c = context(1_000_000);
+    let n = 2051;
+    let a = c
+        .array(vec![n], Buffer::I32((0..n as i32).collect()))
+        .unwrap();
+    let a = a
+        .view(&[Selector::Slice {
+            start: None,
+            stop: None,
+            step: Some(-1),
+        }])
+        .unwrap();
+    let one = c.array(vec![1], Buffer::I32(vec![7])).unwrap();
+    let sum = Expr::binary(crate::BinaryOp::Add, &Expr::input(&a), &Expr::input(&one)).unwrap();
+    let cast = Expr::cast(&sum, DType::Float32).unwrap();
+    let e = Expr::unary(crate::UnaryOp::Neg, &cast).unwrap();
+    let p = Plan::Source(vec![Column {
+        values: e.clone(),
+        valid: None,
+    }]);
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 1_000_000);
+    let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
+    env.freeze(&e).unwrap();
+    let reference = env.eval_dense(&e).unwrap();
+    let out = run(&c, p).unwrap();
+    assert_eq!(out.columns[0].values.buffer, reference.buffer);
+}
+
+#[test]
+fn full_projection_result_fits_with_batches_but_dense_expression_does_not() {
+    let c = context(250_000);
+    let n = 8193;
+    let a = c.array(vec![n], Buffer::I64(vec![1; n])).unwrap();
+    let e = Expr::binary(
+        crate::BinaryOp::Add,
+        &Expr::input(&a),
+        &Expr::scalar(Scalar::Int(10)),
+    )
+    .unwrap();
+    let e = Expr::binary(crate::BinaryOp::Mul, &e, &Expr::scalar(Scalar::Int(2))).unwrap();
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 250_000);
+    let _inputs = budget.reserve((n * 8) as u64).unwrap();
+    let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
+    env.freeze(&e).unwrap();
+    assert_eq!(
+        env.eval_dense(&e).unwrap_err().code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    let out = run(
+        &c,
+        Plan::Source(vec![Column {
+            values: e,
+            valid: None,
+        }]),
+    )
+    .unwrap();
+    assert_eq!(out.columns[0].values.buffer, Buffer::I64(vec![22; n]));
+}
+
+#[test]
+fn mixed_materialization_boundaries_share_the_atomic_snapshot() {
+    let c = context(100_000);
+    let a = c.array(vec![3], Buffer::I64(vec![1, 2, 3])).unwrap();
+    let indexed = Expr::index(
+        &Expr::input(&a),
+        vec![Selector::Slice {
+            start: None,
+            stop: None,
+            step: Some(-1),
+        }],
+    )
+    .unwrap();
+    let p = Plan::Join(
+        Box::new(source(&a)),
+        Box::new(Plan::Source(vec![Column {
+            values: indexed,
+            valid: None,
+        }])),
+        0,
+        0,
+        false,
+        false,
+    );
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 100_000);
+    let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
+    let frozen = streaming::Frozen::new(&p, &mut env).unwrap();
+    write(&a, 99);
+    let out = execute(&p, &mut env, &frozen).unwrap();
+    assert_eq!(out.columns[0].values.buffer, Buffer::I64(vec![1, 2, 3]));
+    assert_eq!(out.columns[1].values.buffer, Buffer::I64(vec![1, 2, 3]));
+}
+
+#[test]
+fn empty_pipeline_preserves_scalar_expression_errors() {
+    let c = context(10_000);
+    let a = c.array(vec![0], Buffer::I64(vec![])).unwrap();
+    let scalar = Expr::binary(
+        crate::BinaryOp::Pow,
+        &Expr::scalar(Scalar::Int(2)),
+        &Expr::scalar(Scalar::Int(-1)),
+    )
+    .unwrap();
+    let e = Expr::binary(crate::BinaryOp::Add, &Expr::input(&a), &scalar).unwrap();
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 10_000);
+    let mut env = JobEnv::new(Device::Cpu, budget, CancellationToken::new());
+    env.freeze(&e).unwrap();
+    let expected = env.eval_dense(&e).unwrap_err().code;
+    let actual = run(
+        &c,
+        Plan::Source(vec![Column {
+            values: e,
+            valid: None,
+        }]),
+    )
+    .err()
+    .unwrap()
+    .code;
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn hash_index_budget_rejection_is_atomic() {
+    let c = context(10_000);
+    let a = c.array(vec![100], Buffer::I64((0..100).collect())).unwrap();
+    let budget = crate::memory::MemoryBudget::new(Device::Cpu, 900);
+    let env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
+    let column = MaterializedColumn {
+        values: a.snapshot(&budget).unwrap(),
+        valid: all_valid(&env, 100).unwrap(),
+    };
+    assert_eq!(
+        KeyIndex::new(&column, true, &env).err().unwrap().code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    assert_eq!(budget.usage().used, 900);
+    drop(column);
+    assert_eq!(budget.usage().used, 0);
 }

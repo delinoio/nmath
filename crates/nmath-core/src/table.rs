@@ -13,6 +13,9 @@ use crate::{
     memory::{Device, Reservation},
 };
 
+#[path = "table_stream.rs"]
+mod streaming;
+
 // Array mutation commits take this gate too. Keep the gate only while freezing,
 // never while evaluating kernels or waiting for scheduler/storage tickets.
 pub(crate) static SNAPSHOT_GATE: Mutex<()> = Mutex::new(());
@@ -66,26 +69,6 @@ fn shape() -> Error {
     )
 }
 impl Plan {
-    fn sources(&self, out: &mut Vec<Expr>) {
-        match self {
-            Self::Source(cols) => {
-                for c in cols {
-                    out.push(c.values.clone());
-                    if let Some(v) = &c.valid {
-                        out.push(v.clone());
-                    }
-                }
-            }
-            Self::Join(a, b, ..) => {
-                a.sources(out);
-                b.sources(out);
-            }
-            Self::Select(a, ..) | Self::Filter(a, ..) | Self::Sort(a, ..) | Self::Group(a, ..) => {
-                a.sources(out)
-            }
-        }
-    }
-
     fn validate(&self, context: u64) -> Result<usize> {
         Ok(match self {
             Self::Source(cols) => {
@@ -172,26 +155,8 @@ pub fn compute(
     let result = Arc::new(Mutex::new(None));
     let output = result.clone();
     let work: Work = Box::new(move |env| {
-        let mut inputs = Vec::new();
-        plan.sources(&mut inputs);
-        {
-            let _gate = SNAPSHOT_GATE.lock().unwrap();
-            env.token.check()?;
-            // NdArray::snapshot currently uses an offset vector. Reserve its
-            // largest temporary here until snapshot owns that reservation.
-            let largest = inputs
-                .iter()
-                .flat_map(Expr::inputs)
-                .map(|a| a.size())
-                .max()
-                .unwrap_or(0);
-            let _offsets = reserve(env, largest, std::mem::size_of::<usize>())?;
-            for input in &inputs {
-                env.token.check()?;
-                env.freeze(input)?;
-            }
-        }
-        let table = execute(&plan, env)?;
+        let frozen = streaming::Frozen::new(&plan, env)?;
+        let table = execute(&plan, env, &frozen)?;
         env.token.check()?;
         *output.lock().unwrap() = Some(table);
         Ok(JobOutput::Unit)
@@ -263,6 +228,93 @@ fn equal(a: &MaterializedColumn, i: usize, b: &MaterializedColumn, j: usize, nul
         _ => false,
     }
 }
+// Fixed-capacity open addressing keeps all row-index storage reserved before
+// allocation. Randomized hashes avoid predictable collision chains. Keys use
+// the same NaN, signed-zero, exact-integer, and null equivalence as cmp/equal.
+struct KeyIndex {
+    slots: Vec<usize>,
+    next: Vec<usize>,
+    hash: std::collections::hash_map::RandomState,
+    _slots_charge: Reservation,
+    _next_charge: Reservation,
+}
+const NO_ROW: usize = usize::MAX;
+impl KeyIndex {
+    fn new(key: &MaterializedColumn, nulls: bool, env: &JobEnv) -> Result<Self> {
+        let rows = key.values.size();
+        let capacity = rows
+            .checked_mul(2)
+            .and_then(|n| n.max(1).checked_next_power_of_two())
+            .ok_or_else(invalid)?;
+        let slots_charge = reserve(env, capacity, std::mem::size_of::<usize>())?;
+        let next_charge = reserve(env, rows, std::mem::size_of::<usize>())?;
+        let mut index = Self {
+            slots: vec![NO_ROW; capacity],
+            next: vec![NO_ROW; rows],
+            hash: std::collections::hash_map::RandomState::new(),
+            _slots_charge: slots_charge,
+            _next_charge: next_charge,
+        };
+        // Prepending in reverse order preserves original right-match order and
+        // the input accumulation order within each group.
+        for i in (0..rows).rev() {
+            env.token.check()?;
+            if !nulls && !key.valid(i) {
+                continue;
+            }
+            let slot = index.slot(key, key, i, env)?;
+            index.next[i] = index.slots[slot];
+            index.slots[slot] = i;
+        }
+        Ok(index)
+    }
+
+    fn slot(
+        &self,
+        indexed: &MaterializedColumn,
+        key: &MaterializedColumn,
+        row: usize,
+        env: &JobEnv,
+    ) -> Result<usize> {
+        use std::hash::BuildHasher;
+        let bits = if !key.valid(row) {
+            0
+        } else {
+            match key.values.buffer.get(row) {
+                Scalar::Int(n) => n as u64,
+                Scalar::UInt(n) => n,
+                Scalar::Bool(n) => u64::from(n),
+                Scalar::Float(n) if n == 0.0 => 0,
+                Scalar::Float(n) if n.is_nan() => f64::NAN.to_bits(),
+                Scalar::Float(n) => n.to_bits(),
+                Scalar::Complex(_) => return Err(invalid()),
+            }
+        };
+        let mut slot = self.hash.hash_one((key.valid(row), bits)) as usize & (self.slots.len() - 1);
+        loop {
+            env.token.check()?;
+            let head = self.slots[slot];
+            if head == NO_ROW || equal(indexed, head, key, row, true) {
+                return Ok(slot);
+            }
+            slot = (slot + 1) & (self.slots.len() - 1);
+        }
+    }
+
+    fn find(
+        &self,
+        indexed: &MaterializedColumn,
+        key: &MaterializedColumn,
+        row: usize,
+        nulls: bool,
+        env: &JobEnv,
+    ) -> Result<usize> {
+        if !nulls && !key.valid(row) {
+            return Ok(NO_ROW);
+        }
+        Ok(self.slots[self.slot(indexed, key, row, env)?])
+    }
+}
 fn take(table: &Table, rows: &[Option<usize>], env: &JobEnv) -> Result<Table> {
     let mut columns = Vec::new();
     for col in &table.columns {
@@ -284,7 +336,10 @@ fn take(table: &Table, rows: &[Option<usize>], env: &JobEnv) -> Result<Table> {
         rows: rows.len(),
     })
 }
-fn execute(plan: &Plan, env: &mut JobEnv) -> Result<Table> {
+fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<Table> {
+    if let Some(result) = frozen.execute(plan, env) {
+        return result;
+    }
     env.token.check()?;
     match plan {
         Plan::Source(cols) => {
@@ -302,7 +357,7 @@ fn execute(plan: &Plan, env: &mut JobEnv) -> Result<Table> {
             Ok(Table { columns, rows })
         }
         Plan::Select(p, indices) => {
-            let t = execute(p, env)?;
+            let t = execute(p, env, frozen)?;
             let mut columns = Vec::new();
             for &i in indices {
                 let c = &t.columns[i];
@@ -319,7 +374,7 @@ fn execute(plan: &Plan, env: &mut JobEnv) -> Result<Table> {
             })
         }
         Plan::Filter(p, k) => {
-            let t = execute(p, env)?;
+            let t = execute(p, env, frozen)?;
             let c = &t.columns[*k];
             if c.values.buffer.dtype() != DType::Bool {
                 return Err(invalid());
@@ -337,7 +392,7 @@ fn execute(plan: &Plan, env: &mut JobEnv) -> Result<Table> {
             take(&t, &rows, env)
         }
         Plan::Sort(p, k, descending, nulls_last) => {
-            let t = execute(p, env)?;
+            let t = execute(p, env, frozen)?;
             let c = &t.columns[*k];
             let _charge = reserve(env, t.rows, 2 * std::mem::size_of::<Option<usize>>())?;
             let mut rows: Vec<_> = (0..t.rows).map(Some).collect();
@@ -390,53 +445,56 @@ fn execute(plan: &Plan, env: &mut JobEnv) -> Result<Table> {
             take(&t, &rows, env)
         }
         Plan::Join(a, b, x, y, left, nulls) => {
-            let a = execute(a, env)?;
-            let b = execute(b, env)?;
+            let a = execute(a, env, frozen)?;
+            let b = execute(b, env, frozen)?;
             if a.columns[*x].values.buffer.dtype() != b.columns[*y].values.buffer.dtype() {
                 return Err(Error::new(
                     ErrorCode::DTypeUnsupported,
                     "Join keys must have the same numeric dtype. Cast keys explicitly.",
                 ));
             }
+            let index = KeyIndex::new(&b.columns[*y], *nulls, env)?;
             let mut count = 0usize;
             for i in 0..a.rows {
-                let mut found = false;
-                for j in 0..b.rows {
-                    env.token.check()?;
-                    if equal(&a.columns[*x], i, &b.columns[*y], j, *nulls) {
-                        count = count.checked_add(1).ok_or_else(invalid)?;
-                        found = true;
-                    }
-                }
-                if *left && !found {
+                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, env)?;
+                if *left && j == NO_ROW {
                     count = count.checked_add(1).ok_or_else(invalid)?;
+                }
+                while j != NO_ROW {
+                    env.token.check()?;
+                    count = count.checked_add(1).ok_or_else(invalid)?;
+                    j = index.next[j];
                 }
             }
             let _charge = reserve(env, count, 2 * std::mem::size_of::<Option<usize>>())?;
             let mut ar = Vec::with_capacity(count);
             let mut br = Vec::with_capacity(count);
             for i in 0..a.rows {
-                let mut found = false;
-                for j in 0..b.rows {
-                    env.token.check()?;
-                    if equal(&a.columns[*x], i, &b.columns[*y], j, *nulls) {
-                        ar.push(Some(i));
-                        br.push(Some(j));
-                        found = true;
-                    }
-                }
-                if *left && !found {
+                let mut j = index.find(&b.columns[*y], &a.columns[*x], i, *nulls, env)?;
+                if *left && j == NO_ROW {
                     ar.push(Some(i));
                     br.push(None);
+                }
+                while j != NO_ROW {
+                    env.token.check()?;
+                    ar.push(Some(i));
+                    br.push(Some(j));
+                    j = index.next[j];
                 }
             }
             let mut out = take(&a, &ar, env)?;
             out.columns.extend(take(&b, &br, env)?.columns);
             Ok(out)
         }
-        Plan::Group(p, k, v, op, drop_nulls, flavor) => {
-            group(execute(p, env)?, *k, *v, *op, *drop_nulls, *flavor, env)
-        }
+        Plan::Group(p, k, v, op, drop_nulls, flavor) => group(
+            execute(p, env, frozen)?,
+            *k,
+            *v,
+            *op,
+            *drop_nulls,
+            *flavor,
+            env,
+        ),
     }
 }
 fn group(
@@ -450,22 +508,12 @@ fn group(
 ) -> Result<Table> {
     let key = &t.columns[k];
     let value = &t.columns[v];
+    let index = KeyIndex::new(key, !drop_nulls, env)?;
     let _charge = reserve(env, t.rows, std::mem::size_of::<Option<usize>>())?;
     let mut reps: Vec<Option<usize>> = Vec::with_capacity(t.rows);
     for i in 0..t.rows {
         env.token.check()?;
-        if drop_nulls && !key.valid(i) {
-            continue;
-        }
-        let mut found = false;
-        for &j in &reps {
-            env.token.check()?;
-            if equal(key, i, key, j.unwrap(), true) {
-                found = true;
-                break;
-            }
-        }
-        if !found {
+        if index.find(key, key, i, !drop_nulls, env)? == i {
             reps.push(Some(i));
         }
     }
@@ -511,9 +559,12 @@ fn group(
         let mut unsigned = 0u64;
         let mut float = 0f64;
         let mut extreme = None;
-        for i in 0..t.rows {
+        let mut row = rep.unwrap();
+        while row != NO_ROW {
             env.token.check()?;
-            if !equal(key, rep.unwrap(), key, i, true) || !value.valid(i) {
+            let i = row;
+            row = index.next[i];
+            if !value.valid(i) {
                 continue;
             }
             let s = value.values.buffer.get(i);

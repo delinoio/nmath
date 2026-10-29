@@ -164,7 +164,9 @@ Plan nodes are source, named/positional projection, boolean-column filter, stabl
 
 All buffers for source snapshots, evaluated columns, row selection, sort scratch space, join row mappings, group representatives, aggregation intermediates and results are reserved against the CPU budget before allocation. Native table results retain their data and validity reservations until their array handles are released. Metadata bookkeeping is not a process-wide memory cap. Integer key comparisons preserve all 64 bits.
 
-Stable sorting uses an iterative merge sort with cooperative cancellation. Join matching and group discovery currently use repeated scans. The executor materializes intermediates; it is not the required internal streaming engine or a query optimizer. More scalable algorithms remain implementation targets.
+Row-local numeric source expressions (inputs, scalars, unary/binary arithmetic and casts), projections and boolean-column filters execute in internal batches of at most 1,024 rows. Filters count against frozen inputs before reserving the exact completed result, then evaluate batches again to fill it. Snapshots still cover all source values and masks atomically at actual execution start. No public batch-stream API is exposed.
+
+Stable sorting uses an iterative merge sort with cooperative cancellation. Joins and groups use pre-reserved randomized hash indexes that preserve first-seen group order, right-match order, exact integer keys, null equivalence, NaN equivalence and signed-zero equivalence. Group accumulation retains input order. Sort, join, group and non-row-local source expressions remain materialization boundaries; eligible input pipelines can use batches. Snapshots, hash indexes and completed results must fit the CPU budget. Spill-to-disk execution, streaming group/join state and full Polars compatibility remain implementation targets.
 
 ### NPZ archives
 
