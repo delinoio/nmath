@@ -9,6 +9,31 @@ use crate::{
     sync::CancellationToken,
 };
 
+/// Validate the complete allocation size before budget admission or allocation.
+pub(crate) fn checked_byte_len(len: usize, dtype: DType) -> Result<usize> {
+    dtype.ensure_computable()?;
+    len.checked_mul(dtype.item_size())
+        .filter(|&bytes| bytes <= isize::MAX as usize)
+        .ok_or_else(allocation_error)
+}
+
+fn allocation_error() -> Error {
+    Error::new(
+        ErrorCode::MemoryBudgetExceeded,
+        "The buffer allocation is too large. Reduce the array size or string width.",
+    )
+}
+
+fn unicode_storage(len: usize, width: usize) -> Result<Vec<u32>> {
+    let bytes = checked_byte_len(len, DType::Str(width))?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(bytes / 4)
+        .map_err(|_| allocation_error())?;
+    values.resize(bytes / 4, 0);
+    Ok(values)
+}
+
 /// A JS-facing scalar. 64-bit integers are carried exactly.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scalar {
@@ -170,7 +195,7 @@ impl Buffer {
             if text.chars().count() > width {
                 return Err(crate::dtype::unsupported());
             }
-            let mut values = vec![0; len * width];
+            let mut values = unicode_storage(len, width)?;
             for row in values.chunks_exact_mut(width) {
                 for (slot, c) in row.iter_mut().zip(text.chars()) {
                     *slot = c as u32;
@@ -444,7 +469,7 @@ impl Buffer {
         use crate::dtype::unsupported;
         match (self, dtype) {
             (Self::Unicode { width, values }, DType::Str(target)) => {
-                let mut out = vec![0; self.len() * target];
+                let mut out = unicode_storage(self.len(), target)?;
                 for (i, row) in values.chunks_exact(*width).enumerate() {
                     if i % 16384 == 0 {
                         token.check()?;
@@ -652,6 +677,31 @@ impl DenseArray {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unicode_allocations_reject_byte_overflow() {
+        let width = usize::MAX / 4096 + 1;
+        let input = Buffer::Unicode {
+            width: 1,
+            values: vec![0; 1024],
+        };
+        // The element count fits usize, but its byte count wraps to zero.
+        for result in [
+            input.cast(DType::Str(width)),
+            Buffer::filled(DType::Str(width), 1024, Scalar::Text(String::new())),
+        ] {
+            assert_eq!(result.unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+        }
+        // Vec also rejects byte lengths above isize::MAX even without overflow.
+        assert_eq!(
+            checked_byte_len(1, DType::Str(usize::MAX / 4))
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(checked_byte_len(0, DType::Str(width)).unwrap(), 0);
+        assert_eq!(input.cast(DType::Str(2)).unwrap().byte_len(), 8192);
+    }
 
     #[test]
     fn binary16_roundtrips_every_encoding_and_rounds_ties_to_even() {

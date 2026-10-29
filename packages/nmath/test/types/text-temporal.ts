@@ -59,3 +59,16 @@ void [
   copy,
   numeric,
 ];
+
+import * as np from "../../src/numpy.js";
+const namespaceMean: Promise<Temporal<"timedelta64">> = np
+  .mean(deltas)
+  .compute();
+const namespaceMinimum: Promise<Temporal<"datetime64">> = np
+  .min(dates)
+  .compute();
+// @ts-expect-error datetime mean is not defined through the namespace
+np.mean(dates);
+// @ts-expect-error string minima are not supported
+np.min(strings);
+void [namespaceMean, namespaceMinimum];

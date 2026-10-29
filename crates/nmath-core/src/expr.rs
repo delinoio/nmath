@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     array::NdArray,
-    buffer::{Buffer, DenseArray, Scalar},
+    buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
     kernels::{self, BinaryOp, ReduceOp, UnaryOp},
@@ -574,7 +574,7 @@ impl JobEnv {
             }
             ExprKind::Cast(e, dtype) => {
                 let v = self.eval_dense(e)?;
-                let reservation = budget.reserve((v.size() * dtype.item_size()) as u64)?;
+                let reservation = budget.reserve(checked_byte_len(v.size(), *dtype)? as u64)?;
                 DenseArray::new(
                     v.shape.clone(),
                     v.buffer.cast_cancellable(*dtype, &token)?,
@@ -712,6 +712,29 @@ mod tests {
                 Value::View(_) => panic!("binary expression must produce a dense value"),
             },
             Buffer::F64(vec![10.0])
+        );
+    }
+
+    #[test]
+    fn unicode_cast_rejects_byte_overflow_before_budget_admission() {
+        let input = Expr::input(&arr(
+            1,
+            vec![1024],
+            Buffer::Unicode {
+                width: 1,
+                values: vec![0; 1024],
+            },
+        ));
+        let cast = Expr::cast(&input, DType::Str(usize::MAX / 4096 + 1)).unwrap();
+        let mut env = JobEnv::new(
+            Device::Cpu,
+            MemoryBudget::new(Device::Cpu, u64::MAX),
+            CancellationToken::new(),
+        );
+        env.freeze(&cast).unwrap();
+        assert_eq!(
+            env.eval_dense(&cast).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
         );
     }
 
