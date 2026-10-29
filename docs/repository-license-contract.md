@@ -10,4 +10,4 @@ Imported agent skills retain their upstream licenses, attribution and notices. A
 
 ## Distribution
 
-Future distributions must include the complete applicable license terms and notices. Validate package contents in the owning project's distribution checks. This base publishes no runtime packages or release artifacts.
+Future distributions must include the complete applicable license terms and notices. Validate package contents in the owning project's distribution checks. The NMath npm package and VS Code extension include their own `LICENSE` files; the npm package also includes `NOTICE`. Native dependencies retain their applicable licenses and notices. Release automation is not configured; source-build output alone does not establish distribution compliance.
