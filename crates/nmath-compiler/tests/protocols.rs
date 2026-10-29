@@ -90,10 +90,10 @@ fn content_mapper_round_trip() {
     let result = &transformed["result"];
     assert_eq!(result["extension"], json!(".ts"));
     let text = result["text"].as_str().unwrap();
-    assert!(text.contains("const y = __nmath.mul(a, b);"), "{text}");
+    assert!(text == source, "{text}");
     // A position inside the operand `b` maps back to the original position.
     let mappings = result["mappings"].as_array().unwrap();
-    let virtual_b = text.find("b)").unwrap() as i64;
+    let virtual_b = text.find("b;").unwrap() as i64;
     let original_b = source.find('b').unwrap() as i64;
     let segment = mappings
         .iter()
@@ -127,9 +127,8 @@ fn content_mapper_round_trip() {
         "transform",
         json!({ "fileName": "/p/c.nts", "content": "function f() { a[i] = 1; }\n" }),
     );
-    let diagnostic = &bad["result"]["diagnostics"][0];
-    assert_eq!(diagnostic["code"], json!(2));
-    assert_eq!(diagnostic["start"], json!(15));
+    // A standalone mapper has no type evidence for the assignment.
+    assert_eq!(bad["result"]["diagnostics"], json!([]));
 
     let unknown = mapper.call(6, "frobnicate", json!({}));
     assert_eq!(unknown["error"]["code"], json!(-32601));

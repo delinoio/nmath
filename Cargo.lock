@@ -728,8 +728,10 @@ dependencies = [
 name = "nmath-nts"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
  "tracing",
  "tsrs_ast",
+ "tsrs_checker",
  "tsrs_core",
  "tsrs_parser",
  "tsrs_scanner",

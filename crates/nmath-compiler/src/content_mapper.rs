@@ -45,6 +45,7 @@ pub fn serve(reader: impl io::Read, mut writer: impl Write) -> io::Result<()> {
 
 fn serve_buffered(reader: &mut impl BufRead, writer: &mut impl Write) -> io::Result<()> {
     tracing::debug!("content mapper started");
+    let mut projects = std::collections::BTreeMap::<String, Value>::new();
     while let Some(message) = read_message(reader)? {
         let Some(id) = message.get("id").cloned() else {
             // Notifications need no answer.
@@ -55,11 +56,15 @@ fn serve_buffered(reader: &mut impl BufRead, writer: &mut impl Write) -> io::Res
             .and_then(Value::as_str)
             .unwrap_or_default();
         let reply = match Method::parse(name) {
-            Some(method) => handle(method, message.get("params").unwrap_or(&Value::Null))
-                .map_or_else(
-                    |err| error_response(&id, RpcErrorCode::InvalidParams, &err),
-                    |r| response(&id, r),
-                ),
+            Some(method) => handle(
+                method,
+                message.get("params").unwrap_or(&Value::Null),
+                &mut projects,
+            )
+            .map_or_else(
+                |err| error_response(&id, RpcErrorCode::InvalidParams, &err),
+                |r| response(&id, r),
+            ),
             None => error_response(
                 &id,
                 RpcErrorCode::MethodNotFound,
@@ -72,13 +77,35 @@ fn serve_buffered(reader: &mut impl BufRead, writer: &mut impl Write) -> io::Res
     Ok(())
 }
 
-fn handle(method: Method, params: &Value) -> Result<Value, String> {
+fn handle(
+    method: Method,
+    params: &Value,
+    projects: &mut std::collections::BTreeMap<String, Value>,
+) -> Result<Value, String> {
     Ok(match method {
         Method::Initialize => {
             json!({ "positionEncoding": "utf-8", "diagnosticSource": DIAGNOSTIC_SOURCE })
         }
-        Method::OpenProject => json!({}),
-        Method::CloseProject => Value::Null,
+        Method::OpenProject => {
+            let handle = params
+                .get("projectHandle")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            projects.insert(
+                handle.into(),
+                params.get("options").cloned().unwrap_or(Value::Null),
+            );
+            json!({})
+        }
+        Method::CloseProject => {
+            projects.remove(
+                params
+                    .get("projectHandle")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            );
+            Value::Null
+        }
         Method::Transform => {
             let file_name = params
                 .get("fileName")
@@ -88,7 +115,26 @@ fn handle(method: Method, params: &Value) -> Result<Value, String> {
                 .get("content")
                 .and_then(Value::as_str)
                 .ok_or("transform requires content")?;
-            transform_result(file_name, content)
+            let handle = params
+                .get("projectHandle")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if let Some(transforms) = projects
+                .get(handle)
+                .and_then(|options| options.get("transforms"))
+            {
+                let prepared = transforms.get(file_name).ok_or(
+                    "File was not included in semantic analysis; rerun the project command",
+                )?;
+                if prepared.get("source").and_then(Value::as_str) != Some(content) {
+                    return Err("Source changed after semantic analysis; rerun the project \
+                                command"
+                        .into());
+                }
+                prepared["result"].clone()
+            } else {
+                transform_result(file_name, content)
+            }
         }
     })
 }
@@ -110,6 +156,10 @@ pub fn transform_result(file_name: &str, content: &str) -> Value {
         diagnostics = output.diagnostics.len(),
         "transformed .nts file"
     );
+    output_result(&output)
+}
+
+pub fn output_result(output: &nmath_nts::TransformOutput) -> Value {
     let diagnostics: Vec<Value> = output
         .diagnostics
         .iter()

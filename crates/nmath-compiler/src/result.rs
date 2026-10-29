@@ -10,6 +10,8 @@ use serde::{Serialize, Serializer};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompilerCode {
     NtsParse,
+    NtsAmbiguousType,
+    NtsUnsupportedSyntax,
     NtsAssignRequiresAsync,
     Config,
     TypeError,
@@ -20,6 +22,8 @@ impl CompilerCode {
     pub fn as_str(self) -> &'static str {
         match self {
             CompilerCode::NtsParse => "NMATH_NTS_PARSE",
+            CompilerCode::NtsAmbiguousType => DiagnosticCode::AmbiguousType.as_str(),
+            CompilerCode::NtsUnsupportedSyntax => DiagnosticCode::UnsupportedSyntax.as_str(),
             CompilerCode::NtsAssignRequiresAsync => "NMATH_NTS_ASSIGN_REQUIRES_ASYNC",
             CompilerCode::Config => "NMATH_COMPILER_CONFIG",
             CompilerCode::TypeError => "NMATH_COMPILER_TYPE_ERROR",
@@ -30,6 +34,8 @@ impl CompilerCode {
     pub fn recovery(self) -> &'static str {
         match self {
             CompilerCode::NtsParse => DiagnosticCode::Parse.recovery(),
+            CompilerCode::NtsAmbiguousType => DiagnosticCode::AmbiguousType.recovery(),
+            CompilerCode::NtsUnsupportedSyntax => DiagnosticCode::UnsupportedSyntax.recovery(),
             CompilerCode::NtsAssignRequiresAsync => DiagnosticCode::AssignRequiresAsync.recovery(),
             CompilerCode::Config => {
                 "Pass an existing tsconfig.json with -p and fix the reported configuration error."
@@ -49,6 +55,8 @@ impl From<DiagnosticCode> for CompilerCode {
     fn from(code: DiagnosticCode) -> CompilerCode {
         match code {
             DiagnosticCode::Parse => CompilerCode::NtsParse,
+            DiagnosticCode::AmbiguousType => CompilerCode::NtsAmbiguousType,
+            DiagnosticCode::UnsupportedSyntax => CompilerCode::NtsUnsupportedSyntax,
             DiagnosticCode::AssignRequiresAsync => CompilerCode::NtsAssignRequiresAsync,
         }
     }

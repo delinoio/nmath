@@ -116,7 +116,14 @@ mod tests {
     #[test]
     fn synthesized_import_has_no_original_location() {
         let source = "export const x = a + b;\n";
-        let transformed = nmath_nts::transform("/project/src/main.nts", source);
+        let mut plan = nmath_nts::semantic::LoweringPlan::default();
+        plan.operations.insert((17, 22));
+        let transformed = nmath_nts::transform_with_plan(
+            "/project/src/main.nts",
+            source,
+            nmath_nts::TransformOptions::default(),
+            &plan,
+        );
         let map = serde_json::json!({
             "version": 3, "file": "main.js", "sources": ["../src/main.ts"],
             "sourcesContent": [transformed.text], "names": [], "mappings": "AAAA;AACA"

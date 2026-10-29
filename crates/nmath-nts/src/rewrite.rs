@@ -64,31 +64,6 @@ fn unary_helper(operator: Kind) -> Option<&'static str> {
     })
 }
 
-/// Whether an expression is built only from numeric or string literals, so
-/// arithmetic on it keeps ordinary JS semantics and is not rewritten.
-fn is_literal_only(node: P<Node>) -> bool {
-    match node.kind() {
-        Kind::NumericLiteral
-        | Kind::BigIntLiteral
-        | Kind::StringLiteral
-        | Kind::NoSubstitutionTemplateLiteral => true,
-        Kind::ParenthesizedExpression => {
-            is_literal_only(node.as_parenthesized_expression().expression.get())
-        }
-        Kind::PrefixUnaryExpression => {
-            let unary = node.as_prefix_unary_expression();
-            unary_helper(unary.operator).is_some() && is_literal_only(unary.operand)
-        }
-        Kind::BinaryExpression => {
-            let binary = node.as_binary_expression();
-            binary_helper(binary.operator_token.kind()).is_some()
-                && is_literal_only(binary.left)
-                && is_literal_only(binary.right.get())
-        }
-        _ => false,
-    }
-}
-
 fn is_string_literal_like(node: P<Node>) -> bool {
     matches!(
         node.kind(),
@@ -98,6 +73,7 @@ fn is_string_literal_like(node: P<Node>) -> bool {
 
 struct Rewriter<'a> {
     text: &'a str,
+    plan: &'a crate::semantic::LoweringPlan,
     /// The local name of the runtime namespace import.
     namespace: String,
     options: TransformOptions,
@@ -245,9 +221,8 @@ impl Rewriter<'_> {
     fn visit_binary(&mut self, node: P<Node>, async_context: bool, depth: i64) {
         let binary = node.as_binary_expression();
         let operator = binary.operator_token;
-        let right = binary.right.get();
         if let Some(helper) = binary_helper(operator.kind()) {
-            if is_literal_only(binary.left) && is_literal_only(right) {
+            if !self.plan.contains(self.token_start(node), end(node)) {
                 return;
             }
             let start = self.token_start(node);
@@ -270,6 +245,9 @@ impl Rewriter<'_> {
             return;
         }
         if operator.kind() != Kind::EqualsToken || !is_rewritable_element_access(binary.left) {
+            return;
+        }
+        if !self.plan.contains(self.token_start(node), end(node)) {
             return;
         }
         let target = binary.left;
@@ -363,7 +341,7 @@ impl Rewriter<'_> {
         let Some(helper) = unary_helper(unary.operator) else {
             return;
         };
-        if is_literal_only(unary.operand) {
+        if !self.plan.contains(self.token_start(node), end(node)) {
             return;
         }
         let start = self.token_start(node);
@@ -378,7 +356,10 @@ impl Rewriter<'_> {
     }
 
     fn visit_element_access(&mut self, node: P<Node>, depth: i64) {
-        if !is_rewritable_element_access(node) || is_reference_position(node) {
+        if !is_rewritable_element_access(node)
+            || is_reference_position(node)
+            || !self.plan.contains(self.token_start(node), end(node))
+        {
             return;
         }
         let element = node.as_element_access_expression();
@@ -491,20 +472,30 @@ fn is_reference_position(node: P<Node>) -> bool {
     }
 }
 
-pub(crate) fn run(file_name: &str, source: &str, options: TransformOptions) -> TransformOutput {
+pub(crate) fn run(
+    file_name: &str,
+    source: &str,
+    options: TransformOptions,
+    plan: &crate::semantic::LoweringPlan,
+) -> TransformOutput {
     // The parser allocates the tree in an arena; a scratch region frees it when
     // the transform returns so that long-running callers (the language
     // server and the content mapper) do not accumulate trees.
     let region = tsrs_core::arena::Region::new((source.len() * 16).clamp(64 << 10, 64 << 20));
     let output = {
         let _scope = region.enter();
-        run_in_region(file_name, source, options)
+        run_in_region(file_name, source, options, plan)
     };
     drop(region);
     output
 }
 
-fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> TransformOutput {
+fn run_in_region(
+    file_name: &str,
+    source: &str,
+    options: TransformOptions,
+    plan: &crate::semantic::LoweringPlan,
+) -> TransformOutput {
     // The parser requires a normalized absolute name and only uses it for
     // declaration-file detection, so a fixed `.ts` name stands in for the
     // caller's file name (which may be relative or end in `.nts`).
@@ -546,10 +537,11 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
     let namespace = runtime_namespace(source_file.as_node());
     let mut rewriter = Rewriter {
         text: source,
+        plan,
         namespace,
         options,
         edits: Vec::new(),
-        diagnostics: Vec::new(),
+        diagnostics: plan.diagnostics.clone(),
     };
     for statement in source_file.statements().nodes() {
         rewriter.visit(*statement, true, 1);
@@ -565,7 +557,9 @@ fn run_in_region(file_name: &str, source: &str, options: TransformOptions) -> Tr
     } else {
         format!("{import}\n")
     };
-    rewriter.open(import_at, import_text, 0, None);
+    if !plan.operations.is_empty() {
+        rewriter.open(import_at, import_text, 0, None);
+    }
 
     let Rewriter {
         mut edits,

@@ -134,7 +134,7 @@ fn run_inner(command: ProjectCommand, options: &ProjectOptions) -> CompilerResul
 
     let wrapper_path = format!("{config_dir}/{WRAPPER_CONFIG}");
     let package_dir = format!("{config_dir}/node_modules/{MAPPER_PACKAGE}");
-    let wrapper = serde_json::json!({
+    let mut wrapper = serde_json::json!({
         "extends": format!("./{config_name}"),
         "contentMappers": [{ "package": MAPPER_PACKAGE, "extensions": [nmath_nts::NTS_EXTENSION] }],
     });
@@ -148,6 +148,35 @@ fn run_inner(command: ProjectCommand, options: &ProjectOptions) -> CompilerResul
     let mut virtual_files = BTreeMap::new();
     virtual_files.insert(wrapper_path.clone(), wrapper.to_string());
     virtual_files.insert(format!("{package_dir}/package.json"), manifest.to_string());
+
+    let plans = match analyze_project(&virtual_files, &wrapper_path, &config_dir) {
+        Ok(plans) => plans,
+        Err(message) => return config_error(message),
+    };
+    let mut transforms = serde_json::Map::new();
+    for (path, plan) in &plans {
+        let source = match std::fs::read_to_string(path) {
+            Ok(source) => source,
+            Err(error) => return config_error(format!("Cannot read '{path}': {error}")),
+        };
+        let output = nmath_nts::transform_with_plan(
+            path,
+            &source,
+            nmath_nts::TransformOptions {
+                rewrite_import_extensions: false,
+            },
+            plan,
+        );
+        transforms.insert(
+            path.clone(),
+            serde_json::json!({
+                "source": source,
+                "result": crate::content_mapper::output_result(&output),
+            }),
+        );
+    }
+    wrapper["contentMappers"][0]["options"] = serde_json::json!({ "transforms": transforms });
+    virtual_files.insert(wrapper_path.clone(), wrapper.to_string());
 
     let mut args = vec![
         "--runExternalCode".to_string(),
@@ -188,7 +217,7 @@ fn run_inner(command: ProjectCommand, options: &ProjectOptions) -> CompilerResul
         return result;
     }
     let mut writes = pass.writes;
-    match emit_nts_javascript(&pass.nts_files, &names, &config_dir, &config_name) {
+    match emit_nts_javascript(&pass.nts_files, &names, &config_dir, &config_name, &plans) {
         Ok(nts_writes) => writes.extend(nts_writes),
         Err(diagnostics) => {
             result.ok = false;
@@ -300,6 +329,7 @@ fn emit_nts_javascript(
     names: &FileNames,
     config_dir: &str,
     config_name: &str,
+    plans: &BTreeMap<String, nmath_nts::semantic::LoweringPlan>,
 ) -> Result<BTreeMap<String, String>, Vec<CompilerDiagnostic>> {
     if nts_files.is_empty() {
         return Ok(BTreeMap::new());
@@ -336,7 +366,12 @@ fn emit_nts_javascript(
                 continue;
             }
         };
-        let transformed = nmath_nts::transform(nts, &source);
+        let transformed = nmath_nts::transform_with_plan(
+            nts,
+            &source,
+            nmath_nts::TransformOptions::default(),
+            &plans.get(nts).cloned().unwrap_or_default(),
+        );
         virtual_files.insert(lowered_path.clone(), transformed.text.clone());
         mapped_sources.insert(lowered_path.clone(), (nts.clone(), source, transformed));
         virtual_to_nts.insert(lowered_path, nts.clone());
@@ -958,5 +993,177 @@ mod tests {
             "no backups remain"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+/// Build standard tsrs programs until all proven operations have been lowered.
+/// Each pass adds at least one source operation or terminates; there is no
+/// arbitrary iteration limit that would truncate long inference chains.
+/// `virtual_files` may overlay unsaved sources. The config must register the
+/// NMath content mapper; no external mapper is executed during this analysis.
+pub fn analyze_project(
+    virtual_files: &BTreeMap<String, String>,
+    config_path: &str,
+    cwd: &str,
+) -> Result<BTreeMap<String, nmath_nts::semantic::LoweringPlan>, String> {
+    let mut plans = BTreeMap::new();
+    loop {
+        let fs = Arc::new(OverlayFs::new(virtual_files.clone()));
+        let parse_host = SemanticConfigHost {
+            fs: Arc::clone(&fs),
+            cwd: cwd.into(),
+        };
+        let compiler_options = tsrs_core::CompilerOptions {
+            run_external_code: tsrs_core::Tristate::True,
+            rewrite_relative_import_extensions: tsrs_core::Tristate::True,
+            ..Default::default()
+        };
+        let (config, errors) = tsrs_tsoptions::get_parsed_command_line_of_config_file(
+            config_path,
+            Some(&compiler_options),
+            None,
+            &parse_host,
+            None,
+        );
+        let Some(config) = config else {
+            return Err(errors
+                .iter()
+                .map(|d| d.localize())
+                .collect::<Vec<_>>()
+                .join("\n"));
+        };
+        let mapper = Arc::new(SemanticMapper {
+            plans: plans.clone(),
+        });
+        let host = tsrs_compiler::new_compiler_host(
+            cwd,
+            fs,
+            &bundled::default_lib_path(),
+            None,
+            None,
+            Some(mapper),
+        );
+        let mut options = tsrs_compiler::ProgramOptions::new(P::new(config), host);
+        options.single_threaded = tsrs_core::Tristate::True;
+        options.regions = Some(Arc::new(tsrs_compiler::ProgramRegions::default()));
+        options.checker_regions = true;
+        options.checker_diagnostic_regions = true;
+        let program = tsrs_compiler::new_program(options);
+        let context = tsrs_core::Context::default();
+        let mut next = BTreeMap::new();
+        for file in program.source_files() {
+            if !nmath_nts::is_nts_file(file.file_name()) {
+                continue;
+            }
+            let mut checker = program.get_type_checker_for_file(&context, *file);
+            let previous = plans.get(file.file_name()).cloned().unwrap_or_default();
+            let plan = nmath_nts::semantic::classify_file(&mut checker, *file, &previous);
+            next.insert(file.file_name().to_string(), plan);
+        }
+        // SAFETY: all checker handles are dropped and the result owns only
+        // source offsets and diagnostic strings. No AST or type pointer
+        // escapes.
+        unsafe {
+            tsrs_compiler::free_unshared_program(program);
+        }
+        let changed = next.iter().any(|(path, plan)| {
+            plans
+                .get(path)
+                .is_none_or(|old| old.operations != plan.operations)
+        });
+        plans = next;
+        if !changed {
+            return Ok(plans);
+        }
+    }
+}
+
+struct SemanticConfigHost {
+    fs: Arc<OverlayFs>,
+    cwd: String,
+}
+impl tsrs_tsoptions::ParseConfigHost for SemanticConfigHost {
+    fn fs(&self) -> &dyn FS {
+        &*self.fs
+    }
+
+    fn get_current_directory(&self) -> &str {
+        &self.cwd
+    }
+}
+struct SemanticMapper {
+    plans: BTreeMap<String, nmath_nts::semantic::LoweringPlan>,
+}
+impl tsrs_contentmapper::Project for SemanticMapper {
+    fn refresh(&self) -> Result<(), tsrs_contentmapper::Error> {
+        Ok(())
+    }
+
+    fn identities(&self) -> Result<Vec<String>, tsrs_contentmapper::Error> {
+        Ok(vec!["nmath-semantic".into()])
+    }
+
+    fn identity(
+        &self,
+        _: &tsrs_contentmapper::Mapper,
+    ) -> Result<String, tsrs_contentmapper::Error> {
+        Ok("nmath-semantic".into())
+    }
+
+    fn watched_files(&self) -> Result<Vec<String>, tsrs_contentmapper::Error> {
+        Ok(vec![])
+    }
+
+    fn diagnostics(&self) -> Vec<tsrs_contentmapper::OptionDiagnostic> {
+        vec![]
+    }
+
+    fn close(&self) -> Result<(), tsrs_contentmapper::Error> {
+        Ok(())
+    }
+
+    fn transform(
+        &self,
+        _: &tsrs_contentmapper::Mapper,
+        request: tsrs_contentmapper::Request<'_>,
+    ) -> Result<tsrs_contentmapper::TransformResultFiles, tsrs_contentmapper::Error> {
+        let mut plan = self
+            .plans
+            .get(request.file_name)
+            .cloned()
+            .unwrap_or_default();
+        // Intermediate ambiguity can disappear after inference sees a lowered
+        // producer. Only the converged pass reports semantic diagnostics.
+        plan.diagnostics.clear();
+        let output = nmath_nts::transform_with_plan(
+            request.file_name,
+            request.content,
+            nmath_nts::TransformOptions {
+                rewrite_import_extensions: false,
+            },
+            &plan,
+        );
+        let segments: Vec<_> = output
+            .span_map
+            .segments()
+            .iter()
+            .map(|s| tsrs_spanmap::Segment {
+                virtual_start: s.virtual_start,
+                virtual_end: s.virtual_end,
+                original_start: s.original_start,
+                original_end: s.original_end,
+                kind: match s.kind {
+                    nmath_nts::SegmentKind::Verbatim => tsrs_spanmap::Kind::VERBATIM,
+                    nmath_nts::SegmentKind::Atom => tsrs_spanmap::Kind::ATOM,
+                },
+                features: tsrs_spanmap::Feature::all(),
+            })
+            .collect();
+        Ok(tsrs_contentmapper::TransformResultFiles {
+            text: output.text,
+            virtual_extension: ".ts".into(),
+            mappings: Some(tsrs_spanmap::new(&segments)),
+            ..Default::default()
+        })
     }
 }
