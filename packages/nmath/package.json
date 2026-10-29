@@ -61,7 +61,10 @@
     "oracle:check": "python3 scripts/compatibility/check-reproducibility.py",
     "benchmark": "node scripts/benchmarks/run.mjs",
     "benchmark:originals": "python3 scripts/benchmarks/originals.py",
-    "test:benchmarks": "node --test test/benchmarks.test.mjs"
+    "test:benchmarks": "node --test test/benchmarks.test.mjs",
+    "license:prepare": "node scripts/license-bundle.mjs prepare",
+    "license:render": "node scripts/license-bundle.mjs render",
+    "test:package:licenses": "node scripts/smoke-real-license-package.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.10.9",

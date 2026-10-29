@@ -347,6 +347,10 @@ CSV empty cells and JSON null become invalid values. JSON non-finite floats beco
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
 
+## Third-party notices
+
+Distribution archives include Apache-2.0 terms for NMath and the original license terms and notices for included third-party components in `THIRD_PARTY_LICENSES.txt`. Third-party material retains its original licenses. The accompanying JSON receipt records the notice bundle digest.
+
 ## Benchmark interpretation
 
 Performance evidence uses synthetic matrix multiplication, pandas/Polars group aggregation and a numerical algorithm compiled from `.nts`. Comparisons use fixed NumPy, pandas and Polars versions. Results must identify the hardware, software, seed, workloads and source revision, and separate startup/compilation from repeated execution. Compute time, memory and native-boundary overhead have different measurement boundaries. GPU timings include transfers unless a report explicitly provides isolated transfer measurements.
