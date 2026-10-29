@@ -71,6 +71,8 @@ Complex arithmetic, unary operations, reductions, indexing, writes, copies, expl
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
 
+The NumPy `sum`, `mean`, `min` and `max` wrappers preserve the core methods' dtype and shape inference. Omitting the axis, or passing `undefined`, produces a scalar result type. A literal axis removes its dimension from a tuple shape. A dynamic axis retains the result dtype and uses a dynamic shape because its result rank is not known at type-check time.
+
 ### Errors
 
 `NMathError` has a `code` property whose values are the error codes in the [runtime crates contract](crates-nmath-runtime-contract.md#error-codes). Messages are English.
