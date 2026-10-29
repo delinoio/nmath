@@ -80,6 +80,111 @@ test("fixed pandas and Polars duplicate/null joins, groups, stable sort and empt
     await ctx.close();
   }
 });
+test("pandas dropna excludes float NaN keys while Polars retains them", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const mask of [undefined, [true, true]]) {
+        const frame = new pl.DataFrame([
+          new pl.Series(
+            "k",
+            ctx.array([1, Number.NaN], { dtype }),
+            mask && ctx.array(mask, { dtype: "bool" }),
+          ),
+          new pl.Series("v", ctx.array([10, 20], { dtype: "int32" })),
+        ]);
+        const pandas = frame.toPandas();
+        for (const [op, expected] of [
+          ["sum", 10],
+          ["mean", 10],
+          ["min", 10],
+          ["max", 10],
+          ["count", 1],
+        ]) {
+          const omitted = await pandas.groupBy("k", "v", op);
+          const explicit = await pandas.groupBy("k", "v", op, {
+            dropna: true,
+          });
+          assert.deepEqual(rows(omitted), [[1, expected]], `${dtype}/${op}`);
+          assert.deepEqual(rows(explicit), [[1, expected]], `${dtype}/${op}`);
+          assert.equal(omitted.get("k").dtype, dtype);
+          assert.deepEqual(
+            rows(await pandas.groupBy("k", "v", op, { dropna: false })),
+            [
+              [1, expected],
+              [Number.NaN, op === "count" ? 1 : 20],
+            ],
+            `${dtype}/${op}/dropna:false`,
+          );
+        }
+        assert.deepEqual(
+          rows(await frame.lazy().groupBy("k", "v", "sum").collect()),
+          [
+            [1, 10],
+            [Number.NaN, 20],
+          ],
+        );
+      }
+
+      const frame = new pl.DataFrame([
+        new pl.Series(
+          "k",
+          ctx.array([2, Number.NaN, 1, Number.NaN, 2, 1, 3], { dtype }),
+          ctx.array([true, true, true, true, true, true, false], {
+            dtype: "bool",
+          }),
+        ),
+        new pl.Series(
+          "v",
+          ctx.array([4, 20, 3, 30, 5, 7, 100], { dtype: "int32" }),
+        ),
+      ]);
+      const pandas = frame.toPandas();
+      assert.deepEqual(rows(await pandas.groupBy("k", "v", "sum")), [
+        [1, 10],
+        [2, 9],
+      ]);
+      assert.deepEqual(
+        rows(await pandas.groupBy("k", "v", "sum", { sort: false })),
+        [
+          [2, 9],
+          [1, 10],
+        ],
+      );
+      assert.deepEqual(
+        rows(
+          await pandas.groupBy("k", "v", "sum", { dropna: false, sort: false }),
+        ),
+        [
+          [2, 9],
+          [Number.NaN, 50],
+          [1, 10],
+          [null, 100],
+        ],
+      );
+      assert.deepEqual(
+        rows(await frame.lazy().groupBy("k", "v", "sum").collect()),
+        [
+          [2, 9],
+          [Number.NaN, 50],
+          [1, 10],
+          [null, 100],
+        ],
+      );
+
+      const allMissing = new pl.DataFrame([
+        new pl.Series("k", ctx.array([Number.NaN], { dtype })),
+        new pl.Series("v", ctx.array([10], { dtype: "int32" })),
+      ]);
+      const empty = await allMissing.toPandas().groupBy("k", "v", "sum");
+      assert.deepEqual(rows(empty), []);
+      assert.equal(empty.get("k").dtype, dtype);
+      assert.equal(empty.get("v").dtype, "int32");
+    }
+  } finally {
+    await ctx.close();
+  }
+});
 test("one native execution per multi-column plan and independent repeated collection", async () => {
   const ctx = context();
   try {
