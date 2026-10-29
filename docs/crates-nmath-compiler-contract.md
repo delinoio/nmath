@@ -25,6 +25,8 @@ This contract owns the `nmath-nts` and `nmath-compiler` components of the [`nmat
 
 The transform parses `.nts` text with the standard tsrs TypeScript parser and produces TypeScript text plus a span map. It does not extend the parser or lexer. Only checker-proven NMath operations are lowered. Ordinary JavaScript operators and bracket accesses remain unchanged. Project analysis repeats until lowered expression types propagate through local inference and imports; the language server uses the same analysis with unsaved overlays.
 
+An interface or class that inherits a package-owned NMath declaration retains NMath operator and numeric-index behavior. This also applies through transitive bases and generic constraints. A matching local class name or property name alone does not establish NMath identity.
+
 | `.nts` source                                         | Lowered TypeScript                                                                                                           |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `a + b`, `a - b`, `a * b`, `a / b`, `a % b`, `a ** b` | `__nmath.add(a, b)`, `__nmath.sub(a, b)`, `__nmath.mul(a, b)`, `__nmath.div(a, b)`, `__nmath.mod(a, b)`, `__nmath.pow(a, b)` |

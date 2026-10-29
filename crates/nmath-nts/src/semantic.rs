@@ -105,6 +105,20 @@ fn classify(checker: &mut Checker, ty: P<Type>, depth: usize) -> ValueKind {
     {
         return ValueKind::NMath;
     }
+    // The checker resolves interface and class bases to their declarations.
+    // Follow those identities so a user type inherits NMath semantics only
+    // when its ancestry reaches a declaration owned by the NMath package.
+    let mut inherited = ValueKind::Ordinary;
+    for &base in checker.get_base_types_exported(ty) {
+        match classify(checker, base, depth + 1) {
+            ValueKind::NMath => return ValueKind::NMath,
+            ValueKind::Ambiguous => inherited = ValueKind::Ambiguous,
+            ValueKind::Ordinary => {}
+        }
+    }
+    if inherited == ValueKind::Ambiguous {
+        return inherited;
+    }
     ValueKind::Ordinary
 }
 

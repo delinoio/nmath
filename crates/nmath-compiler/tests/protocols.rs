@@ -494,3 +494,34 @@ fn language_server_lowers_inferred_nmath_operations() {
     lsp.send(&notification("exit", Value::Null));
     assert_eq!(lsp.finish(), 0);
 }
+
+#[test]
+fn language_server_recognizes_inherited_nmath_identity() {
+    let fixture = common::Fixture::new("lsp-inherited-nmath");
+    fixture.write("node_modules/@delinoio/nmath/package.json", r#"{"name":"@delinoio/nmath","type":"module","exports":{".":"./core.d.ts","./nts-runtime":"./nts-runtime.d.ts"}}"#);
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.d.ts",
+        "export declare const lazyBrand: unique symbol;\nexport declare class NMathArray { \
+         readonly [lazyBrand]: true; }\nexport declare class Expr { readonly [lazyBrand]: true; \
+         }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.d.ts",
+        "import { NMathArray, Expr } from './core.js';\nexport declare function add(a: NMathArray \
+         | Expr, b: number): Expr;\nexport declare function get(a: NMathArray | Expr, i: number): \
+         Expr;\n",
+    );
+    let uri = format!("file://{}", fixture.path("src/main.nts").display());
+    let source = "import { NMathArray } from '@delinoio/nmath';\ninterface Vector extends \
+                  NMathArray {}\ndeclare const a: Vector;\nexport const b = a + 1;\nexport const \
+                  c = a[0];\n";
+    fixture.write("src/main.nts", source);
+    let mut lsp = Session::start("lsp");
+    lsp.call(1, "initialize", json!({"capabilities":{}}));
+    open_document(&mut lsp, &uri, source);
+    let published = lsp.receive();
+    assert_eq!(published["params"]["diagnostics"], json!([]), "{published}");
+    lsp.call(2, "shutdown", Value::Null);
+    lsp.send(&notification("exit", Value::Null));
+    assert_eq!(lsp.finish(), 0);
+}
