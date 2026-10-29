@@ -5,6 +5,7 @@ import {
   chmodSync,
   copyFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -65,6 +66,60 @@ function runNode(root, code, env = {}) {
     env: { ...process.env, ...env },
   });
 }
+
+test(
+  "a real compiler checks and builds ordinary TypeScript without a numerical addon",
+  {
+    skip:
+      process.platform === "win32" ||
+      !existsSync(join(source, "native", compilerName)),
+  },
+  () => {
+    const { root, pkg } = fixture();
+    try {
+      copyFileSync(
+        join(source, "native", compilerName),
+        join(pkg, "native", compilerName),
+      );
+      chmodSync(join(pkg, "native", compilerName), 0o755);
+      writeFileSync(
+        join(root, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            target: "es2024",
+            module: "nodenext",
+            moduleResolution: "nodenext",
+            outDir: "out",
+            rootDir: "src",
+          },
+          include: ["src"],
+        }),
+      );
+      mkdirSync(join(root, "src"));
+      writeFileSync(
+        join(root, "src", "main.ts"),
+        "export const answer: number = 42;\n",
+      );
+      const result = runNode(
+        root,
+        `import assert from "node:assert/strict";
+         import { check, build } from "@delinoio/nmath/compiler";
+         const tsconfig = "tsconfig.json";
+         assert.equal((await check({ tsconfig })).ok, true);
+         const built = await build({ tsconfig });
+         assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
+         assert.ok(built.outputFiles.some(file => file.endsWith("main.js")));`,
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(
+        readFileSync(join(root, "out", "main.js"), "utf8"),
+        /answer = 42/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "compiler API and CLI use the local executable without a numerical addon",
