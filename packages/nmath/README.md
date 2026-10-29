@@ -336,3 +336,21 @@ string/datetime columns and full upstream read/write options remain unsupported.
 CSV empty cells and JSON null become invalid values. JSON non-finite floats become
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
+
+### Arrow IPC and Parquet local files
+
+Use an explicit context for asynchronous file operations:
+
+```ts
+const table = await ctx.readColumnar("input.parquet", "parquet");
+await ctx.writeColumnar("output.arrow", "arrow", table.columns, table.validity);
+for (const value of [...table.columns.values(), ...table.validity.values()]) {
+  value.dispose();
+}
+```
+
+Writes reject existing destinations unless `{ overwrite: true }` is provided. Reads and writes accept `{ signal }`. Failed or cancelled writes preserve the destination until atomic publication; a published file is a successful write. Column names, numeric/boolean dtypes and null masks are preserved. 64-bit integer scalars use `bigint`. File operations use CPU workers and context scheduling and memory budgets.
+
+pandas provides `read_parquet(ctx, path)` and `read_feather(ctx, path)`, plus DataFrame `to_parquet(ctx, path)` and `to_feather(ctx, path)`. A non-default pandas index is rejected. Polars provides `read_parquet(ctx, path)` and `read_ipc(ctx, path)`, plus DataFrame `write_parquet(ctx, path)` and `write_ipc(ctx, path)`. Each returns a Promise. The pandas adapter retains nullable numeric widths, corresponding to pandas' `dtype_backend="numpy_nullable"` representation.
+
+Current format limits: uncompressed Arrow IPC files/Feather V2 and uncompressed or Snappy Parquet. Output Parquet uses Snappy. IPC stream containers, compressed IPC, other Parquet codecs, pandas/custom metadata, duplicate names, dictionaries, and nonnumeric/nonboolean schemas fail explicitly. IPC supports at most 1,024 flat fields and 4,096 UTF-8 bytes per field name. These are implementation limits, not full format compatibility. Reads currently buffer serialized input before batched decoding, and conservative codec reservations may reject files whose final table alone would fit the budget.
