@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Core entry point: contexts, arrays, lazy expressions, selectors and errors.
 
-import { type BinaryOperator, type Expr, Lazy, type Operand } from "./core.js";
+import {
+  type BinaryOperator,
+  type Complex,
+  type Expr,
+  Lazy,
+  type Operand,
+} from "./core.js";
 import type {
   Broadcast,
   BroadcastCheck,
@@ -14,6 +20,7 @@ import type {
 } from "./types.js";
 
 export {
+  Complex,
   Expr,
   Lazy,
   NMathArray,
@@ -78,6 +85,34 @@ export interface BinaryFunction {
   ): Expr<PromoteWeak<D, W>, S>;
 }
 
+export interface RemainderFunction {
+  <
+    D1 extends Exclude<ComputableDType, "complex64" | "complex128">,
+    S1 extends Shape,
+    D2 extends Exclude<ComputableDType, "complex64" | "complex128">,
+    S2 extends Shape,
+  >(
+    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
+    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
+  ): Expr<Promote<D1, D2>, Broadcast<S1, S2>>;
+  <
+    D extends Exclude<ComputableDType, "complex64" | "complex128">,
+    S extends Shape,
+    W extends Exclude<WeakScalar, Complex>,
+  >(
+    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+    b: W,
+  ): Expr<PromoteWeak<D, W>, S>;
+  <
+    W extends Exclude<WeakScalar, Complex>,
+    D extends Exclude<ComputableDType, "complex64" | "complex128">,
+    S extends Shape,
+  >(
+    a: W,
+    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  ): Expr<PromoteWeak<D, W>, S>;
+}
+
 /** {@link BinaryFunction} with true-division result dtypes. */
 export interface DivideFunction {
   <
@@ -107,7 +142,7 @@ export const mul: BinaryFunction = (a: Operand, b: Operand) =>
   binary("mul", a, b);
 export const div: DivideFunction = (a: Operand, b: Operand) =>
   binary("div", a, b);
-export const mod: BinaryFunction = (a: Operand, b: Operand) =>
+export const mod: RemainderFunction = (a: Operand, b: Operand) =>
   binary("mod", a, b);
 export const pow: BinaryFunction = (a: Operand, b: Operand) =>
   binary("pow", a, b);

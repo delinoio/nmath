@@ -207,6 +207,14 @@ impl NdArray {
             ));
         }
         let dtype = self.dtype();
+        if matches!(value.dtype(), DType::Complex64 | DType::Complex128)
+            && !matches!(dtype, DType::Complex64 | DType::Complex128 | DType::Bool)
+        {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Complex writes to real storage require an explicit cast before assignment.",
+            ));
+        }
         let source = value.buffer.cast(dtype)?;
         let strides = broadcast_strides(&value.shape, &target_shape);
         let mut source_offsets = Vec::with_capacity(offsets.len());

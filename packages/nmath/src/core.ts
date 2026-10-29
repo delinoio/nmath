@@ -26,6 +26,39 @@ import type {
   WeakScalar,
 } from "./types.js";
 
+/** A complex scalar with separate IEEE-754 real and imaginary components. */
+export class Complex {
+  readonly #brand = true;
+  constructor(
+    readonly real: number,
+    readonly imag: number = 0,
+  ) {
+    if (typeof real !== "number" || typeof imag !== "number") {
+      throw new TypeError("Complex components must be numbers.");
+    }
+    Object.freeze(this);
+  }
+
+  /** Explicit lossy conversion: returns the real component. */
+  toNumber(): number {
+    return this.real;
+  }
+
+  valueOf(): never {
+    throw new TypeError(
+      "Complex values cannot convert implicitly to numbers. Use toNumber() for an explicit lossy conversion.",
+    );
+  }
+}
+
+function scalarResult(
+  value: number | bigint | boolean | { real: number; imag: number },
+): WeakScalar {
+  return typeof value === "object"
+    ? new Complex(value.real, value.imag)
+    : value;
+}
+
 export type Device = "cpu" | "gpu";
 
 export interface ComputeOptions {
@@ -138,6 +171,9 @@ function withSignal<T>(
 export type Operand = Lazy<any, any> | WeakScalar;
 
 function scalarExpr(value: WeakScalar): NativeExpr {
+  if (value instanceof Complex) {
+    return binding.NativeExpr.complexScalar(value.real, value.imag);
+  }
   if (typeof value === "number") {
     return binding.NativeExpr.floatScalar(value);
   }
@@ -149,7 +185,7 @@ function scalarExpr(value: WeakScalar): NativeExpr {
   }
   throw new NMathError(
     "NMATH_DTYPE_UNSUPPORTED",
-    `NMATH_DTYPE_UNSUPPORTED: Operands must be NMath values, numbers, bigints or booleans. Convert the operand to a supported dtype explicitly.`,
+    `NMATH_DTYPE_UNSUPPORTED: Operands must be NMath values, numbers, bigints, booleans or Complex scalars. Convert the operand to a supported dtype explicitly.`,
   );
 }
 
@@ -257,13 +293,20 @@ export abstract class Lazy<
     return this.binaryOp("div", other);
   }
 
-  mod<D2 extends ComputableDType, S2 extends Shape>(
+  mod<
+    D2 extends Exclude<ComputableDType, "complex64" | "complex128">,
+    S2 extends Shape,
+  >(
+    this: D extends "complex64" | "complex128" ? never : Lazy<D, S>,
     other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
         S,
         S2
       >,
   ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
-  mod<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
+  mod<W extends Exclude<WeakScalar, Complex>>(
+    this: D extends "complex64" | "complex128" ? never : Lazy<D, S>,
+    other: W,
+  ): Expr<PromoteWeak<D, W>, S>;
   mod(other: Operand): Expr<any, any> {
     return this.binaryOp("mod", other);
   }
@@ -395,7 +438,7 @@ function fromResult(
   if (array.shape.length === 0) {
     // Callers only receive the primitive, so release the reservation now.
     try {
-      return native(() => array.item([]));
+      return scalarResult(native(() => array.item([])));
     } finally {
       array.dispose();
     }
@@ -478,7 +521,7 @@ export class NMathArray<
   /** Reads one element synchronously. */
   item(...index: number[]): ScalarOf<D> {
     const checked = index.map((i) => checkInt(i, "An index") as number);
-    return native(() => this.#array.item(checked)) as ScalarOf<D>;
+    return scalarResult(native(() => this.#array.item(checked))) as ScalarOf<D>;
   }
 
   /** Copies the elements into a typed array in C order. */
@@ -490,9 +533,17 @@ export class NMathArray<
 
   /** Copies the elements into nested JS arrays. */
   toArray(): Nested<ScalarOf<D>> {
-    const flat = Array.from(
-      this.toTypedArray() as ArrayLike<number | bigint>,
-      (v) => (this.dtype === "bool" ? v !== 0 : v),
+    const typed = this.toTypedArray();
+    const flat = (
+      this.dtype === "complex64" || this.dtype === "complex128"
+        ? Array.from(
+            { length: this.size },
+            (_, i) =>
+              new Complex(Number(typed[2 * i]), Number(typed[2 * i + 1])),
+          )
+        : Array.from(typed as ArrayLike<number | bigint>, (v) =>
+            this.dtype === "bool" ? v !== 0 : v,
+          )
     ) as ScalarOf<D>[];
     const build = (axis: number, offset: number): Nested<ScalarOf<D>> => {
       if (axis === this.shape.length) {
@@ -581,8 +632,10 @@ function typedArrayFor(dtype: ComputableDType, buffer: ArrayBuffer) {
       return new Uint32Array(buffer);
     case "uint64":
       return new BigUint64Array(buffer);
+    case "complex64":
     case "float32":
       return new Float32Array(buffer);
+    case "complex128":
     case "float64":
       return new Float64Array(buffer);
   }
@@ -704,6 +757,8 @@ function raggedInput(): NMathError {
 
 function itemSize(dtype: ComputableDType): number {
   switch (dtype) {
+    case "complex128":
+      return 16;
     case "bool":
     case "int8":
     case "uint8":
@@ -725,9 +780,35 @@ function product(shape: readonly number[]): number {
 }
 
 function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
+  if (dtype !== "complex64" && dtype !== "complex128") {
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] instanceof Complex)
+        throw new TypeError(
+          "Complex input requires a complex dtype. Convert explicitly before creating real arrays.",
+        );
+    }
+  }
   const length = values.length;
   let typed: ArrayBufferView;
   switch (dtype) {
+    case "complex64":
+    case "complex128": {
+      const parts =
+        dtype === "complex64"
+          ? new Float32Array(length * 2)
+          : new Float64Array(length * 2);
+      for (let i = 0; i < length; i++) {
+        const value = values[i];
+        if (!(value instanceof Complex))
+          throw new TypeError(
+            "Complex array elements must be Complex scalars. Use a floating typed array for interleaved components.",
+          );
+        parts[2 * i] = value.real;
+        parts[2 * i + 1] = value.imag;
+      }
+      typed = parts;
+      break;
+    }
     case "bool":
       typed = Uint8Array.from({ length }, (_, i) => (values[i] ? 1 : 0));
       break;
@@ -804,6 +885,28 @@ export class NMathContext {
   ): NMathArray<D, S> {
     let values: ArrayLike<unknown>;
     let shape: number[];
+    if (
+      ArrayBuffer.isView(data) &&
+      (options.dtype === "complex64" || options.dtype === "complex128")
+    ) {
+      const Expected =
+        options.dtype === "complex64" ? Float32Array : Float64Array;
+      if (!(data instanceof Expected) || data.length % 2 !== 0) {
+        throw new TypeError(
+          "Complex typed input must contain real/imaginary pairs in the matching floating typed array.",
+        );
+      }
+      this.ensureCpuBudget(data.length / 2, options.dtype);
+      const shape = options.shape ? [...options.shape] : [data.length / 2];
+      const array = native(() =>
+        this.nativeContext.array(
+          shape,
+          options.dtype,
+          Buffer.from(data.buffer, data.byteOffset, data.byteLength),
+        ),
+      );
+      return new NMathArray(array, this);
+    }
     if (ArrayBuffer.isView(data)) {
       values = data as unknown as ArrayLike<unknown>;
       shape = options.shape ? [...options.shape] : [values.length];
@@ -903,7 +1006,29 @@ function filled(
   size: number,
   value: unknown,
 ): ArrayBufferView {
+  if (
+    value instanceof Complex &&
+    dtype !== "complex64" &&
+    dtype !== "complex128"
+  ) {
+    throw new TypeError(
+      "Complex values require a complex dtype. Convert explicitly first.",
+    );
+  }
   switch (dtype) {
+    case "complex64":
+    case "complex128": {
+      const z = value instanceof Complex ? value : new Complex(Number(value));
+      const parts =
+        dtype === "complex64"
+          ? new Float32Array(size * 2)
+          : new Float64Array(size * 2);
+      for (let i = 0; i < size; i++) {
+        parts[2 * i] = z.real;
+        parts[2 * i + 1] = z.imag;
+      }
+      return parts;
+    }
     case "bool":
       return new Uint8Array(size).fill(value ? 1 : 0);
     case "int64":
@@ -926,7 +1051,13 @@ function filled(
 
 function zeroOf<D extends ComputableDType>(dtype: D): ScalarOf<D> {
   return (
-    dtype === "int64" || dtype === "uint64" ? 0n : dtype === "bool" ? false : 0
+    dtype === "complex64" || dtype === "complex128"
+      ? new Complex(0)
+      : dtype === "int64" || dtype === "uint64"
+        ? 0n
+        : dtype === "bool"
+          ? false
+          : 0
   ) as ScalarOf<D>;
 }
 

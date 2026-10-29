@@ -10,10 +10,16 @@ export declare class NativeArray {
   get disposed(): boolean
   /** Copies the visible elements in C order using native byte order. */
   toBytes(): Buffer
-  /** Reads one element. 64-bit integers are returned as bigint so they stay exact. */
-  item(index: Array<number>): number | bigint | boolean
+  /**
+   * Reads one element. 64-bit integers are returned as bigint so they stay
+   * exact.
+   */
+  item(index: Array<number>): number | bigint | boolean | NativeComplex
   sharesStorage(other: NativeArray): boolean
-  /** Releases this handle. Storage stays alive while other views or running jobs use it. */
+  /**
+   * Releases this handle. Storage stays alive while other views or running
+   * jobs use it.
+   */
   dispose(): void
 }
 
@@ -41,13 +47,17 @@ export declare class NativeContext {
   copyFrom(source: NativeArray, signal?: NativeCancellation | undefined | null): Promise<NativeArray>
   saveNpy(array: NativeArray, path: string, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
   loadNpy(path: string, signal?: NativeCancellation | undefined | null): Promise<NativeArray>
-  /** Closes the context on a helper thread and resolves when cleanup finishes. */
+  /**
+   * Closes the context on a helper thread and resolves when cleanup
+   * finishes.
+   */
   close(): Promise<void>
   metrics(): NativeMetrics
 }
 
 export declare class NativeExpr {
   static input(array: NativeArray): NativeExpr
+  static complexScalar(real: number, imag: number): NativeExpr
   static floatScalar(value: number): NativeExpr
   static intScalar(value: bigint): NativeExpr
   static boolScalar(value: boolean): NativeExpr
@@ -64,6 +74,11 @@ export declare class NativeExpr {
 }
 
 export declare class NativeGenerator {}
+
+export interface NativeComplex {
+  real: number
+  imag: number
+}
 
 export interface NativeContextOptions {
   maxConcurrentJobs: number

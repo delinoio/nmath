@@ -1,3 +1,4 @@
+import type { Complex } from "./core.js";
 // SPDX-License-Identifier: Apache-2.0
 // Type-level dtype promotion and shape inference. Static rules mirror the native runtime;
 // dimensions typed as `number` are dynamic and validated at runtime.
@@ -33,7 +34,11 @@ export type ComputableDType =
   | "uint32"
   | "uint64"
   | "float32"
-  | "float64";
+  | "float64"
+  | "complex64"
+  | "complex128";
+
+export type ComplexDType = "complex64" | "complex128";
 
 export type FloatDType = "float32" | "float64";
 export type IntDType =
@@ -49,11 +54,13 @@ export type IntDType =
 export type Shape = readonly number[];
 
 /** JS representation of one element of dtype `D`. */
-export type ScalarOf<D extends DType> = D extends "int64" | "uint64"
-  ? bigint
-  : D extends "bool"
-    ? boolean
-    : number;
+export type ScalarOf<D extends DType> = D extends ComplexDType
+  ? Complex
+  : D extends "int64" | "uint64"
+    ? bigint
+    : D extends "bool"
+      ? boolean
+      : number;
 
 /** Typed array used to exchange data of dtype `D`. */
 export type TypedArrayOf<D extends ComputableDType> = D extends "int8"
@@ -72,7 +79,7 @@ export type TypedArrayOf<D extends ComputableDType> = D extends "int8"
               ? Uint32Array
               : D extends "uint64"
                 ? BigUint64Array
-                : D extends "float32"
+                : D extends "float32" | "complex64"
                   ? Float32Array
                   : Float64Array;
 
@@ -227,25 +234,49 @@ type PromoteTable = {
 export type Promote<
   A extends ComputableDType,
   B extends ComputableDType,
-> = PromoteTable[A][B];
+> = A extends ComplexDType
+  ? ComplexPromote<A, B>
+  : B extends ComplexDType
+    ? ComplexPromote<B, A>
+    : A extends keyof PromoteTable
+      ? B extends keyof PromoteTable[A]
+        ? PromoteTable[A][B]
+        : never
+      : never;
+
+type ComplexPromote<
+  A extends ComplexDType,
+  B extends ComputableDType,
+> = A extends "complex128"
+  ? "complex128"
+  : B extends "complex128" | "float64" | "int32" | "uint32" | "int64" | "uint64"
+    ? "complex128"
+    : "complex64";
 
 /** Weak JS scalar kinds: `number` is a Python float, `bigint` a Python int. */
-export type WeakScalar = number | bigint | boolean;
+export type WeakScalar = number | bigint | boolean | Complex;
 
 export type PromoteWeak<
   D extends ComputableDType,
   S extends WeakScalar,
-> = S extends number
-  ? D extends FloatDType
+> = S extends Complex
+  ? D extends ComplexDType
     ? D
-    : "float64"
-  : S extends bigint
-    ? D extends "bool"
-      ? "int64"
-      : D
-    : D;
+    : D extends "float32"
+      ? "complex64"
+      : "complex128"
+  : S extends number
+    ? D extends FloatDType | ComplexDType
+      ? D
+      : "float64"
+    : S extends bigint
+      ? D extends "bool"
+        ? "int64"
+        : D
+      : D;
 
-export type TrueDivide<D extends ComputableDType> = D extends FloatDType
+export type TrueDivide<D extends ComputableDType> = D extends
+  FloatDType | ComplexDType
   ? D
   : "float64";
 

@@ -291,7 +291,7 @@ fn weak_scalar_dtype(array: DType, scalar: Scalar) -> Result<DType> {
     let value: i128 = match scalar {
         Scalar::Int(v) => v.into(),
         Scalar::UInt(v) => v.into(),
-        Scalar::Bool(_) | Scalar::Float(_) => return Ok(dtype),
+        Scalar::Bool(_) | Scalar::Float(_) | Scalar::Complex(_) => return Ok(dtype),
     };
     let (min, max): (i128, i128) = match dtype {
         DType::Int8 => (i8::MIN.into(), i8::MAX.into()),
@@ -483,7 +483,11 @@ impl JobEnv {
             ExprKind::Cast(e, dtype) => {
                 let v = self.eval_dense(e)?;
                 let reservation = budget.reserve((v.size() * dtype.item_size()) as u64)?;
-                DenseArray::new(v.shape.clone(), v.buffer.cast(*dtype)?, reservation)
+                DenseArray::new(
+                    v.shape.clone(),
+                    v.buffer.cast_cancellable(*dtype, &token)?,
+                    reservation,
+                )
             }
             ExprKind::Random(g, shape) => {
                 let len: usize = shape.iter().product();

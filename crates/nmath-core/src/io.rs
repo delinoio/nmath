@@ -50,6 +50,8 @@ fn descr(dtype: DType) -> Result<&'static str> {
         DType::UInt64 => "<u8",
         DType::Float32 => "<f4",
         DType::Float64 => "<f8",
+        DType::Complex64 => "<c8",
+        DType::Complex128 => "<c16",
         other => {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
@@ -118,6 +120,14 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
         Buffer::F32(v) => v
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+        Buffer::C64(v) => v.iter().for_each(|z| {
+            out.extend_from_slice(&z[0].to_le_bytes());
+            out.extend_from_slice(&z[1].to_le_bytes());
+        }),
+        Buffer::C128(v) => v.iter().for_each(|z| {
+            out.extend_from_slice(&z[0].to_le_bytes());
+            out.extend_from_slice(&z[1].to_le_bytes());
+        }),
         Buffer::F64(v) => v
             .iter()
             .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
@@ -134,8 +144,8 @@ fn header_value<'a>(header: &'a str, key: &str) -> Result<&'a str> {
     Ok(header[start..].trim_start())
 }
 
-/// Decodes NPY version 1.x/2.x/3.x data with little-endian or byte-sized
-/// dtypes.
+/// Decodes NPY version 1.x/2.x/3.x data. Complex dtypes also accept
+/// big-endian components and Fortran-order storage.
 pub fn decode_npy(bytes: &[u8]) -> Result<(Vec<usize>, Buffer)> {
     decode_npy_with(bytes, |_| Ok(())).map(|(shape, buffer, ())| (shape, buffer))
 }
@@ -191,6 +201,8 @@ fn decode_npy_with<R>(
         "<u8" => DType::UInt64,
         "<f4" => DType::Float32,
         "<f8" => DType::Float64,
+        "<c8" | ">c8" => DType::Complex64,
+        "<c16" | ">c16" => DType::Complex128,
         other => {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
@@ -198,7 +210,10 @@ fn decode_npy_with<R>(
             ));
         }
     };
-    if !header_value(header, "fortran_order")?.starts_with("False") {
+    let fortran = header_value(header, "fortran_order")?.starts_with("True");
+    if (!fortran && !header_value(header, "fortran_order")?.starts_with("False"))
+        || (fortran && !matches!(dtype, DType::Complex64 | DType::Complex128))
+    {
         return Err(format_error(
             "Fortran-order data is not supported in this build",
         ));
@@ -240,6 +255,20 @@ fn decode_npy_with<R>(
                 .into()
         };
     }
+    let complex_chunk = |i: usize| {
+        let offset = if fortran {
+            let (mut c_index, mut stride, mut f_index) = (i, count, 0);
+            for &dim in shape.iter().rev() {
+                stride /= dim;
+                f_index += (c_index % dim) * stride;
+                c_index /= dim;
+            }
+            f_index
+        } else {
+            i
+        };
+        &data[offset * dtype.item_size()..(offset + 1) * dtype.item_size()]
+    };
     let buffer = match dtype {
         DType::Bool => {
             if data.iter().any(|&b| b > 1) {
@@ -257,6 +286,38 @@ fn decode_npy_with<R>(
         DType::UInt64 => read_le!(u64, 8),
         DType::Float32 => read_le!(f32, 4),
         DType::Float64 => read_le!(f64, 8),
+        DType::Complex64 => Buffer::C64(
+            (0..count)
+                .map(|i| {
+                    let c = complex_chunk(i);
+                    let read = if descr_text.starts_with('>') {
+                        f32::from_be_bytes
+                    } else {
+                        f32::from_le_bytes
+                    };
+                    [
+                        read(c[..4].try_into().unwrap()),
+                        read(c[4..].try_into().unwrap()),
+                    ]
+                })
+                .collect(),
+        ),
+        DType::Complex128 => Buffer::C128(
+            (0..count)
+                .map(|i| {
+                    let c = complex_chunk(i);
+                    let read = if descr_text.starts_with('>') {
+                        f64::from_be_bytes
+                    } else {
+                        f64::from_le_bytes
+                    };
+                    [
+                        read(c[..8].try_into().unwrap()),
+                        read(c[8..].try_into().unwrap()),
+                    ]
+                })
+                .collect(),
+        ),
         _ => unreachable!(),
     };
     Ok((shape, buffer, reservation))
