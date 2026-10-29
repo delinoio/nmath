@@ -47,6 +47,28 @@ def publish(path, report):
     finally:
         temp.unlink(missing_ok=True)
 
+def cpu_identity():
+    """Record a hardware model, never substitute an architecture for one."""
+    model, source = None, None
+    try:
+        if sys.platform.startswith("linux"):
+            for line in Path("/proc/cpuinfo").read_text().splitlines():
+                key, separator, value = line.partition(":")
+                if separator and key.strip() in ("model name", "Hardware") and value.strip():
+                    model, source = value.strip(), "/proc/cpuinfo:" + key.strip()
+                    break
+        elif sys.platform == "darwin":
+            model = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()
+            source = "sysctl:machdep.cpu.brand_string"
+        else:
+            model, source = platform.processor(), "platform.processor"
+    except (OSError, UnicodeError, subprocess.SubprocessError):
+        pass
+    if not model or model.lower() == platform.machine().lower():
+        return {"cpuModel": None, "cpuModelSource": None, "cpuModelStatus": "unavailable",
+                "cpuModelReason": "The hardware CPU model could not be identified; architecture is reported separately."}
+    return {"cpuModel": model, "cpuModelSource": source, "cpuModelStatus": "identified"}
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True, type=Path)
@@ -62,7 +84,7 @@ def main():
     report = {"schemaVersion": 1, "status": "running", "versions": VERSIONS, "workload": WORKLOAD,
               "command": sys.argv, "python": sys.version, "platform": platform.platform(),
               "machine": platform.machine(), "processor": platform.processor(), "cpuCount": os.cpu_count(),
-              "cpuModel": subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip() if sys.platform == "darwin" else platform.processor(),
+              **cpu_identity(),
               "sourceRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               "scriptSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "workingTree": subprocess.check_output(["git", "status", "--porcelain"], text=True),

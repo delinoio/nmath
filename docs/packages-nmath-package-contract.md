@@ -223,7 +223,7 @@ Native reports separate import, compilation, setup/input construction, first exe
 
 GPU requests apply only to numerical arrays. Tabular measurements remain CPU. A full-array identity probe reports transfer-inclusive time and logical input/output bytes. Isolated upload/download times are null because public metrics provide no transfer timestamps; that measurement gap remains explicit. Device initialization and pipeline setup may occur in first execution. No automatic fallback, retry, official GPU allowlist approval or speedup claim follows from a completed report. Known unaccepted GPU power differences remain outside this workload and are not waived.
 
-Reports record source revision, dirty-tree state, script/fixture/algorithm/native-binary hashes, exact software and hardware metadata, commands, versions and seed. Keep local reports and logs in external validation artifacts, not source-of-truth contracts. Cross-platform execution and wider numerical acceptance remain separate release requirements.
+Reports record source revision, dirty-tree state, script/fixture/algorithm/native-binary hashes, exact software and hardware metadata, commands, versions and seed. Original-library reports obtain Linux CPU models from `/proc/cpuinfo` and macOS models from `sysctl`. They record identification status and source; an unavailable model is null with an explicit reason, never an architecture substituted as a model. Keep local reports and logs in external validation artifacts, not source-of-truth contracts. Cross-platform execution and wider numerical acceptance remain separate release requirements.
 
 ### Columnar file API
 
