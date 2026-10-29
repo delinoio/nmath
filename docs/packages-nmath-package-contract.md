@@ -120,7 +120,7 @@ Compiler helpers retain public arithmetic signatures, indexing result types and 
 
 ## Numeric tables
 
-The pandas and Polars numeric table entry points use the same native table executor. A completed result is returned by a Promise; no batch iterator or AsyncIterable is exposed. Table work supports CPU only and rejects explicit GPU selection.
+The pandas and Polars numeric table entry points use the same native table executor. A completed result is returned by a Promise; no batch iterator or AsyncIterable is exposed. Table work supports CPU only and rejects explicit GPU selection. Row-local arithmetic, casts, selection and filtering can execute in bounded internal batches. Snapshots and completed results still require their full memory budget; sort, joins, groups and non-row-local expressions retain materialization boundaries. This bounded subset does not establish full Polars streaming compatibility.
 
 A pandas Series accepts optional `index` labels and `validity` column arguments after its values and name. Labels are strings or numbers. `loc(label)` selects matching labels; `iloc` preserves selected labels. Integer `iloc` on a nullable Series is rejected because the current scalar expression cannot carry a validity mask. Arithmetic aligns Series with the same unique label set; identical duplicate-label sequences also work. Unmatched or differently ordered duplicate labels require explicit alignment and are rejected. Full outer label alignment remains a target. Nullable Series arithmetic and reductions are rejected rather than silently discarding nulls.
 
