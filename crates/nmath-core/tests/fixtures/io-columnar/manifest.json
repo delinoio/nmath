@@ -1,0 +1,27 @@
+{
+  "versions": {
+    "pandas": "3.1.0",
+    "polars": "2.1.0",
+    "pyarrow": "23.0.1"
+  },
+  "license": "Apache-2.0",
+  "source": "Synthetic values authored in generate.py",
+  "expected": {
+    "rows": 3,
+    "signed": [
+      "-9223372036854775808",
+      null,
+      "9223372036854775807"
+    ],
+    "unsigned": [
+      "0",
+      null,
+      "18446744073709551615"
+    ]
+  },
+  "explicitErrors": [
+    "pandas schema/index metadata",
+    "string dtype",
+    "compressed IPC"
+  ]
+}
