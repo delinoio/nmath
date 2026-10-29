@@ -645,14 +645,33 @@ function inferShape(data: unknown): number[] {
   return shape;
 }
 
-function flatten(data: unknown, out: unknown[]): void {
-  if (Array.isArray(data)) {
-    for (const item of data) {
-      flatten(item, out);
+/** Flattens nested input in C order and rejects ragged branches. */
+function flatten(
+  data: unknown,
+  shape: readonly number[],
+  axis: number,
+  out: unknown[],
+): void {
+  if (axis === shape.length) {
+    if (Array.isArray(data)) {
+      throw raggedInput();
     }
-  } else {
     out.push(data);
+    return;
   }
+  if (!Array.isArray(data) || data.length !== shape[axis]) {
+    throw raggedInput();
+  }
+  for (const item of data) {
+    flatten(item, shape, axis + 1, out);
+  }
+}
+
+function raggedInput(): NMathError {
+  return new NMathError(
+    "NMATH_SHAPE_MISMATCH",
+    "NMATH_SHAPE_MISMATCH: Nested input is ragged. Make every nested array at the same depth the same length.",
+  );
 }
 
 function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
@@ -723,10 +742,11 @@ export class NMathContext {
       values = data as unknown as ArrayLike<unknown>;
       shape = options.shape ? [...options.shape] : [values.length];
     } else {
+      const inferred = inferShape(data);
       const flat: unknown[] = [];
-      flatten(data, flat);
+      flatten(data, inferred, 0, flat);
       values = flat;
-      shape = options.shape ? [...options.shape] : inferShape(data);
+      shape = options.shape ? [...options.shape] : inferred;
     }
     const array = native(() =>
       this.nativeContext.array(

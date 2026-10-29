@@ -227,6 +227,38 @@ test("memory budgets reject before allocation", async () => {
   await ctx.close();
 });
 
+test("ragged nested input is rejected", async () => {
+  const ctx = context();
+  throwsWith(
+    () => ctx.array([[1, 2], [3], [4, 5, 6]], { dtype: "int32" }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  throwsWith(
+    () => ctx.array([[1, 2], 3], { dtype: "int32" }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  throwsWith(
+    () => ctx.array([1, [2]], { dtype: "int32" }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  assert.deepEqual(
+    ctx
+      .array(
+        [
+          [1, 2],
+          [3, 4],
+        ],
+        { dtype: "int32" },
+      )
+      .toArray(),
+    [
+      [1, 2],
+      [3, 4],
+    ],
+  );
+  await ctx.close();
+});
+
 test("item rejects non-integer indices", async () => {
   const ctx = context();
   const a = ctx.array([1, 2, 3], { dtype: "int32" });
