@@ -308,6 +308,13 @@ fn preserves_ordinary_javascript() {
         "x = a?.[i];",
         "x = a?.b[i];",
         "a[i](x);",
+        "new constructors[i](42);",
+        "new constructors[i];",
+        "new (constructors[i])(42);",
+        "new (constructors[i]!)(42);",
+        "new ((constructors[i] as Constructor))(42);",
+        "new (<Constructor>constructors[i])(42);",
+        "new (constructors[i] satisfies Constructor)(42);",
         "delete a[i];",
         "(a[i])(x);",
         "(a[i]!)(x);",
@@ -323,6 +330,59 @@ fn preserves_ordinary_javascript() {
         "enum E { A = 1, B = A + 1 }",
     ] {
         assert_eq!(lower(source), source, "{source}");
+    }
+}
+
+#[test]
+fn preserves_constructor_targets_and_lowers_nested_index_values() {
+    let source = "const instance = new constructors[indices[j]](42);";
+    let output = fixture_transform("constructor.nts", source);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert_valid_span_map(source, &output);
+    assert_eq!(
+        output.text,
+        format!("{PREFIX}const instance = new constructors[__nmath.get(indices, j)](42);")
+    );
+    let constructor = output.text.find("constructors[").unwrap() as u32;
+    let original = source.find("constructors[").unwrap() as u32;
+    assert_eq!(
+        output.span_map.virtual_to_original(constructor),
+        Some(original)
+    );
+    let helper = output.text.find("__nmath.get").unwrap() as u32;
+    assert_eq!(
+        output.span_map.virtual_to_original(helper + 8),
+        Some(source.find("indices[j]").unwrap() as u32)
+    );
+    assert_eq!(
+        lower("const value = values[i];"),
+        "const value = __nmath.get(values, i);"
+    );
+}
+
+#[test]
+fn transformed_constructor_targets_create_instances_and_evaluate_index_once() {
+    use std::process::Command;
+
+    for expression in ["new constructors[index()](42)", "new constructors[index()]"] {
+        let transformed = lower(&format!("const instance = {expression};"));
+        assert_eq!(transformed, format!("const instance = {expression};"));
+        let script = format!(
+            "class C {{ constructor(value = 7) {{ this.value = value; }} }}\nconst constructors = \
+             [C];\nlet calls = 0;\nconst index = () => {{ calls += 1; return 0; \
+             }};\n{transformed}\nif (!(instance instanceof C) || instance.value !== {expected} || \
+             calls !== 1) {{throw new Error('constructor target changed behavior');}}",
+            expected = if expression.ends_with("(42)") { 42 } else { 7 }
+        );
+        let result = Command::new("node")
+            .args(["--input-type=module", "--eval", &script])
+            .output()
+            .expect("Node.js is required by the repository runtime baseline");
+        assert!(
+            result.status.success(),
+            "Node.js execution failed: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
     }
 }
 
