@@ -213,32 +213,7 @@ impl Expr {
             return Err(crate::dtype::unsupported());
         }
         let dtype = DType::promote(lhs.dtype(), rhs.dtype())?;
-        let (a, b) = (lhs.shape(), rhs.shape());
-        let k_a = *a.last().ok_or_else(|| scalar_matmul_error())?;
-        let k_b = match b.len() {
-            0 => return Err(scalar_matmul_error()),
-            1 => b[0],
-            _ => b[b.len() - 2],
-        };
-        if a.len() > 2 || b.len() > 2 {
-            return Err(Error::new(
-                ErrorCode::ShapeMismatch,
-                "matmul in this build supports 1-D and 2-D operands.",
-            ));
-        }
-        if k_a != k_b {
-            return Err(Error::new(
-                ErrorCode::ShapeMismatch,
-                format!("matmul: the core dimensions of shapes {a:?} and {b:?} do not match."),
-            ));
-        }
-        let mut shape = Vec::new();
-        if a.len() == 2 {
-            shape.push(a[0]);
-        }
-        if b.len() == 2 {
-            shape.push(b[1]);
-        }
+        let shape = crate::shape::matmul_shape(lhs.shape(), rhs.shape())?;
         Ok(Expr::node(
             ExprKind::MatMul(lhs.clone(), rhs.clone()),
             dtype,
@@ -396,13 +371,6 @@ fn weak_scalar_dtype(array: DType, scalar: Scalar) -> Result<DType> {
         ));
     }
     Ok(dtype)
-}
-
-fn scalar_matmul_error() -> Error {
-    Error::new(
-        ErrorCode::ShapeMismatch,
-        "matmul does not accept scalar operands.",
-    )
 }
 
 fn same_view(a: &NdArray, b: &NdArray) -> bool {

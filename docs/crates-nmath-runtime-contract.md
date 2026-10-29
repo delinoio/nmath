@@ -31,7 +31,7 @@ Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`
 
 `complex64` stores two IEEE-754 binary32 components in 8 bytes; `complex128` stores two binary64 components in 16 bytes. Components are ordered real, imaginary. Array promotion follows NumPy 2.5.4: `complex64` remains `complex64` with boolean, 8-bit/16-bit integers and `float32`, and promotes to `complex128` with 32-bit/64-bit integers, `float64` or `complex128`. A weak complex scalar promotes boolean/integer arrays to `complex128`, `float32` arrays to `complex64`, and preserves an existing complex dtype.
 
-Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `sum`, `mean`, lexicographic `min`/`max`, and the existing 1-D/2-D `matmul` forms. Complex remainder is unsupported and fails at expression construction. Complex extrema propagate NaNs and preserve the first equal complex element. Sum and mean preserve the complex dtype. Contiguous complex reductions use pairwise accumulation in component precision.
+Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `sum`, `mean`, lexicographic `min`/`max`, and broadcast-batched `matmul` with vector promotion. Complex remainder is unsupported and fails at expression construction. Complex extrema propagate NaNs and preserve the first equal complex element. Sum and mean preserve the complex dtype. Contiguous complex reductions use pairwise accumulation in component precision.
 
 Contiguous CPU `float32` sum and mean use pairwise accumulation with `float32` intermediates, following the pinned NumPy real reduction order. Mean divides the `float32` sum in `float32` precision, including overflow. Noncontiguous reductions retain their existing accumulation order.
 
@@ -54,6 +54,12 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 - Binary operator IDs: `add`, `sub`, `mul`, `div`, `mod`, `pow`. Unary operator IDs: `pos`, `neg`. Reduction IDs: `sum`, `mean`, `min`, `max`.
 - Shape and dtype of every node are inferred at construction. Invalid broadcasting fails at construction with `NMATH_SHAPE_BROADCAST`.
 - Indexing selectors: integer, `Slice { start, stop, step }` with `stop` excluded and `None` for an omitted bound, integer-array selection and boolean-mask selection. Negative indexes count from the end; out-of-range integers fail with `NMATH_INDEX_OUT_OF_BOUNDS`.
+
+### Matrix products
+
+`matmul` accepts numeric and boolean operands of rank at least one. It contracts the left operand's last axis with the right operand's second-last axis (or its only axis for a vector), broadcasts leading batch axes, and removes the temporary row or column axis used to promote a vector. Scalar operands and unequal contraction dimensions fail with `NMATH_SHAPE_MISMATCH`; incompatible leading axes fail with `NMATH_SHAPE_BROADCAST` at expression construction.
+
+CPU execution traverses broadcast batches without expanding repeated operands or allocating per-batch results. It checks the complete output element and byte counts before allocation and reserves the output once. Empty batch/row/column axes return empty output; an empty contraction returns zeros. Integer arithmetic wraps in the promoted dtype. Boolean products retain OR-of-AND short-circuit behavior, float16 retains float32 accumulation, and complex products do not conjugate either operand. Cancellation checks run between batches and kernel chunks. GPU execution uses the same inferred shape with its existing dtype and platform restrictions; shader compilation does not establish real-device numerical acceptance.
 
 ### Contexts and scheduling
 

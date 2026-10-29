@@ -100,6 +100,24 @@ fn validate_all_shader_variants_without_a_driver() {
         }
         graphs.push(Expr::matmul(&a, &a).unwrap());
     }
+    // Shader parsing exercises each vector/batch address form without
+    // pretending that compilation is actual GPU acceptance.
+    for (a_shape, b_shape) in [
+        (vec![2, 1, 2, 3], vec![4, 3, 2]),
+        (vec![3], vec![4, 3, 2]),
+        (vec![4, 2, 3], vec![3]),
+        (vec![0, 2, 3], vec![1, 3, 4]),
+        (vec![2, 3, 0], vec![1, 0, 4]),
+    ] {
+        let make = |shape: Vec<usize>| {
+            let n = shape.iter().product();
+            Expr::input(&NdArray::from_dense(
+                1,
+                DenseArray::new(shape, Buffer::I32(vec![1; n]), Reservation::none()).unwrap(),
+            ))
+        };
+        graphs.push(Expr::matmul(&make(a_shape), &make(b_shape)).unwrap());
+    }
     for e in graphs {
         let source = shader::generate(&e).unwrap();
         let module = naga::front::wgsl::parse_str(&source)
