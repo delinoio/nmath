@@ -435,22 +435,81 @@ fn commit_outputs(writes: &BTreeMap<String, String>) -> Result<Vec<String>, Comp
         }
         staged.push((temp, target));
     }
-    let mut files = Vec::new();
+    // Each committed output remembers the backup of the file it replaced, so a
+    // later failure can restore every earlier target.
+    let mut committed: Vec<(&PathBuf, Option<PathBuf>)> = Vec::new();
     for (index, (temp, target)) in staged.iter().enumerate() {
-        if let Err(err) = std::fs::rename(temp, target) {
-            cleanup(&staged[index..]);
-            tracing::error!(file = %target.display(), error = %err, "renaming output failed");
-            return Err(CompilerDiagnostic::new(
-                CompilerCode::Emit,
-                target.to_string_lossy(),
-                0,
-                0,
-                format!("Output could not be moved into place: {err}."),
-            ));
+        let result = replace_with_backup(temp, target);
+        match result {
+            Ok(backup) => committed.push((target, backup)),
+            Err(err) => {
+                cleanup(&staged[index..]);
+                rollback(&committed);
+                tracing::error!(file = %target.display(), error = %err, "renaming output failed");
+                return Err(CompilerDiagnostic::new(
+                    CompilerCode::Emit,
+                    target.to_string_lossy(),
+                    0,
+                    0,
+                    format!("Output could not be moved into place: {err}."),
+                ));
+            }
         }
-        files.push(target.to_string_lossy().into_owned());
     }
-    Ok(files)
+    for (_, backup) in &committed {
+        if let Some(backup) = backup {
+            let _ = std::fs::remove_file(backup);
+        }
+    }
+    Ok(committed
+        .iter()
+        .map(|(target, _)| target.to_string_lossy().into_owned())
+        .collect())
+}
+
+/// Moves an existing target file aside, then renames `temp` into place. On
+/// failure the target is left as it was.
+fn replace_with_backup(temp: &Path, target: &Path) -> std::io::Result<Option<PathBuf>> {
+    let backup = match std::fs::symlink_metadata(target) {
+        Ok(meta) if meta.is_file() => {
+            let backup = backup_path(target);
+            std::fs::rename(target, &backup)?;
+            Some(backup)
+        }
+        // A directory or other non-file target makes the rename below fail and
+        // is never moved.
+        Ok(_) => None,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) => return Err(err),
+    };
+    if let Err(err) = std::fs::rename(temp, target) {
+        if let Some(backup) = &backup {
+            let _ = std::fs::rename(backup, target);
+        }
+        return Err(err);
+    }
+    Ok(backup)
+}
+
+/// Restores earlier outputs in reverse order after a failed commit.
+fn rollback(committed: &[(&PathBuf, Option<PathBuf>)]) {
+    for (target, backup) in committed.iter().rev() {
+        let restored = match backup {
+            Some(backup) => std::fs::rename(backup, target),
+            None => std::fs::remove_file(target),
+        };
+        if let Err(err) = restored {
+            tracing::error!(file = %target.display(), error = %err, "restoring output failed");
+        }
+    }
+}
+
+fn backup_path(target: &Path) -> PathBuf {
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    target.with_file_name(format!(".{name}.nmath-{}.bak", std::process::id()))
 }
 
 fn temp_path(target: &Path) -> PathBuf {
@@ -832,5 +891,45 @@ mod tests {
             Some("x")
         );
         assert_eq!(fs.take_writes().len(), 1);
+    }
+
+    #[test]
+    fn failed_commit_restores_earlier_outputs() {
+        let dir = std::env::temp_dir().join(format!(
+            "nmath-commit-rollback-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("b.js")).unwrap();
+        std::fs::write(dir.join("a.js"), "old").unwrap();
+        let mut writes = BTreeMap::new();
+        writes.insert(normalize(&dir.join("a.js")), "new a".to_string());
+        writes.insert(normalize(&dir.join("a.d.ts")), "new decl".to_string());
+        // `b.js` is a directory, so its rename fails after `a.d.ts` and `a.js`
+        // commit.
+        writes.insert(normalize(&dir.join("b.js")), "new b".to_string());
+        assert!(commit_outputs(&writes).is_err());
+        assert_eq!(std::fs::read_to_string(dir.join("a.js")).unwrap(), "old");
+        assert!(!dir.join("a.d.ts").exists());
+        let mut leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        leftovers.sort();
+        assert_eq!(leftovers, vec!["a.js".to_string(), "b.js".to_string()]);
+
+        writes.remove(&normalize(&dir.join("b.js")));
+        let files = commit_outputs(&writes).unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(std::fs::read_to_string(dir.join("a.js")).unwrap(), "new a");
+        assert_eq!(
+            std::fs::read_dir(&dir).unwrap().count(),
+            3,
+            "no backups remain"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
