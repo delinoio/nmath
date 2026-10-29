@@ -1,0 +1,103 @@
+# NMath Compiler Crates Contract
+
+## Scope
+
+This contract owns the `nmath-nts` and `nmath-compiler` components of the [`nmath` project](project-nmath.md):
+
+- `crates/nmath-nts/`: the `.nts` source transform and its position map.
+- `crates/nmath-compiler/`: the `nmath-compiler` executable, its programmatic project API and the content-mapper process.
+
+## Runtime and Language
+
+- Rust with the repository toolchain.
+- The compiler depends on tsrs crates from Rust, pinned to commit `77d3cddb44540734abc33a42ccca4d3f33bee527` (workspace version `0.20.1`, TypeScript `7.1.0-beta` source baseline). The tsrs npm executable is not part of the architecture.
+- The tsrs TypeScript 7.1 beta baseline is separate from the TypeScript 7.0.2 baseline that validates ordinary `.ts` consumers of the npm package.
+
+## Users and Operators
+
+- `.nts` authors who run `nmath-compiler check` and `nmath-compiler build`.
+- Editors that start `nmath-compiler lsp`.
+- Programmatic callers of `@delinoio/nmath/compiler`.
+
+## Interfaces and Contracts
+
+### `.nts` transform
+
+The transform parses `.nts` text with the standard tsrs TypeScript parser and produces TypeScript text plus a span map. It does not extend the parser or lexer.
+
+| `.nts` source                                         | Lowered TypeScript                                                                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `a + b`, `a - b`, `a * b`, `a / b`, `a % b`, `a ** b` | `__nmath.add(a, b)`, `__nmath.sub(a, b)`, `__nmath.mul(a, b)`, `__nmath.div(a, b)`, `__nmath.mod(a, b)`, `__nmath.pow(a, b)` |
+| `+a`, `-a`                                            | `__nmath.pos(a)`, `__nmath.neg(a)`                                                                                           |
+| `a[i]`                                                | `__nmath.get(a, i)`                                                                                                          |
+| `a[[i, j]]`                                           | `__nmath.get(a, [i, j])`                                                                                                     |
+| `a[i] = value`                                        | `(await __nmath.set(a, i, value))`                                                                                           |
+
+- The transform inserts `import * as __nmath from "@delinoio/nmath/nts-runtime";` at the top of each transformed module.
+- `__nmath` operator helpers are overloaded in TypeScript declarations. An overload accepts NMath operands and returns a lazy expression; the remaining overloads accept ordinary JS operands and return the ordinary result type. A union that may be NMath or ordinary JS matches no overload, so the checker requires narrowing. The type checker, not speculative dispatch, decides the semantics. The runtime helper calls the NMath operation only when an operand is an NMath value.
+- Literal-only arithmetic (both operands numeric or string literals) is not rewritten.
+- `a[i] = value` is rewritten only inside async functions or module top level. Elsewhere the transform reports `NMATH_NTS_ASSIGN_REQUIRES_ASYNC`.
+- Compound assignment (`+=` and others), `++` and `--` on bracket expressions are left unchanged. Comparison and bitwise operators are never rewritten.
+- Source-relative imports ending in `.nts` are rewritten to `.js` in emitted output.
+
+### Diagnostics
+
+Compiler diagnostics use stable codes:
+
+| Code                              | Meaning                                                |
+| --------------------------------- | ------------------------------------------------------ |
+| `NMATH_NTS_PARSE`                 | The `.nts` file has a syntax error.                    |
+| `NMATH_NTS_ASSIGN_REQUIRES_ASYNC` | A bracket assignment appears outside an async context. |
+| `NMATH_COMPILER_CONFIG`           | The `tsconfig.json` path is missing or invalid.        |
+| `NMATH_COMPILER_TYPE_ERROR`       | Type checking reported errors.                         |
+| `NMATH_COMPILER_EMIT`             | Output could not be written.                           |
+
+Every diagnostic reports the original `.nts` file and 1-based line and column, an English message and recovery guidance.
+
+### CLI
+
+- `nmath-compiler check -p <tsconfig>`: type-check the project. Exit code 0 on success, 1 on diagnostics, 2 on usage or configuration errors.
+- `nmath-compiler build -p <tsconfig>`: emit ESM JavaScript, declaration files and source maps. On any type or transform error, write nothing and keep existing outputs.
+- `nmath-compiler lsp`: run a generic Language Server Protocol server over stdio with diagnostics, completion and go-to-definition for `.nts` files.
+- `nmath-compiler content-mapper`: internal tsrs content-mapper process. Not a public interface.
+- `--json` prints the structured result `{ ok, diagnostics: [{ code, file, line, column, message, recovery }], outputFiles: [] }`.
+
+### Programmatic API
+
+`@delinoio/nmath/compiler` exposes `check({ tsconfig })` and `build({ tsconfig })`. Each returns `Promise<CompilerResult>` with the structured result above. An in-memory source API is out of scope.
+
+## Storage
+
+Build output is written to the `outDir` from `tsconfig.json`. Each output file is written to a temporary file and renamed only after the whole build succeeds.
+
+## Security
+
+The compiler reads and writes local files with the calling user's permissions. It does not execute project code. The content-mapper process accepts requests only from its parent over stdio.
+
+## Logging
+
+Use `tracing` with structured fields. `NMATH_LOG` enables logs on stderr; ANSI color is on by default and `NO_COLOR` disables it. Logs do not contain source text.
+
+## Build and Test
+
+- `cargo test` from the repository root runs transform and CLI tests.
+- Transform tests cover every rewrite in the table above, preservation of ordinary JS, span-map round trips and the async-assignment diagnostic.
+
+## Dependencies and Integrations
+
+- tsrs crates pinned to `77d3cddb44540734abc33a42ccca4d3f33bee527`. A pinned fork or patch is allowed only when an upstream change is essential; document its scope and removal condition next to the patch.
+- tsrs documents gaps in content-mapper support in its language server. `nmath-compiler lsp` therefore runs the NMath transform directly and does not depend on the tsrs language server for `.nts` features. Remove this workaround when tsrs ships language-server content-mapper support at a pinned commit.
+- Downstream: [npm package contract](packages-nmath-package-contract.md) for `/compiler` and `nts-runtime`; [VS Code extension contract](apps-nmath-vscode-contract.md) for `lsp`.
+
+## Change Triggers
+
+- Changes to rewrites or helper names update the [npm package contract](packages-nmath-package-contract.md).
+- Changes to the CLI or LSP surface update the [VS Code extension contract](apps-nmath-vscode-contract.md).
+- Update `AGENTS.md` only when development procedures, directory ownership or repository/domain development rules change; follow the [instruction-update policy](README.md#instruction-update-policy).
+
+## References
+
+- [NMath project index](project-nmath.md)
+- [Runtime crates contract](crates-nmath-runtime-contract.md)
+- [Repository defaults](repository-defaults.md)
+- [tsrs content-mapper notes at the pinned commit](https://github.com/oxc-project/tsrs/blob/77d3cddb44540734abc33a42ccca4d3f33bee527/notes/contentmappers.md)

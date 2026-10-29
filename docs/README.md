@@ -1,6 +1,6 @@
 # Documentation Catalog
 
-`docs/` is the source of truth for repository contracts. This base contains no runtime projects.
+`docs/` is the source of truth for repository contracts.
 
 ## Repository contracts
 
@@ -17,7 +17,15 @@
 
 ## Project catalog
 
-No projects are registered. Before implementation, add `project-<id>.md`, at least one `<domain>-<project-or-component>-<contract>.md`, and their links here. Use lowercase kebab-case IDs and domain prefixes `apps`, `cmds`, `servers`, `crates`, `protos`, or `packages`.
+Before implementing a new project, add `project-<id>.md`, at least one `<domain>-<project-or-component>-<contract>.md`, and their links here. Use lowercase kebab-case IDs and domain prefixes `apps`, `cmds`, `servers`, `crates`, `protos`, or `packages`.
+
+### NMath
+
+- [Project index](project-nmath.md)
+- [Runtime crates contract](crates-nmath-runtime-contract.md)
+- [Compiler crates contract](crates-nmath-compiler-contract.md)
+- [npm package contract](packages-nmath-package-contract.md)
+- [VS Code extension contract](apps-nmath-vscode-contract.md)
 
 ## Instruction update policy
 
