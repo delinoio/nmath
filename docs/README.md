@@ -1,6 +1,6 @@
 # Documentation Catalog
 
-`docs/` is the source of truth for repository contracts.
+`docs/` is the source of truth for repository contracts. Start with the [root README](../README.md) for setup and validation, the [package guide](../packages/nmath/README.md) for API usage, or the [NMath project index](project-nmath.md) for component ownership.
 
 ## Repository contracts
 
