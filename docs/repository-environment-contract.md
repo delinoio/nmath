@@ -2,7 +2,7 @@
 
 ## Configuration ownership
 
-The base has no application services, environment selectors, secret provider integration or production credentials. New services must define their configuration schema, validation, local defaults and credential boundaries in their domain contracts.
+NMath is a local library and compiler with a VS Code extension. It has no application services, environment selectors or secret provider integration. Context limits are explicit API options, not environment selectors. `NMATH_LOG` enables native and compiler diagnostics on stderr; `NO_COLOR` disables ANSI color. The extension owns the `nmath.compilerPath` setting under its [contract](apps-nmath-vscode-contract.md). Production and publishing credentials stay outside source control. New services must define their configuration schema, validation, local defaults and credential boundaries in their domain contracts.
 
 ## Local state
 
