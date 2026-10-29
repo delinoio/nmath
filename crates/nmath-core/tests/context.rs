@@ -583,3 +583,41 @@ fn random_assignments_commit_generator_state() {
     assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeBroadcast);
     assert_eq!(g.current(), committed);
 }
+
+#[test]
+fn load_npy_reserves_encoded_and_decoded_buffers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("a.npy");
+    let bytes = nmath_core::io::encode_npy(&[4], &Buffer::F64(vec![1.0; 4])).unwrap();
+    std::fs::write(&path, &bytes).unwrap();
+    let load = |budget: u64| {
+        let c = Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 0,
+            cpu_memory_budget: budget,
+            gpu_memory_budget: 0,
+        })
+        .unwrap();
+        let (done, rx) = channel();
+        c.load_npy(path.clone(), CancellationToken::new(), done)
+            .unwrap();
+        (c, wait(&rx))
+    };
+    // A zero budget rejects before the file is read.
+    assert_eq!(load(0).1.unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+    // The file alone fits, but not together with the 32-byte decoded buffer.
+    assert_eq!(
+        load(bytes.len() as u64).1.unwrap_err().code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    let (c, loaded) = load(bytes.len() as u64 + 32);
+    let JobOutput::Array(loaded) = loaded.unwrap() else {
+        panic!()
+    };
+    assert_eq!(loaded.to_buffer(), Buffer::F64(vec![1.0; 4]));
+    assert_eq!(
+        c.metrics().cpu_memory.used,
+        32,
+        "only the array stays charged"
+    );
+}

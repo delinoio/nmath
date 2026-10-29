@@ -13,6 +13,7 @@ use crate::{
     buffer::Buffer,
     dtype::DType,
     error::{Error, ErrorCode, Result},
+    memory::{MemoryBudget, Reservation},
     sync::CancellationToken,
 };
 
@@ -120,6 +121,22 @@ fn header_value<'a>(header: &'a str, key: &str) -> Result<&'a str> {
 /// Decodes NPY version 1.x/2.x/3.x data with little-endian or byte-sized
 /// dtypes.
 pub fn decode_npy(bytes: &[u8]) -> Result<(Vec<usize>, Buffer)> {
+    decode_npy_with(bytes, |_| Ok(())).map(|(shape, buffer, ())| (shape, buffer))
+}
+
+/// Like [`decode_npy`], but charges the decoded buffer to `budget` after the
+/// header is validated and before the buffer is allocated.
+pub fn decode_npy_budgeted(
+    bytes: &[u8],
+    budget: &MemoryBudget,
+) -> Result<(Vec<usize>, Buffer, Reservation)> {
+    decode_npy_with(bytes, |len| budget.reserve(len))
+}
+
+fn decode_npy_with<R>(
+    bytes: &[u8],
+    reserve: impl FnOnce(u64) -> Result<R>,
+) -> Result<(Vec<usize>, Buffer, R)> {
     if bytes.len() < 10 || &bytes[..6] != NPY_MAGIC {
         return Err(format_error("missing magic string"));
     }
@@ -194,6 +211,7 @@ pub fn decode_npy(bytes: &[u8]) -> Result<(Vec<usize>, Buffer)> {
             data.len()
         )));
     }
+    let reservation = reserve(expected as u64)?;
     macro_rules! read_le {
         ($t:ty, $n:expr) => {
             data.chunks_exact($n)
@@ -217,7 +235,7 @@ pub fn decode_npy(bytes: &[u8]) -> Result<(Vec<usize>, Buffer)> {
         DType::Float64 => read_le!(f64, 8),
         _ => unreachable!(),
     };
-    Ok((shape, buffer))
+    Ok((shape, buffer, reservation))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -295,11 +313,33 @@ pub fn write_atomic(
 /// Reads a whole file and fails with `NMATH_IO_MODIFIED` when its size or
 /// modification time changes while reading. Detection is best effort.
 pub fn read_checked(path: &Path, token: &CancellationToken) -> Result<Vec<u8>> {
+    read_checked_with(path, token, |_| Ok(())).map(|(bytes, ())| bytes)
+}
+
+/// Like [`read_checked`], but charges the file contents to `budget` using the
+/// size recorded at open, before any read buffer is allocated.
+pub fn read_checked_budgeted(
+    path: &Path,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<(Vec<u8>, Reservation)> {
+    read_checked_with(path, token, |len| budget.reserve(len))
+}
+
+fn read_checked_with<R>(
+    path: &Path,
+    token: &CancellationToken,
+    reserve: impl FnOnce(u64) -> Result<R>,
+) -> Result<(Vec<u8>, R)> {
     let stamp = |m: &fs::Metadata| (m.len(), m.modified().ok());
-    let mut file = File::open(path).map_err(io_error)?;
+    let file = File::open(path).map_err(io_error)?;
     let before = stamp(&file.metadata().map_err(io_error)?);
+    let reservation = reserve(before.0)?;
     let mut bytes = Vec::with_capacity(before.0 as usize);
-    let mut chunk = vec![0u8; 1 << 20];
+    // Read at most one byte past the recorded size so a growing file cannot
+    // allocate beyond the reservation; the extra byte reports the change.
+    let mut file = file.take(before.0.saturating_add(1));
+    let mut chunk = vec![0u8; before.0.saturating_add(1).min(1 << 20) as usize];
     loop {
         token.check()?;
         let n = file.read(&mut chunk).map_err(io_error)?;
@@ -315,7 +355,7 @@ pub fn read_checked(path: &Path, token: &CancellationToken) -> Result<Vec<u8>> {
             "The input file changed while it was read.",
         ));
     }
-    Ok(bytes)
+    Ok((bytes, reservation))
 }
 
 #[cfg(test)]
@@ -333,6 +373,20 @@ mod tests {
             decode_npy(&scalar).unwrap(),
             (vec![], Buffer::F32(vec![1.5]))
         );
+    }
+
+    #[test]
+    fn budgeted_decode_charges_the_data_before_allocation() {
+        let bytes = encode_npy(&[3], &Buffer::F64(vec![1.0, 2.0, 3.0])).unwrap();
+        let tight = MemoryBudget::new(crate::memory::Device::Cpu, 23);
+        assert_eq!(
+            decode_npy_budgeted(&bytes, &tight).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        let fits = MemoryBudget::new(crate::memory::Device::Cpu, 24);
+        let (_, buffer, reservation) = decode_npy_budgeted(&bytes, &fits).unwrap();
+        assert_eq!(buffer, Buffer::F64(vec![1.0, 2.0, 3.0]));
+        assert_eq!(reservation.bytes(), 24);
     }
 
     #[test]
@@ -368,6 +422,16 @@ mod tests {
         assert_eq!(fs::read(&dest).unwrap(), b"first");
         write_atomic(&dest, b"fourth", WriteMode::Overwrite, &token).unwrap();
         assert_eq!(read_checked(&dest, &token).unwrap(), b"fourth");
+        let tight = MemoryBudget::new(crate::memory::Device::Cpu, 5);
+        assert_eq!(
+            read_checked_budgeted(&dest, &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        let fits = MemoryBudget::new(crate::memory::Device::Cpu, 6);
+        let (bytes, reservation) = read_checked_budgeted(&dest, &fits, &token).unwrap();
+        assert_eq!((bytes.as_slice(), reservation.bytes()), (&b"fourth"[..], 6));
         assert_eq!(
             fs::read_dir(dir.path()).unwrap().count(),
             1,

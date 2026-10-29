@@ -361,10 +361,12 @@ impl Context {
     pub fn load_npy(&self, path: PathBuf, token: CancellationToken, done: Done) -> Result<u64> {
         let id = self.id();
         let work: Work = Box::new(move |env| {
-            let bytes = io::read_checked(&path, &env.token)?;
-            let reservation = env.budget.reserve(bytes.len() as u64)?;
-            let (shape, buffer) = io::decode_npy(&bytes)?;
+            // The encoded bytes and the decoded buffer are both live while
+            // decoding, so each carries its own reservation.
+            let (bytes, encoded) = io::read_checked_budgeted(&path, &env.budget, &env.token)?;
+            let (shape, buffer, reservation) = io::decode_npy_budgeted(&bytes, &env.budget)?;
             drop(bytes);
+            drop(encoded);
             Ok(JobOutput::Array(NdArray::from_dense(
                 id,
                 DenseArray::new(shape, buffer, reservation)?,
