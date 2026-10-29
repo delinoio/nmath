@@ -9,61 +9,95 @@ use crate::{
     sync::CancellationToken,
 };
 
+/// Validate the complete allocation size before budget admission or allocation.
+pub(crate) fn checked_byte_len(len: usize, dtype: DType) -> Result<usize> {
+    dtype.ensure_computable()?;
+    len.checked_mul(dtype.item_size())
+        .filter(|&bytes| bytes <= isize::MAX as usize)
+        .ok_or_else(allocation_error)
+}
+
+fn allocation_error() -> Error {
+    Error::new(
+        ErrorCode::MemoryBudgetExceeded,
+        "The buffer allocation is too large. Reduce the array size or string width.",
+    )
+}
+
+fn unicode_storage(len: usize, width: usize) -> Result<Vec<u32>> {
+    let bytes = checked_byte_len(len, DType::Str(width))?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(bytes / 4)
+        .map_err(|_| allocation_error())?;
+    values.resize(bytes / 4, 0);
+    Ok(values)
+}
+
 /// A JS-facing scalar. 64-bit integers are carried exactly.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Scalar {
     Bool(bool),
     Int(i64),
     UInt(u64),
     Float(f64),
     Complex([f64; 2]),
+    Text(String),
+    Temporal(i64, DType),
 }
 
 impl Scalar {
-    pub fn kind(self) -> ScalarKind {
+    pub fn kind(&self) -> ScalarKind {
         match self {
             Scalar::Bool(_) => ScalarKind::Bool,
             Scalar::Int(_) | Scalar::UInt(_) => ScalarKind::Int,
             Scalar::Float(_) => ScalarKind::Float,
             Scalar::Complex(_) => ScalarKind::Complex,
+            Scalar::Text(_) | Scalar::Temporal(..) => ScalarKind::Other,
         }
     }
 
     /// Dtype of a scalar that stands alone (both operands are scalars).
-    pub fn default_dtype(self) -> DType {
+    pub fn default_dtype(&self) -> DType {
         match self {
             Scalar::Bool(_) => DType::Bool,
             Scalar::Int(_) => DType::Int64,
             Scalar::UInt(_) => DType::UInt64,
             Scalar::Float(_) => DType::Float64,
             Scalar::Complex(_) => DType::Complex128,
+            Scalar::Text(s) => DType::Str(s.chars().count().max(1)),
+            Scalar::Temporal(_, d) => *d,
         }
     }
 
-    pub fn as_f64(self) -> f64 {
+    pub fn as_f64(&self) -> f64 {
         match self {
-            Scalar::Bool(b) => b as u8 as f64,
-            Scalar::Int(i) => i as f64,
-            Scalar::UInt(u) => u as f64,
-            Scalar::Float(f) => f,
-            Scalar::Complex(_) => panic!("complex conversion must be explicit"),
+            Scalar::Bool(b) => *b as u8 as f64,
+            Scalar::Int(i) => *i as f64,
+            Scalar::UInt(u) => *u as f64,
+            Scalar::Float(f) => *f,
+            Scalar::Text(_) | Scalar::Temporal(..) | Scalar::Complex(_) => {
+                panic!("complex conversion must be explicit")
+            }
         }
     }
 
-    pub fn as_complex(self) -> [f64; 2] {
+    pub fn as_complex(&self) -> [f64; 2] {
         match self {
-            Scalar::Complex(z) => z,
+            Scalar::Complex(z) => *z,
             other => [other.as_f64(), 0.0],
         }
     }
 
-    fn as_i128(self) -> i128 {
+    fn as_i128(&self) -> i128 {
         match self {
-            Scalar::Bool(b) => b as i128,
-            Scalar::Int(i) => i as i128,
-            Scalar::UInt(u) => u as i128,
-            Scalar::Float(f) => f as i128,
-            Scalar::Complex(_) => panic!("complex conversion must be explicit"),
+            Scalar::Bool(b) => *b as i128,
+            Scalar::Int(i) => *i as i128,
+            Scalar::UInt(u) => *u as i128,
+            Scalar::Float(f) => *f as i128,
+            Scalar::Text(_) | Scalar::Temporal(..) | Scalar::Complex(_) => {
+                panic!("complex conversion must be explicit")
+            }
         }
     }
 }
@@ -85,6 +119,8 @@ pub enum Buffer {
     F64(Vec<f64>),
     C64(Vec<[f32; 2]>),
     C128(Vec<[f64; 2]>),
+    Unicode { width: usize, values: Vec<u32> },
+    Temporal { dtype: DType, ticks: Vec<i64> },
 }
 
 macro_rules! each_buffer {
@@ -104,6 +140,9 @@ macro_rules! each_buffer {
             Buffer::F64($v) => $body,
             Buffer::C64($v) => $body,
             Buffer::C128($v) => $body,
+            Buffer::Unicode { .. } | Buffer::Temporal { .. } => {
+                unreachable!("handled before numeric dispatch")
+            }
         }
     };
 }
@@ -125,11 +164,17 @@ impl Buffer {
             Buffer::F64(_) => DType::Float64,
             Buffer::C64(_) => DType::Complex64,
             Buffer::C128(_) => DType::Complex128,
+            Buffer::Unicode { width, .. } => DType::Str(*width),
+            Buffer::Temporal { dtype, .. } => *dtype,
         }
     }
 
     pub fn len(&self) -> usize {
-        each_buffer!(self, v => v.len())
+        match self {
+            Self::Unicode { width, values } => values.len() / width,
+            Self::Temporal { ticks, .. } => ticks.len(),
+            _ => each_buffer!(self, v => v.len()),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -141,6 +186,37 @@ impl Buffer {
     }
 
     pub fn filled(dtype: DType, len: usize, value: Scalar) -> Result<Buffer> {
+        if let DType::Str(width) = dtype {
+            let text = match &value {
+                Scalar::Text(s) => s.as_str(),
+                Scalar::Int(0) => "",
+                _ => return Err(crate::dtype::unsupported()),
+            };
+            if text.chars().count() > width {
+                return Err(crate::dtype::unsupported());
+            }
+            let mut values = unicode_storage(len, width)?;
+            for row in values.chunks_exact_mut(width) {
+                for (slot, c) in row.iter_mut().zip(text.chars()) {
+                    *slot = c as u32;
+                }
+            }
+            return Ok(Self::Unicode { width, values });
+        }
+        if dtype.temporal_unit().is_some() {
+            let tick = match value {
+                Scalar::Temporal(t, d) if d == dtype => t,
+                Scalar::Int(t) => t,
+                _ => return Err(crate::dtype::unsupported()),
+            };
+            return Ok(Self::Temporal {
+                dtype,
+                ticks: vec![tick; len],
+            });
+        }
+        if matches!(value, Scalar::Text(_) | Scalar::Temporal(..)) {
+            return Err(crate::dtype::unsupported());
+        }
         if matches!(value, Scalar::Complex(_))
             && !matches!(dtype, DType::Complex64 | DType::Complex128)
         {
@@ -185,6 +261,17 @@ impl Buffer {
             Buffer::F64(v) => Scalar::Float(v[i]),
             Buffer::C64(v) => Scalar::Complex(v[i].map(f64::from)),
             Buffer::C128(v) => Scalar::Complex(v[i]),
+            Buffer::Temporal { dtype, ticks } => Scalar::Temporal(ticks[i], *dtype),
+            Buffer::Unicode { width, values } => {
+                let row = &values[i * width..(i + 1) * width];
+                let end = row.iter().rposition(|&c| c != 0).map_or(0, |j| j + 1);
+                Scalar::Text(
+                    row[..end]
+                        .iter()
+                        .map(|&c| char::from_u32(c).expect("validated unicode"))
+                        .collect(),
+                )
+            }
         }
     }
 
@@ -206,12 +293,52 @@ impl Buffer {
             (Buffer::F64(a), Buffer::F64(b)) => a[i] = b[j],
             (Buffer::C64(a), Buffer::C64(b)) => a[i] = b[j],
             (Buffer::C128(a), Buffer::C128(b)) => a[i] = b[j],
+            (
+                Buffer::Temporal {
+                    ticks: a,
+                    dtype: da,
+                },
+                Buffer::Temporal {
+                    ticks: b,
+                    dtype: db,
+                },
+            ) if da == db => a[i] = b[j],
+            (
+                Buffer::Unicode {
+                    width: a,
+                    values: av,
+                },
+                Buffer::Unicode {
+                    width: b,
+                    values: bv,
+                },
+            ) if a == b => {
+                av[i * *a..(i + 1) * *a].copy_from_slice(&bv[j * *b..(j + 1) * *b]);
+            }
             _ => panic!("set_from requires matching dtypes"),
         }
     }
 
     /// Gathers `indices` into a new buffer.
     pub fn gather(&self, indices: &[usize]) -> Buffer {
+        match self {
+            Self::Temporal { dtype, ticks } => {
+                return Self::Temporal {
+                    dtype: *dtype,
+                    ticks: indices.iter().map(|&i| ticks[i]).collect(),
+                };
+            }
+            Self::Unicode { width, values } => {
+                return Self::Unicode {
+                    width: *width,
+                    values: indices
+                        .iter()
+                        .flat_map(|&i| values[i * width..(i + 1) * width].iter().copied())
+                        .collect(),
+                };
+            }
+            _ => {}
+        }
         each_buffer!(self, v => indices.iter().map(|&i| v[i]).collect::<Vec<_>>().into())
     }
 
@@ -223,6 +350,11 @@ impl Buffer {
     pub fn cast_cancellable(&self, dtype: DType, token: &CancellationToken) -> Result<Buffer> {
         token.check()?;
         dtype.ensure_computable()?;
+        if self.dtype().kind() == crate::dtype::DTypeKind::Other
+            || dtype.kind() == crate::dtype::DTypeKind::Other
+        {
+            return self.cast_special(dtype, token);
+        }
         if self.dtype() == dtype {
             return Ok(each_buffer!(self, v => map_elements(v, token, |x| x)?.into()));
         }
@@ -331,6 +463,69 @@ impl Buffer {
             };
         }
         Ok(each_buffer!(self, v => conv!(v)))
+    }
+
+    fn cast_special(&self, dtype: DType, token: &CancellationToken) -> Result<Self> {
+        use crate::dtype::unsupported;
+        match (self, dtype) {
+            (Self::Unicode { width, values }, DType::Str(target)) => {
+                let mut out = unicode_storage(self.len(), target)?;
+                for (i, row) in values.chunks_exact(*width).enumerate() {
+                    if i % 16384 == 0 {
+                        token.check()?;
+                    }
+                    let n = target.min(*width);
+                    out[i * target..i * target + n].copy_from_slice(&row[..n]);
+                }
+                Ok(Self::Unicode {
+                    width: target,
+                    values: out,
+                })
+            }
+            (
+                Self::Temporal {
+                    dtype: source,
+                    ticks,
+                },
+                target,
+            ) if target.temporal_unit().is_some() => {
+                if source.id() != target.id() {
+                    return Err(unsupported());
+                }
+                // Validate the unit conversion even for an empty or all-NaT
+                // input.
+                crate::temporal::convert(
+                    crate::temporal::NAT,
+                    source.temporal_unit().unwrap(),
+                    target.temporal_unit().unwrap(),
+                    matches!(source, DType::Datetime64(_)),
+                )?;
+                let mut out = Vec::with_capacity(ticks.len());
+                for (i, &tick) in ticks.iter().enumerate() {
+                    if i % 16384 == 0 {
+                        token.check()?;
+                    }
+                    out.push(crate::temporal::convert(
+                        tick,
+                        source.temporal_unit().unwrap(),
+                        target.temporal_unit().unwrap(),
+                        matches!(source, DType::Datetime64(_)),
+                    )?);
+                }
+                Ok(Self::Temporal {
+                    dtype: target,
+                    ticks: out,
+                })
+            }
+            (Self::Temporal { ticks, .. }, DType::Int64) => {
+                Ok(Self::I64(map_elements(ticks, token, |x| x)?))
+            }
+            (Self::I64(ticks), target) if target.temporal_unit().is_some() => Ok(Self::Temporal {
+                dtype: target,
+                ticks: map_elements(ticks, token, |x| x)?,
+            }),
+            _ => Err(unsupported()),
+        }
     }
 }
 
@@ -482,6 +677,31 @@ impl DenseArray {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unicode_allocations_reject_byte_overflow() {
+        let width = usize::MAX / 4096 + 1;
+        let input = Buffer::Unicode {
+            width: 1,
+            values: vec![0; 1024],
+        };
+        // The element count fits usize, but its byte count wraps to zero.
+        for result in [
+            input.cast(DType::Str(width)),
+            Buffer::filled(DType::Str(width), 1024, Scalar::Text(String::new())),
+        ] {
+            assert_eq!(result.unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+        }
+        // Vec also rejects byte lengths above isize::MAX even without overflow.
+        assert_eq!(
+            checked_byte_len(1, DType::Str(usize::MAX / 4))
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(checked_byte_len(0, DType::Str(width)).unwrap(), 0);
+        assert_eq!(input.cast(DType::Str(2)).unwrap().byte_len(), 8192);
+    }
 
     #[test]
     fn binary16_roundtrips_every_encoding_and_rounds_ties_to_even() {

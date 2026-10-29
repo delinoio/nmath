@@ -416,9 +416,9 @@ pub fn write(
             c.values.dtype(),
             DType::Complex64
                 | DType::Complex128
-                | DType::Str
-                | DType::Datetime64
-                | DType::Timedelta64
+                | DType::Str(_)
+                | DType::Datetime64(_)
+                | DType::Timedelta64(_)
         )
     }) {
         return Err(Error::new(

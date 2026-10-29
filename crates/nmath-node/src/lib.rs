@@ -161,6 +161,23 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
         };
     }
     Ok(match dtype.ensure_computable().map_err(to_napi)? {
+        DType::Str(width) => {
+            let values = bytes
+                .chunks_exact(4)
+                .map(|c| u32::from_ne_bytes(c.try_into().unwrap()))
+                .collect::<Vec<_>>();
+            if values.iter().any(|&c| char::from_u32(c).is_none()) {
+                return Err(to_napi(nmath_core::dtype::unsupported()));
+            }
+            CoreBuffer::Unicode { width, values }
+        }
+        DType::Datetime64(_) | DType::Timedelta64(_) => CoreBuffer::Temporal {
+            dtype,
+            ticks: bytes
+                .chunks_exact(8)
+                .map(|c| i64::from_ne_bytes(c.try_into().unwrap()))
+                .collect(),
+        },
         DType::Bool => CoreBuffer::Bool(bytes.iter().map(|&b| b != 0).collect()),
         DType::Int8 => read!(i8),
         DType::Int16 => read!(i16),
@@ -195,12 +212,13 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
                 })
                 .collect(),
         ),
-        _ => unreachable!(),
     })
 }
 
 fn buffer_to_bytes(buffer: &CoreBuffer) -> Vec<u8> {
     match buffer {
+        CoreBuffer::Unicode { values, .. } => values.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::Temporal { ticks, .. } => ticks.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::Bool(v) => v.iter().map(|&b| b as u8).collect(),
         CoreBuffer::I8(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::I16(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
@@ -225,6 +243,13 @@ fn buffer_to_bytes(buffer: &CoreBuffer) -> Vec<u8> {
 }
 
 #[napi(object)]
+pub struct NativeTemporal {
+    pub ticks: BigInt,
+    pub dtype: String,
+    pub unit: String,
+}
+
+#[napi(object)]
 pub struct NativeComplex {
     pub real: f64,
     pub imag: f64,
@@ -235,6 +260,11 @@ impl NativeArray {
     #[napi(getter)]
     pub fn dtype(&self) -> Result<String> {
         Ok(self.get()?.dtype().id().to_string())
+    }
+
+    #[napi(getter)]
+    pub fn dtype_descriptor(&self) -> Result<String> {
+        Ok(self.get()?.dtype().descriptor())
     }
 
     #[napi(getter)]
@@ -261,19 +291,28 @@ impl NativeArray {
     /// Reads one element. 64-bit integers are returned as bigint so they stay
     /// exact.
     #[napi]
-    pub fn item(&self, index: Vec<i64>) -> Result<Either4<f64, BigInt, bool, NativeComplex>> {
+    pub fn item(
+        &self,
+        index: Vec<i64>,
+    ) -> Result<Either6<f64, BigInt, bool, NativeComplex, String, NativeTemporal>> {
         let array = self.get()?;
         let wide = matches!(array.dtype(), DType::Int64 | DType::UInt64);
         let value = array.get_scalar(&index).map_err(to_napi)?;
         Ok(match value {
-            Scalar::Bool(b) => Either4::C(b),
-            Scalar::Int(i) if wide => Either4::B(BigInt::from(i)),
-            Scalar::UInt(u) if wide => Either4::B(BigInt::from(u)),
+            Scalar::Text(s) => Either6::E(s),
+            Scalar::Temporal(ticks, dtype) => Either6::F(NativeTemporal {
+                ticks: ticks.into(),
+                dtype: dtype.id().into(),
+                unit: dtype.temporal_unit().unwrap().id(),
+            }),
+            Scalar::Bool(b) => Either6::C(b),
+            Scalar::Int(i) if wide => Either6::B(BigInt::from(i)),
+            Scalar::UInt(u) if wide => Either6::B(BigInt::from(u)),
             // 32-bit integers are exact as JS numbers.
-            Scalar::Int(i) => Either4::A(i as f64),
-            Scalar::UInt(u) => Either4::A(u as f64),
-            Scalar::Float(f) => Either4::A(f),
-            Scalar::Complex([real, imag]) => Either4::D(NativeComplex { real, imag }),
+            Scalar::Int(i) => Either6::A(i as f64),
+            Scalar::UInt(u) => Either6::A(u as f64),
+            Scalar::Float(f) => Either6::A(f),
+            Scalar::Complex([real, imag]) => Either6::D(NativeComplex { real, imag }),
         })
     }
 
@@ -308,6 +347,37 @@ impl NativeExpr {
         Ok(Self {
             inner: Expr::input(array.get()?),
         })
+    }
+
+    #[napi(factory)]
+    pub fn text_scalar(value: String) -> Self {
+        Self {
+            inner: Expr::scalar(Scalar::Text(value)),
+        }
+    }
+
+    #[napi(factory)]
+    pub fn temporal_scalar(ticks: BigInt, dtype: String) -> Result<Self> {
+        let (ticks, lossless) = ticks.get_i64();
+        let dtype = parse_dtype(&dtype)?;
+        if !lossless || dtype.temporal_unit().is_none() {
+            return Err(to_napi(nmath_core::dtype::unsupported()));
+        }
+        Ok(Self {
+            inner: Expr::scalar(Scalar::Temporal(ticks, dtype)),
+        })
+    }
+
+    #[napi]
+    pub fn temporal_milliseconds(ticks: BigInt, unit: String) -> Result<BigInt> {
+        let (ticks, lossless) = ticks.get_i64();
+        if !lossless {
+            return Err(to_napi(nmath_core::dtype::unsupported()));
+        }
+        let from = nmath_core::dtype::TimeUnit::parse(&unit).map_err(to_napi)?;
+        nmath_core::temporal::milliseconds(ticks, from)
+            .map(BigInt::from)
+            .map_err(to_napi)
     }
 
     #[napi(factory)]
@@ -549,6 +619,11 @@ impl NativeExpr {
             )
             .map_err(to_napi)?,
         })
+    }
+
+    #[napi(getter)]
+    pub fn dtype_descriptor(&self) -> String {
+        self.inner.dtype().descriptor()
     }
 
     #[napi(getter)]

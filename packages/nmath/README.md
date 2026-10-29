@@ -213,7 +213,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 
 | Area                 | Available now                                                                                                                                                           | Not yet available                                                                                                                                                |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float16`, `float32`, `float64`, `complex64`, `complex128`                            | extended precision, string, datetime, timedelta, categorical, structured                                                                                         |
+| Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                       | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                                    |
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                                     |
 | NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                                                      | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                                                 |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
@@ -247,7 +247,7 @@ Apache-2.0. See `LICENSE` and `NOTICE`. Native dependencies keep their own licen
 
 ## Numeric tables
 
-The numeric table APIs are a bounded native subset of pandas 3.1.0 and Polars 2.1.0. They do not implement the complete pandas or Polars API. Columns can use bool, signed/unsigned 8-, 16-, 32- or 64-bit integers, float32 and float64. Nulls use explicit boolean validity columns; true means valid. String, time, categorical, complex and extended-precision families remain support targets. NaN/inf and floating-point summation behavior still require broader original-derived numerical acceptance; explicit-null integer fixtures do not establish complete missing-value parity.
+The numeric table APIs are a bounded native subset of pandas 3.1.0 and Polars 2.1.0. They do not implement the complete pandas or Polars API. Columns can use bool, signed/unsigned 8-, 16-, 32- or 64-bit integers, float32 and float64. Nulls use explicit boolean validity columns; true means valid. Fixed-width strings and temporal columns support materialization, selection, filtering and access; their sorting/join/group operations remain targets. Categorical, complex and extended-precision table columns remain targets. NaN/inf and floating-point summation behavior still require broader original-derived numerical acceptance; explicit-null integer fixtures do not establish complete missing-value parity.
 
 ```ts
 import { createContext } from '@delinoio/nmath';
@@ -269,7 +269,7 @@ const result = await frame.lazy().groupBy('key', 'value', 'sum').collect();
 await ctx.close();
 ```
 
-Supported table operations: native multi-column compute, boolean-column filtering, stable single-key sorting, single-key inner/left equijoins, sum/mean/min/max/count grouping, and basic materialized lazy plans. pandas preserves explicit labels and matches null join keys; Polars uses positional rows and requires `nullsEqual:true` to match null join keys. Full label alignment, nullable expression arithmetic, arbitrary post-row projections, multiple keys, additional join modes, windows, pivots, strings, temporal/categorical operations, query optimization and internal streaming remain targets.
+Supported table operations: native multi-column compute, boolean-column filtering, stable single-key sorting, single-key inner/left equijoins, sum/mean/min/max/count grouping, and basic materialized lazy plans. pandas preserves explicit labels and matches null join keys; Polars uses positional rows and requires `nullsEqual:true` to match null join keys. Full label alignment, nullable expression arithmetic, arbitrary post-row projections, multiple keys, additional join modes, windows, pivots, richer string/temporal/categorical operations, query optimization and full internal streaming remain targets.
 
 Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Polars `groupBy` retains NaN keys and null groups.
 
@@ -296,7 +296,7 @@ The save helpers append `.npz` if needed. Named Map entries precede positional `
 
 For exact paths, use `ctx.saveNpz(path, map, { compressed, overwrite, signal })` and `ctx.loadNpz(path, { signal })`. Compression and overwrite default to false. All saved arrays must belong to the context. Cancellation before publication preserves existing output. A write that has already published completes successfully even if its signal aborts before the Promise settles.
 
-NPZ supports stored and deflated numeric/boolean NPY members, including complex64 and complex128. Complex input supports both byte orders and C/Fortran layout; output is little-endian C order. Pickle/object data, string/date/structured/extended dtypes, unsupported noncomplex byte orders/layouts, encrypted members and other compression methods are unsupported. Names must be nonempty UTF-8 components other than `.` or `..`, without slashes, backslashes, colons or control characters, and at most 65,531 UTF-8 bytes. Duplicate names and non-NPY members are rejected. ZIP64 central directories, multi-disk archives, 65,535 or more members and output capacity bounds at or above 4 GiB are unsupported. Conservative memory and output reservations can reject an archive earlier. These limits do not establish full NumPy compatibility.
+NPZ supports stored and deflated numeric/boolean NPY members, including complex64 and complex128. Complex input supports both byte orders and C/Fortran layout; output is little-endian C order. Pickle/object data, byte/variable string, generic temporal, structured and extended dtypes, unsupported noncomplex byte orders/layouts, encrypted members and other compression methods are unsupported. Names must be nonempty UTF-8 components other than `.` or `..`, without slashes, backslashes, colons or control characters, and at most 65,531 UTF-8 bytes. Duplicate names and non-NPY members are rejected. ZIP64 central directories, multi-disk archives, 65,535 or more members and output capacity bounds at or above 4 GiB are unsupported. Conservative memory and output reservations can reject an archive earlier. These limits do not establish full NumPy compatibility.
 
 ### Float16 arrays
 
@@ -400,3 +400,30 @@ Parameter broadcasting, `out`, other distributions, other bit generators, option
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
 
 `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, and `fft.irfft` accept `{ n?, axis?, norm? }`. The default axis is `-1`; normalization is `"backward"`, `"forward"`, or `"ortho"`. Length crops or zero-pads input. `rfft` requires real input. `irfft` defaults to `2 * (inputLength - 1)`; pass `n` to recover an odd original length. Call `.compute()` to execute on CPU. GPU execution and `out` buffers are unsupported. Complex output uses `Complex` values and interleaved typed arrays. Other linear-algebra and FFT functions remain compatibility targets.
+
+### Strings and exact temporal values
+
+```ts
+import { Temporal } from '@delinoio/nmath';
+
+const words = context.array(['hello', '한글', '😀'], { dtype: 'str' });
+const greetings = await words.add('!').compute();
+console.log(greetings.toArray());
+
+const dates = context.array(new BigInt64Array([-1n, 9007199254740993n]), {
+  dtype: 'datetime64',
+  unit: 'ns',
+});
+const first = dates.item(0); // Temporal<'datetime64'>
+console.log(first.ticks, first.unit); // -1n, 'ns'
+console.log(first.toDate()); // explicit conversion to millisecond precision
+
+const duration = new Temporal(1n, 'ns', 'timedelta64');
+const shifted = await dates.add(duration).compute();
+```
+
+Strings use JS strings. Width counts Unicode scalar values; you can select it with `stringWidth`, or let creation infer it. Creation and assignment reject truncation. Use `astype('str', {stringWidth})` when truncation is intentional. Strings export through `item()` and `toArray()`.
+
+Temporal values preserve exact bigint ticks, units and NaT. Their unit defaults to `ns` unless selected explicitly. Use `toTypedArray()` to copy raw ticks, and retain the array's `unit` and `dtype` when transferring them. `toDate()` is explicit, supports datetime values only, and reduces precision to milliseconds. Implicit number conversion is rejected. NPY/NPZ files preserve string widths and temporal metadata.
+
+Current string operations include concatenation, indexing, copies and explicit width casts. Temporal operations include date/duration arithmetic, compatible-unit conversion and supported reductions. Unsupported operators and casts report errors. Byte-string and variable-width string dtypes, string processing APIs, date parsing/formatting, business calendars and richer time-series/table operations remain compatibility work; they are not new exclusions.

@@ -115,7 +115,7 @@ impl Frozen {
             }
             ExprKind::Scalar(s) => {
                 let charge = reserve(env, 1, e.dtype().item_size())?;
-                DenseArray::new(vec![], Buffer::filled(e.dtype(), 1, *s)?, charge)
+                DenseArray::new(vec![], Buffer::filled(e.dtype(), 1, s.clone())?, charge)
             }
             ExprKind::Unary(op, e) => kernels::unary(
                 *op,

@@ -310,6 +310,20 @@ impl Context {
                     // (basic indexing of an input)
                     // materialize from the frozen snapshot.
                     let dense = env.eval_dense(&value)?;
+                    // String width and temporal unit casts allocate a full
+                    // source buffer. Hold its reservation
+                    // until the atomic write finishes.
+                    let _cast_charge = if target.dtype().kind() == crate::dtype::DTypeKind::Other {
+                        Some(
+                            env.budget.reserve(
+                                (dense.size() as u64)
+                                    .checked_mul(target.dtype().item_size() as u64)
+                                    .ok_or_else(crate::dtype::unsupported)?,
+                            )?,
+                        )
+                    } else {
+                        None
+                    };
                     target.assign(&turn, &selectors, &dense, &env.token)?;
                     Ok(JobOutput::Unit)
                 })

@@ -1,0 +1,10657 @@
+{
+  "numpy": "2.5.4",
+  "criterion": "exact strings, dtype metadata, signed integer ticks, shape, NaT and exception category; NaN by classification",
+  "sourceHashes": {
+    "_datetime.h": "8e10983b9683985e235bb30378521aa434587ccabe1e75817fba09ca5dda0987",
+    "datetime.c": "095004fba022ce045a2a2b42cd210820d49ac9a57a8be07515c1dff599304bcf"
+  },
+  "cases": [
+    {
+      "op": "add",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "b": {
+        "dtype": "str",
+        "stringWidth": 2,
+        "shape": [
+          3
+        ],
+        "values": [
+          "!",
+          "🦊",
+          "z"
+        ]
+      },
+      "result": {
+        "dtype": "str",
+        "stringWidth": 5,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글!",
+          "😀🦊",
+          "a\u0000bz",
+          "!",
+          "é🦊",
+          "𝄞z"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "target": "U1",
+      "result": {
+        "dtype": "str",
+        "stringWidth": 1,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한",
+          "😀",
+          "a",
+          "",
+          "é",
+          "𝄞"
+        ]
+      }
+    },
+    {
+      "op": "sub",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "b": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "b": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "b": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "TypeError"
+    },
+    {
+      "op": "mod",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "b": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "TypeError"
+    },
+    {
+      "op": "neg",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "pos",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "TypeError"
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "TypeError"
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-156",
+          "-12",
+          "0",
+          "12",
+          "156",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-4748",
+          "-365",
+          "0",
+          "365",
+          "4748",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410227200",
+          "-31536000",
+          "0",
+          "31536000",
+          "410227200",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410227200000",
+          "-31536000000",
+          "0",
+          "31536000000",
+          "410227200000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410227200000000000",
+          "-31536000000000000",
+          "0",
+          "31536000000000000",
+          "410227200000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "0",
+          "1",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-396",
+          "-31",
+          "0",
+          "31",
+          "396",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34214400",
+          "-2678400",
+          "0",
+          "2678400",
+          "34214400",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34214400000",
+          "-2678400000",
+          "0",
+          "2678400000",
+          "34214400000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34214400000000000",
+          "-2678400000000000",
+          "0",
+          "2678400000000000",
+          "34214400000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-3",
+          "-1",
+          "0",
+          "0",
+          "3",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-91",
+          "-7",
+          "0",
+          "7",
+          "91",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400",
+          "-604800",
+          "0",
+          "604800",
+          "7862400",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400000",
+          "-604800000",
+          "0",
+          "604800000",
+          "7862400000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400000000000",
+          "-604800000000000",
+          "0",
+          "604800000000000",
+          "7862400000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200",
+          "-86400",
+          "0",
+          "86400",
+          "1123200",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200000",
+          "-86400000",
+          "0",
+          "86400000",
+          "1123200000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200000000000",
+          "-86400000000000",
+          "0",
+          "86400000000000",
+          "1123200000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800",
+          "-3600",
+          "0",
+          "3600",
+          "46800",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800000",
+          "-3600000",
+          "0",
+          "3600000",
+          "46800000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800000000000",
+          "-3600000000000",
+          "0",
+          "3600000000000",
+          "46800000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780",
+          "-60",
+          "0",
+          "60",
+          "780",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780000",
+          "-60000",
+          "0",
+          "60000",
+          "780000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780000000000",
+          "-60000000000",
+          "0",
+          "60000000000",
+          "780000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000",
+          "-1000000000",
+          "0",
+          "1000000000",
+          "13000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000",
+          "-1000000",
+          "0",
+          "1000000",
+          "13000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000000000",
+          "-1000000000000000",
+          "0",
+          "1000000000000000",
+          "13000000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000000",
+          "-1000000000000",
+          "0",
+          "1000000000000",
+          "13000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000",
+          "-1000000000",
+          "0",
+          "1000000000",
+          "13000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000",
+          "-1000000",
+          "0",
+          "1000000",
+          "13000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39",
+          "-3",
+          "0",
+          "3",
+          "39",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39000",
+          "-3000",
+          "0",
+          "3000",
+          "39000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39000000000",
+          "-3000000000",
+          "0",
+          "3000000000",
+          "39000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[Y]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[M]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[D]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[s]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26",
+          "-2",
+          "0",
+          "2",
+          "26",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26000000",
+          "-2000000",
+          "0",
+          "2000000",
+          "26000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "datetime64[as]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26000000000000000",
+          "-2000000000000000",
+          "0",
+          "2000000000000000",
+          "26000000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-3",
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "-3",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "4",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "6",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "pos",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "neg",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "997",
+          "2004",
+          "-994",
+          "1001",
+          "2002",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sub",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-1003",
+          "-1996",
+          "1006",
+          "-999",
+          "-1998",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "mod",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "target": "datetime64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "result": {
+        "dtype": "datetime64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "20000000000"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "target": "datetime64[ms]",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000"
+        ]
+      }
+    },
+    {
+      "op": "sub",
+      "a": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "datetime64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-156",
+          "-12",
+          "0",
+          "12",
+          "156",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-4749",
+          "-366",
+          "0",
+          "365",
+          "4748",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410240376",
+          "-31556952",
+          "0",
+          "31556952",
+          "410240376",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410240376000",
+          "-31556952000",
+          "0",
+          "31556952000",
+          "410240376000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-410240376000000000",
+          "-31556952000000000",
+          "0",
+          "31556952000000000",
+          "410240376000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-2",
+          "-1",
+          "0",
+          "0",
+          "1",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-396",
+          "-31",
+          "0",
+          "30",
+          "395",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34186698",
+          "-2629746",
+          "0",
+          "2629746",
+          "34186698",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34186698000",
+          "-2629746000",
+          "0",
+          "2629746000",
+          "34186698000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-34186698000000000",
+          "-2629746000000000",
+          "0",
+          "2629746000000000",
+          "34186698000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-3",
+          "-1",
+          "0",
+          "0",
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-91",
+          "-7",
+          "0",
+          "7",
+          "91",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400",
+          "-604800",
+          "0",
+          "604800",
+          "7862400",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400000",
+          "-604800000",
+          "0",
+          "604800000",
+          "7862400000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-7862400000000000",
+          "-604800000000000",
+          "0",
+          "604800000000000",
+          "7862400000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "W",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200",
+          "-86400",
+          "0",
+          "86400",
+          "1123200",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200000",
+          "-86400000",
+          "0",
+          "86400000",
+          "1123200000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1123200000000000",
+          "-86400000000000",
+          "0",
+          "86400000000000",
+          "1123200000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800",
+          "-3600",
+          "0",
+          "3600",
+          "46800",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800000",
+          "-3600000",
+          "0",
+          "3600000",
+          "46800000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-46800000000000",
+          "-3600000000000",
+          "0",
+          "3600000000000",
+          "46800000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "h",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780",
+          "-60",
+          "0",
+          "60",
+          "780",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780000",
+          "-60000",
+          "0",
+          "60000",
+          "780000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-780000000000",
+          "-60000000000",
+          "0",
+          "60000000000",
+          "780000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "m",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000",
+          "-1000000000",
+          "0",
+          "1000000000",
+          "13000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000",
+          "-1000000",
+          "0",
+          "1000000",
+          "13000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000000000",
+          "-1000000000000000",
+          "0",
+          "1000000000000000",
+          "13000000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "us",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000000",
+          "-1000000000000",
+          "0",
+          "1000000000000",
+          "13000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000000",
+          "-1000000000",
+          "0",
+          "1000000000",
+          "13000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ps",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000000",
+          "-1000000",
+          "0",
+          "1000000",
+          "13000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "fs",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13000",
+          "-1000",
+          "0",
+          "1000",
+          "13000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39",
+          "-3",
+          "0",
+          "3",
+          "39",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39000",
+          "-3000",
+          "0",
+          "3000",
+          "39000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-39000000000",
+          "-3000000000",
+          "0",
+          "3000000000",
+          "39000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[Y]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "Y",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[M]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "M",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[D]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "D",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[s]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-1",
+          "-1",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26",
+          "-2",
+          "0",
+          "2",
+          "26",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26000000",
+          "-2000000",
+          "0",
+          "2000000",
+          "26000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "2ms",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-13",
+          "-1",
+          "0",
+          "1",
+          "13",
+          "-9223372036854775808"
+        ]
+      },
+      "target": "timedelta64[as]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "as",
+        "shape": [
+          6
+        ],
+        "values": [
+          "-26000000000000000",
+          "-2000000000000000",
+          "0",
+          "2000000000000000",
+          "26000000000000000",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-2",
+          "6",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "7",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-1",
+          "3",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-3",
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "-3",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": null,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": 0,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "4",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "axis": -1,
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2
+        ],
+        "values": [
+          "6",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "pos",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "neg",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "3",
+          "-4",
+          "-6",
+          "-1",
+          "-2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "997",
+          "2004",
+          "-994",
+          "1001",
+          "2002",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sub",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-1003",
+          "-1996",
+          "1006",
+          "-999",
+          "-1998",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "error": "UFuncTypeError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "float64",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          -0.003,
+          0.002,
+          -0.006,
+          0.001,
+          0.001,
+          "NaN"
+        ]
+      }
+    },
+    {
+      "op": "mod",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "997",
+          "4",
+          "-994",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "target": "timedelta64[ns]",
+      "error": "OverflowError"
+    },
+    {
+      "op": "add",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "s",
+        "shape": [
+          1
+        ],
+        "values": [
+          "20000000000"
+        ]
+      }
+    },
+    {
+      "op": "cast",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000000000"
+        ]
+      },
+      "target": "timedelta64[ms]",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10000"
+        ]
+      }
+    },
+    {
+      "op": "sub",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "-3",
+          "4",
+          "6",
+          "1",
+          "2",
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ms",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-5",
+          "4",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "int64",
+        "shape": [
+          3
+        ],
+        "values": [
+          "2",
+          "-2",
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-10",
+          "-8",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-5",
+          "4",
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "int64",
+        "shape": [
+          3
+        ],
+        "values": [
+          "2",
+          "-2",
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          3
+        ],
+        "values": [
+          "-2",
+          "-2",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          0
+        ],
+        "values": []
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "sum",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          2
+        ],
+        "values": [
+          "9223372036854775807",
+          "1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          0
+        ],
+        "values": []
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mean",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          2
+        ],
+        "values": [
+          "9223372036854775807",
+          "1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          0
+        ],
+        "values": []
+      },
+      "error": "ValueError"
+    },
+    {
+      "op": "min",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          2
+        ],
+        "values": [
+          "9223372036854775807",
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          0
+        ],
+        "values": []
+      },
+      "error": "ValueError"
+    },
+    {
+      "op": "max",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          2
+        ],
+        "values": [
+          "9223372036854775807",
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [],
+        "values": [
+          "9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "error": "OverflowError"
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775807"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "9223372036854775809"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-10"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-1"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "div",
+      "a": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "b": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "op": "mul",
+      "a": {
+        "dtype": "uint64",
+        "shape": [
+          1
+        ],
+        "values": [
+          "18446744073709551615"
+        ]
+      },
+      "b": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      },
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "ns",
+        "shape": [
+          1
+        ],
+        "values": [
+          "-9223372036854775808"
+        ]
+      }
+    }
+  ],
+  "files": [
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPFUzJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDMpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIApc1QAAAK4AAAAAAAAA9gEAAAAAAAAAAABhAAAAAAAAAGIAAAAAAAAAAAAAAAAAAADpAAAAAAAAAAAAAAAe0QEAAAAAAAAAAAA=",
+      "result": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPlUzJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDMpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAANVcAACuAAAAAAAAAfYAAAAAAAAAAAAAAABhAAAAAAAAAGIAAAAAAAAAAAAAAAAAAADpAAAAAAAAAAAAAdEeAAAAAAAAAAA=",
+      "result": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPFUzJywgJ2ZvcnRyYW5fb3JkZXInOiBUcnVlLCAnc2hhcGUnOiAoMiwgMyksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIApc1QAAAK4AAAAAAAAAAAAAAAAAAAAAAAAA9gEAAAAAAAAAAADpAAAAAAAAAAAAAABhAAAAAAAAAGIAAAAe0QEAAAAAAAAAAAA=",
+      "result": {
+        "dtype": "str",
+        "stringWidth": 3,
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "한글",
+          "😀",
+          "a\u0000b",
+          "",
+          "é",
+          "𝄞"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPE04W25zXScsICdmb3J0cmFuX29yZGVyJzogRmFsc2UsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr//////////wIAAAAAAAAAAQAAAAAAIAAAAAAAAAAAgA==",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-1",
+          "2",
+          "9007199254740993",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPk04W25zXScsICdmb3J0cmFuX29yZGVyJzogRmFsc2UsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr//////////wAAAAAAAAACACAAAAAAAAGAAAAAAAAAAA==",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-1",
+          "2",
+          "9007199254740993",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPE04W25zXScsICdmb3J0cmFuX29yZGVyJzogVHJ1ZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr//////////wEAAAAAACAAAgAAAAAAAAAAAAAAAAAAgA==",
+      "result": {
+        "dtype": "datetime64",
+        "unit": "ns",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-1",
+          "2",
+          "9007199254740993",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPG04WzNzXScsICdmb3J0cmFuX29yZGVyJzogRmFsc2UsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr9/////////wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgA==",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-3",
+          "4",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPm04WzNzXScsICdmb3J0cmFuX29yZGVyJzogRmFsc2UsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr//////////QAAAAAAAAAEAAAAAAAAAACAAAAAAAAAAA==",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-3",
+          "4",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    },
+    {
+      "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPG04WzNzXScsICdmb3J0cmFuX29yZGVyJzogVHJ1ZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAr9/////////wAAAAAAAAAABAAAAAAAAAAAAAAAAAAAgA==",
+      "result": {
+        "dtype": "timedelta64",
+        "unit": "3s",
+        "shape": [
+          2,
+          2
+        ],
+        "values": [
+          "-3",
+          "4",
+          "0",
+          "-9223372036854775808"
+        ]
+      }
+    }
+  ]
+}

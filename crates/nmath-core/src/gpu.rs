@@ -531,7 +531,11 @@ impl<'a> Runtime<'a> {
             ExprKind::Input(a) => self.upload(&snapshot(a)?.buffer),
             ExprKind::Scalar(value) => {
                 let _host = self.cpu.reserve(4)?;
-                self.upload(&Buffer::filled(weak.unwrap_or(expr.dtype()), 1, *value)?)
+                self.upload(&Buffer::filled(
+                    weak.unwrap_or(expr.dtype()),
+                    1,
+                    value.clone(),
+                )?)
             }
             ExprKind::Unary(_, a) | ExprKind::Reduce(_, a, _) => {
                 let a = self.evaluate(a, None, snapshot)?;

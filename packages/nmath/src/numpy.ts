@@ -5,6 +5,7 @@
 
 import {
   type ArrayOptions,
+  type Expr,
   Lazy,
   type NMathArray,
   type NMathContext,
@@ -14,6 +15,9 @@ import {
 import { add, div, mod, mul, pow, sub } from "./index.js";
 import type {
   ComputableDType,
+  SumDType,
+  TrueDivide,
+  ReduceShape,
   ScalarOf,
   Shape,
   TypedArrayOf,
@@ -93,32 +97,51 @@ export function negative<T extends Lazy<ComputableDType, Shape>>(x: T) {
 export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
   return x.pos();
 }
+// Public overloads retain dtype/axis inference and reject unsupported reductions.
+// The broad internal signatures bridge conditional method receivers; no runtime
+// coercion occurs. Remove this bridge if TypeScript resolves those generic receivers.
 export function sum<
-  D extends ComputableDType,
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
   A extends number | undefined = undefined,
->(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<SumDType<D>, ReduceShape<S, A>>;
+export function sum(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.sum(axis);
 }
 export function mean<
-  D extends ComputableDType,
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
   A extends number | undefined = undefined,
->(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A>>;
+export function mean(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.mean(axis);
 }
 export function min<
-  D extends ComputableDType,
+  D extends Exclude<ComputableDType, "str">,
   S extends Shape,
   A extends number | undefined = undefined,
->(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<D, ReduceShape<S, A>>;
+export function min(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.min(axis);
 }
 export function max<
-  D extends ComputableDType,
+  D extends Exclude<ComputableDType, "str">,
   S extends Shape,
   A extends number | undefined = undefined,
->(x: Lazy<NoInfer<D>, S> & { readonly dtype: D }, axis?: A) {
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<D, ReduceShape<S, A>>;
+export function max(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.max(axis);
 }
 export function matmul(

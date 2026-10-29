@@ -2,8 +2,7 @@
 
 use crate::error::{Error, ErrorCode, Result};
 
-/// Every dtype ID in the project contract. Not every dtype has a CPU kernel
-/// yet; see [`DType::is_computable`].
+/// Every dtype ID in the project contract, including storage metadata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DType {
     Bool,
@@ -20,9 +19,9 @@ pub enum DType {
     Float64,
     Complex64,
     Complex128,
-    Str,
-    Datetime64,
-    Timedelta64,
+    Str(usize),
+    Datetime64(TimeUnit),
+    Timedelta64(TimeUnit),
 }
 
 /// Kind ordering used by NumPy promotion: bool < unsigned/signed integer <
@@ -52,9 +51,9 @@ impl DType {
         DType::Float64,
         DType::Complex64,
         DType::Complex128,
-        DType::Str,
-        DType::Datetime64,
-        DType::Timedelta64,
+        DType::Str(1),
+        DType::Datetime64(TimeUnit::NANOSECOND),
+        DType::Timedelta64(TimeUnit::NANOSECOND),
     ];
 
     pub fn id(self) -> &'static str {
@@ -73,13 +72,31 @@ impl DType {
             DType::Float64 => "float64",
             DType::Complex64 => "complex64",
             DType::Complex128 => "complex128",
-            DType::Str => "str",
-            DType::Datetime64 => "datetime64",
-            DType::Timedelta64 => "timedelta64",
+            DType::Str(_) => "str",
+            DType::Datetime64(_) => "datetime64",
+            DType::Timedelta64(_) => "timedelta64",
         }
     }
 
     pub fn from_id(id: &str) -> Result<DType> {
+        if let Some(width) = id.strip_prefix("str[").and_then(|s| s.strip_suffix(']')) {
+            let width = width
+                .parse::<usize>()
+                .ok()
+                .filter(|n| *n > 0 && *n <= usize::MAX / 4)
+                .ok_or_else(unsupported)?;
+            return Ok(DType::Str(width));
+        }
+        for (prefix, datetime) in [("datetime64[", true), ("timedelta64[", false)] {
+            if let Some(unit) = id.strip_prefix(prefix).and_then(|s| s.strip_suffix(']')) {
+                let unit = TimeUnit::parse(unit)?;
+                return Ok(if datetime {
+                    DType::Datetime64(unit)
+                } else {
+                    DType::Timedelta64(unit)
+                });
+            }
+        }
         DType::ALL
             .into_iter()
             .find(|d| d.id() == id)
@@ -91,26 +108,14 @@ impl DType {
             })
     }
 
-    /// Dtypes with CPU kernels in this crate. Other dtypes are recognized but
-    /// rejected with `NMATH_DTYPE_UNSUPPORTED` until their kernels exist.
+    /// Valid CPU storage metadata. Operators validate their own supported
+    /// loops.
     pub fn is_computable(self) -> bool {
-        matches!(
-            self,
-            DType::Int8
-                | DType::Int16
-                | DType::UInt8
-                | DType::UInt16
-                | DType::Bool
-                | DType::Int32
-                | DType::Int64
-                | DType::UInt32
-                | DType::UInt64
-                | DType::Float16
-                | DType::Float32
-                | DType::Float64
-                | DType::Complex64
-                | DType::Complex128
-        )
+        match self {
+            Self::Str(n) => n > 0 && n <= usize::MAX / 4,
+            Self::Datetime64(u) | Self::Timedelta64(u) => u.step > 0 && u.step <= i32::MAX as u32,
+            _ => true,
+        }
     }
 
     pub fn ensure_computable(self) -> Result<DType> {
@@ -158,10 +163,25 @@ impl DType {
             | DType::UInt64
             | DType::Float64
             | DType::Complex64
-            | DType::Datetime64
-            | DType::Timedelta64 => 8,
+            | DType::Datetime64(_)
+            | DType::Timedelta64(_) => 8,
             DType::Complex128 => 16,
-            DType::Str => 4,
+            DType::Str(width) => width * 4,
+        }
+    }
+
+    pub fn descriptor(self) -> String {
+        match self {
+            Self::Str(n) => format!("str[{n}]"),
+            Self::Datetime64(u) | Self::Timedelta64(u) => format!("{}[{}]", self.id(), u.id()),
+            _ => self.id().into(),
+        }
+    }
+
+    pub fn temporal_unit(self) -> Option<TimeUnit> {
+        match self {
+            Self::Datetime64(u) | Self::Timedelta64(u) => Some(u),
+            _ => None,
         }
     }
 
@@ -175,6 +195,12 @@ impl DType {
         b.ensure_computable()?;
         if a == b {
             return Ok(a);
+        }
+        if let (DType::Str(a), DType::Str(b)) = (a, b) {
+            return Ok(DType::Str(a.max(b)));
+        }
+        if a.kind() == DTypeKind::Other || b.kind() == DTypeKind::Other {
+            return Err(unsupported());
         }
         let (ka, kb) = (a.kind(), b.kind());
         if ka == DTypeKind::Bool {
@@ -210,6 +236,9 @@ impl DType {
     /// (NEP 50).
     pub fn promote_weak(array: DType, scalar: ScalarKind) -> Result<DType> {
         array.ensure_computable()?;
+        if array.kind() == DTypeKind::Other {
+            return Err(unsupported());
+        }
         Ok(match (array.kind(), scalar) {
             (DTypeKind::Bool | DTypeKind::Int, ScalarKind::Complex) => DType::Complex128,
             (DTypeKind::Float, ScalarKind::Complex) => {
@@ -247,6 +276,7 @@ impl DType {
 /// Kind of a weak scalar operand coming from a JS number, bigint or boolean.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScalarKind {
+    Other,
     Bool,
     Int,
     Float,
@@ -334,7 +364,142 @@ mod tests {
 
     #[test]
     fn uncomputable_dtypes_are_rejected() {
-        let err = DType::promote(DType::Str, DType::Float64).unwrap_err();
+        let err = DType::promote(DType::Str(1), DType::Float64).unwrap_err();
         assert_eq!(err.code, ErrorCode::DTypeUnsupported);
+    }
+}
+
+/// NumPy temporal metadata: a positive multiplier and a base unit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TimeUnit {
+    pub base: TimeBase,
+    pub step: u32,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum TimeBase {
+    Year,
+    Month,
+    Week,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Milli,
+    Micro,
+    Nano,
+    Pico,
+    Femto,
+    Atto,
+}
+pub fn unsupported() -> Error {
+    Error::new(
+        ErrorCode::DTypeUnsupported,
+        "This dtype, unit conversion or operation is unsupported. Use an explicit supported dtype \
+         conversion.",
+    )
+}
+impl TimeUnit {
+    pub const NANOSECOND: Self = Self {
+        base: TimeBase::Nano,
+        step: 1,
+    };
+
+    pub fn parse(s: &str) -> Result<Self> {
+        let n = s.bytes().take_while(u8::is_ascii_digit).count();
+        let step = if n == 0 {
+            1
+        } else {
+            s[..n].parse().map_err(|_| unsupported())?
+        };
+        if step == 0 || step > i32::MAX as u32 {
+            return Err(unsupported());
+        }
+        let base = match &s[n..] {
+            "Y" => TimeBase::Year,
+            "M" => TimeBase::Month,
+            "W" => TimeBase::Week,
+            "D" => TimeBase::Day,
+            "h" => TimeBase::Hour,
+            "m" => TimeBase::Minute,
+            "s" => TimeBase::Second,
+            "ms" => TimeBase::Milli,
+            "us" => TimeBase::Micro,
+            "ns" => TimeBase::Nano,
+            "ps" => TimeBase::Pico,
+            "fs" => TimeBase::Femto,
+            "as" => TimeBase::Atto,
+            _ => return Err(unsupported()),
+        };
+        Ok(Self { base, step })
+    }
+
+    pub fn id(self) -> String {
+        let base = match self.base {
+            TimeBase::Year => "Y",
+            TimeBase::Month => "M",
+            TimeBase::Week => "W",
+            TimeBase::Day => "D",
+            TimeBase::Hour => "h",
+            TimeBase::Minute => "m",
+            TimeBase::Second => "s",
+            TimeBase::Milli => "ms",
+            TimeBase::Micro => "us",
+            TimeBase::Nano => "ns",
+            TimeBase::Pico => "ps",
+            TimeBase::Femto => "fs",
+            TimeBase::Atto => "as",
+        };
+        if self.step == 1 {
+            base.into()
+        } else {
+            format!("{}{base}", self.step)
+        }
+    }
+
+    /// Attoseconds; calendar durations use the Gregorian 400-year average.
+    pub fn scale(self) -> i128 {
+        let seconds: i128 = match self.base {
+            TimeBase::Year => 31556952,
+            TimeBase::Month => 2629746,
+            TimeBase::Week => 604800,
+            TimeBase::Day => 86400,
+            TimeBase::Hour => 3600,
+            TimeBase::Minute => 60,
+            TimeBase::Second => 1,
+            _ => 0,
+        };
+        let scale = if seconds != 0 {
+            seconds * 1_000_000_000_000_000_000
+        } else {
+            match self.base {
+                TimeBase::Milli => 1_000_000_000_000_000,
+                TimeBase::Micro => 1_000_000_000_000,
+                TimeBase::Nano => 1_000_000_000,
+                TimeBase::Pico => 1_000_000,
+                TimeBase::Femto => 1000,
+                _ => 1,
+            }
+        };
+        scale * self.step as i128
+    }
+
+    pub fn calendar(self) -> bool {
+        matches!(self.base, TimeBase::Year | TimeBase::Month)
+    }
+
+    pub fn common(self, other: Self) -> Result<Self> {
+        if self.calendar() != other.calendar() {
+            return Err(unsupported());
+        }
+        let base = self.base.max(other.base);
+        let unit = Self { base, step: 1 };
+        let (mut a, mut b) = (self.scale() / unit.scale(), other.scale() / unit.scale());
+        while b != 0 {
+            (a, b) = (b, a % b);
+        }
+        Ok(Self {
+            base,
+            step: u32::try_from(a).map_err(|_| unsupported())?,
+        })
     }
 }

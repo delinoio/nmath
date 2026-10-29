@@ -262,3 +262,32 @@ await ctx.close();
     f.close();
   }
 });
+
+test("string and temporal operators preserve native metadata", async () => {
+  const f = fixture({
+    "main.nts":
+      context +
+      `
+import { Temporal } from "@delinoio/nmath";
+const words = ctx.array(["한글", "😀"], {dtype: "str"});
+const joined = await (words + "!").compute();
+if (joined.item(1) !== "😀!") throw new Error("Unicode concatenation");
+const dates = ctx.array(new BigInt64Array([-1n, 9007199254740993n]), {dtype:"datetime64", unit:"ns", shape:[2] as const});
+const shifted = dates + new Temporal(2n, "ns", "timedelta64");
+const value = await shifted[1].compute();
+if (value.ticks !== 9007199254740995n || value.unit !== "ns") throw new Error("temporal precision");
+const delta = await (shifted - dates).compute();
+if (delta.dtype !== "timedelta64" || delta.item(0).ticks !== 2n) throw new Error("temporal subtraction");
+words[0] = "ok";
+if (words.item(0) !== "ok") throw new Error("Unicode assignment");
+await ctx.close();
+`,
+  });
+  try {
+    const result = await build(f);
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    execFileSync(process.execPath, [join(f.root, "out/main.js")]);
+  } finally {
+    f.close();
+  }
+});

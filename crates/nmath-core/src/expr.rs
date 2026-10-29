@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     array::NdArray,
-    buffer::{Buffer, DenseArray, Scalar},
+    buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
     kernels::{self, BinaryOp, ReduceOp, UnaryOp},
@@ -82,7 +82,8 @@ impl Expr {
     }
 
     pub fn scalar(value: Scalar) -> Expr {
-        Expr::node(ExprKind::Scalar(value), value.default_dtype(), vec![], None)
+        let dtype = value.default_dtype();
+        Expr::node(ExprKind::Scalar(value), dtype, vec![], None)
     }
 
     pub fn random(context_id: u64, generator: &Generator, shape: Vec<usize>) -> Expr {
@@ -130,8 +131,8 @@ impl Expr {
     }
 
     fn weak_scalar(&self) -> Option<Scalar> {
-        match self.0.kind {
-            ExprKind::Scalar(s) => Some(s),
+        match &self.0.kind {
+            ExprKind::Scalar(s) => Some(s.clone()),
             _ => None,
         }
     }
@@ -139,6 +140,22 @@ impl Expr {
     pub fn binary(op: BinaryOp, lhs: &Expr, rhs: &Expr) -> Result<Expr> {
         let context_id = join_context(lhs.context_id(), rhs.context_id())?;
         let shape = broadcast_shapes(lhs.shape(), rhs.shape())?;
+        if lhs.dtype().kind() == crate::dtype::DTypeKind::Other
+            || rhs.dtype().kind() == crate::dtype::DTypeKind::Other
+        {
+            let dtype = kernels::special_binary_dtype(op, lhs.dtype(), rhs.dtype())?;
+            return Ok(Expr::node(
+                ExprKind::Binary {
+                    op,
+                    lhs: lhs.clone(),
+                    rhs: rhs.clone(),
+                    compute_dtype: dtype,
+                },
+                dtype,
+                shape,
+                context_id,
+            ));
+        }
         let compute_dtype = match (lhs.weak_scalar(), rhs.weak_scalar()) {
             (Some(_), Some(_)) | (None, None) => DType::promote(lhs.dtype(), rhs.dtype())?,
             (Some(s), None) => weak_scalar_dtype(rhs.dtype(), s)?,
@@ -160,10 +177,11 @@ impl Expr {
 
     pub fn unary(op: UnaryOp, input: &Expr) -> Result<Expr> {
         let dtype = input.dtype().ensure_computable()?;
-        if dtype == DType::Bool {
+        if dtype == DType::Bool || matches!(dtype, DType::Str(_) | DType::Datetime64(_)) {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
-                "Unary arithmetic is not supported for bool operands.",
+                "Unary arithmetic is not supported for bool, string or datetime operands. Use a \
+                 supported numeric or duration dtype.",
             ));
         }
         Ok(Expr::node(
@@ -175,6 +193,7 @@ impl Expr {
     }
 
     pub fn reduce(op: ReduceOp, input: &Expr, axes: Option<Vec<i64>>) -> Result<Expr> {
+        kernels::validate_special_reduce(op, input.dtype())?;
         let reduced = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
         let shape = kernels::reduce_shape(input.shape(), &reduced);
         let dtype = op.result_dtype(input.dtype().ensure_computable()?);
@@ -188,6 +207,11 @@ impl Expr {
 
     pub fn matmul(lhs: &Expr, rhs: &Expr) -> Result<Expr> {
         let context_id = join_context(lhs.context_id(), rhs.context_id())?;
+        if lhs.dtype().kind() == crate::dtype::DTypeKind::Other
+            || rhs.dtype().kind() == crate::dtype::DTypeKind::Other
+        {
+            return Err(crate::dtype::unsupported());
+        }
         let dtype = DType::promote(lhs.dtype(), rhs.dtype())?;
         let (a, b) = (lhs.shape(), rhs.shape());
         let k_a = *a.last().ok_or_else(|| scalar_matmul_error())?;
@@ -348,6 +372,7 @@ fn weak_scalar_dtype(array: DType, scalar: Scalar) -> Result<DType> {
         Scalar::Int(v) => v.into(),
         Scalar::UInt(v) => v.into(),
         Scalar::Bool(_) | Scalar::Float(_) | Scalar::Complex(_) => return Ok(dtype),
+        _ => return Err(crate::dtype::unsupported()),
     };
     let (min, max): (i128, i128) = match dtype {
         DType::Int8 => (i8::MIN.into(), i8::MAX.into()),
@@ -505,7 +530,7 @@ impl JobEnv {
             ExprKind::Scalar(s) => {
                 let dtype = s.default_dtype();
                 let reservation = budget.reserve(dtype.item_size() as u64)?;
-                DenseArray::new(vec![], Buffer::filled(dtype, 1, *s)?, reservation)
+                DenseArray::new(vec![], Buffer::filled(dtype, 1, s.clone())?, reservation)
             }
             ExprKind::Unary(op, e) => {
                 let v = self.eval_dense(e)?;
@@ -549,7 +574,7 @@ impl JobEnv {
             }
             ExprKind::Cast(e, dtype) => {
                 let v = self.eval_dense(e)?;
-                let reservation = budget.reserve((v.size() * dtype.item_size()) as u64)?;
+                let reservation = budget.reserve(checked_byte_len(v.size(), *dtype)? as u64)?;
                 DenseArray::new(
                     v.shape.clone(),
                     v.buffer.cast_cancellable(*dtype, &token)?,
@@ -687,6 +712,29 @@ mod tests {
                 Value::View(_) => panic!("binary expression must produce a dense value"),
             },
             Buffer::F64(vec![10.0])
+        );
+    }
+
+    #[test]
+    fn unicode_cast_rejects_byte_overflow_before_budget_admission() {
+        let input = Expr::input(&arr(
+            1,
+            vec![1024],
+            Buffer::Unicode {
+                width: 1,
+                values: vec![0; 1024],
+            },
+        ));
+        let cast = Expr::cast(&input, DType::Str(usize::MAX / 4096 + 1)).unwrap();
+        let mut env = JobEnv::new(
+            Device::Cpu,
+            MemoryBudget::new(Device::Cpu, u64::MAX),
+            CancellationToken::new(),
+        );
+        env.freeze(&cast).unwrap();
+        assert_eq!(
+            env.eval_dense(&cast).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
         );
     }
 

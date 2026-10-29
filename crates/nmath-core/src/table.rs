@@ -284,6 +284,9 @@ impl KeyIndex {
         env: &JobEnv,
     ) -> Result<usize> {
         use std::hash::BuildHasher;
+        if key.values.dtype().kind() == crate::dtype::DTypeKind::Other {
+            return Err(crate::dtype::unsupported());
+        }
         let bits = if !key.valid(row) {
             0
         } else {
@@ -294,7 +297,9 @@ impl KeyIndex {
                 Scalar::Float(n) if n == 0.0 => 0,
                 Scalar::Float(n) if n.is_nan() => f64::NAN.to_bits(),
                 Scalar::Float(n) => n.to_bits(),
-                Scalar::Complex(_) => return Err(invalid()),
+                Scalar::Complex(_) | Scalar::Text(_) | Scalar::Temporal(..) => {
+                    return Err(invalid());
+                }
             }
         };
         let mut slot = self.hash.hash_one((key.valid(row), bits)) as usize & (self.slots.len() - 1);
@@ -402,6 +407,9 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
         Plan::Sort(p, k, descending, nulls_last) => {
             let t = execute(p, env, frozen)?;
             let c = &t.columns[*k];
+            if c.values.dtype().kind() == crate::dtype::DTypeKind::Other {
+                return Err(crate::dtype::unsupported());
+            }
             let _charge = reserve(env, t.rows, 2 * std::mem::size_of::<Option<usize>>())?;
             let mut rows: Vec<_> = (0..t.rows).map(Some).collect();
             let mut scratch = vec![None; t.rows];
@@ -516,6 +524,9 @@ fn group(
 ) -> Result<Table> {
     let key = &t.columns[k];
     let value = &t.columns[v];
+    if value.values.dtype().kind() == crate::dtype::DTypeKind::Other {
+        return Err(crate::dtype::unsupported());
+    }
     let exclude_nan = drop_nulls && flavor == Flavor::Pandas;
     let index = KeyIndex::new(key, !drop_nulls, exclude_nan, env)?;
     let _charge = reserve(env, t.rows, std::mem::size_of::<Option<usize>>())?;
@@ -586,13 +597,15 @@ fn group(
                 Scalar::UInt(n) => unsigned = unsigned.wrapping_add(n),
                 Scalar::Bool(n) => signed += i64::from(n),
                 Scalar::Float(n) => float += n,
-                Scalar::Complex(_) => return Err(invalid()),
+                Scalar::Complex(_) | Scalar::Text(_) | Scalar::Temporal(..) => {
+                    return Err(invalid());
+                }
             };
             if !matches!(s, Scalar::Float(_)) {
                 float += s.as_f64();
             }
-            if extreme.is_none_or(|old| {
-                let c = cmp(s, old);
+            if extreme.as_ref().is_none_or(|old: &Scalar| {
+                let c = cmp(s.clone(), old.clone());
                 if matches!(op, Aggregate::Min) {
                     c == Ordering::Less
                 } else {
@@ -619,7 +632,7 @@ fn group(
         // pandas retains a small integer dtype if every group sum fits it.
         // An overflowing group widens the entire result column to 64 bits.
         if flavor == Flavor::Pandas && matches!(op, Aggregate::Sum) {
-            dtype = match (dtype, result) {
+            dtype = match (dtype, result.clone()) {
                 (DType::Int8, Scalar::Int(n)) if i8::try_from(n).is_err() => DType::Int64,
                 (DType::Int16, Scalar::Int(n)) if i16::try_from(n).is_err() => DType::Int64,
                 (DType::Int32, Scalar::Int(n)) if i32::try_from(n).is_err() => DType::Int64,
