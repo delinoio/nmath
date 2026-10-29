@@ -37,6 +37,8 @@ Basic indexing shares complex storage; advanced indexing and explicit context co
 
 Boolean remainder and power use the NumPy `int8` result loop. Boolean addition and multiplication preserve `bool`; subtraction and both unary arithmetic operators reject boolean operands.
 
+CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inner dimension after the first true product. Long unsuccessful scans check cancellation between bounded chunks.
+
 ### Arrays and storage
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.
