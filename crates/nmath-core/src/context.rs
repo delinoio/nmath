@@ -447,7 +447,8 @@ impl Context {
             let cancel: Cancel = {
                 let done = done.clone();
                 Box::new(move |err| {
-                    if let Some(done) = done.lock().unwrap().take() {
+                    let callback = done.lock().unwrap().take();
+                    if let Some(done) = callback {
                         done(Err(err));
                     }
                 })
@@ -621,9 +622,6 @@ fn run_job(
                 execution = id,
                 status = status.id()
             );
-            if let Some(done) = done.lock().unwrap().take() {
-                done(result);
-            }
             let next = {
                 let mut sched = inner.sched.lock().unwrap();
                 sched.running.remove(&id);
@@ -640,6 +638,10 @@ fn run_job(
             };
             if let Some(job) = next {
                 (job.start)();
+            }
+            let callback = done.lock().unwrap().take();
+            if let Some(done) = callback {
+                done(result);
             }
         })
         .expect("failed to spawn an NMath worker thread");
@@ -667,6 +669,127 @@ mod publication_tests {
     fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
         let (tx, rx) = mpsc::channel();
         (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn completion_callback_reentrancy_is_bounded() {
+        use std::{process::Command, sync::atomic::AtomicUsize};
+
+        const CASE_ENV: &str = "NMATH_COMPLETION_TEST_CASE";
+        if let Ok(case) = std::env::var(CASE_ENV) {
+            let ctx = context();
+            let (tx, rx) = mpsc::channel();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let callback_ctx = ctx.clone();
+            let callback_calls = calls.clone();
+            let callback_case = case.clone();
+            ctx.submit(
+                OperationKind::Compute,
+                "callback_reentrancy_test",
+                Device::Cpu,
+                CancellationToken::new(),
+                Box::new(|env| {
+                    let _reservation = env.budget.reserve(64)?;
+                    match std::env::var(CASE_ENV).unwrap().as_str() {
+                        "failed" => Err(Error::new(ErrorCode::ShapeBroadcast, "Test failure.")),
+                        "cancelled" => {
+                            env.token.cancel();
+                            Ok(JobOutput::Unit)
+                        }
+                        _ => Ok(JobOutput::Unit),
+                    }
+                }),
+                Box::new(move |result| {
+                    callback_calls.fetch_add(1, Ordering::SeqCst);
+                    let expected = match callback_case.as_str() {
+                        "failed" => ExecutionStatus::Failed,
+                        "cancelled" => ExecutionStatus::Cancelled,
+                        _ => ExecutionStatus::Succeeded,
+                    };
+                    assert_eq!(callback_ctx.metrics().executions[0].status, expected);
+                    if callback_case == "submit" {
+                        let (done, second) = completion();
+                        callback_ctx
+                            .compute(
+                                &Expr::scalar(crate::Scalar::Float(2.0)),
+                                Device::Cpu,
+                                CancellationToken::new(),
+                                done,
+                            )
+                            .unwrap();
+                        assert!(second.recv_timeout(Duration::from_secs(5)).unwrap().is_ok());
+                    } else {
+                        callback_ctx.close();
+                        let (done, _) = completion();
+                        assert_eq!(
+                            callback_ctx
+                                .compute(
+                                    &Expr::scalar(crate::Scalar::Float(1.0)),
+                                    Device::Cpu,
+                                    CancellationToken::new(),
+                                    done,
+                                )
+                                .unwrap_err()
+                                .code,
+                            ErrorCode::ContextClosed
+                        );
+                    }
+                    tx.send(result).unwrap();
+                }),
+            )
+            .unwrap();
+            let result = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            match case.as_str() {
+                "failed" => assert_eq!(result.unwrap_err().code, ErrorCode::ShapeBroadcast),
+                "cancelled" => assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled),
+                _ => assert!(result.is_ok()),
+            }
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            let metrics = ctx.metrics();
+            assert_eq!(
+                metrics.total_submitted,
+                if case == "submit" { 2 } else { 1 }
+            );
+            assert_eq!(
+                metrics.total_succeeded,
+                if case == "submit" {
+                    2
+                } else if case == "close" {
+                    1
+                } else {
+                    0
+                }
+            );
+            assert_eq!(metrics.total_failed, u64::from(case == "failed"));
+            assert_eq!(metrics.total_cancelled, u64::from(case == "cancelled"));
+            assert_eq!(metrics.cpu_memory.used, 0);
+            return;
+        }
+
+        for case in ["close", "submit", "failed", "cancelled"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "context::publication_tests::completion_callback_reentrancy_is_bounded",
+                    "--nocapture",
+                ])
+                .env(CASE_ENV, case)
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    assert!(status.success(), "completion case {case} failed: {status}");
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    child.kill().unwrap();
+                    child.wait().unwrap();
+                    panic!("completion case {case} exceeded 10 seconds");
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
 
     #[test]
