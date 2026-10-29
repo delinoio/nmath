@@ -106,6 +106,36 @@ impl NdArray {
         DenseArray::new(self.shape.clone(), self.to_buffer(), reservation)
     }
 
+    /// Materialize in logical C order with bounded cancellation and no
+    /// element-sized offsets allocation. Reserve before allocating output.
+    pub(crate) fn snapshot_cancellable(
+        &self,
+        budget: &MemoryBudget,
+        token: &CancellationToken,
+    ) -> Result<DenseArray> {
+        token.check()?;
+        let dtype = self.dtype();
+        let size = self.size();
+        let bytes = crate::buffer::checked_byte_len(size, dtype)?;
+        let charge = budget.reserve(bytes as u64)?;
+        let mut output = Buffer::filled(dtype, size, Scalar::Int(0))?;
+        let source = self.storage.data.read().unwrap();
+        for i in 0..size {
+            if i % 1024 == 0 {
+                token.check()?;
+            }
+            let mut linear = i;
+            let mut offset = self.offset;
+            for (&dim, &stride) in self.shape.iter().zip(&self.strides).rev() {
+                offset += (linear % dim) as isize * stride;
+                linear /= dim;
+            }
+            output.set_from(i, &source, offset as usize);
+        }
+        token.check()?;
+        DenseArray::new(self.shape.clone(), output, charge)
+    }
+
     /// A rank-0 element read.
     pub fn get_scalar(&self, index: &[i64]) -> Result<Scalar> {
         if index.len() != self.ndim() {
@@ -165,6 +195,31 @@ impl NdArray {
             storage: self.storage.clone(),
             offset,
             shape,
+            strides,
+        })
+    }
+
+    /// Permutes metadata while retaining the same storage and write ordering.
+    pub(crate) fn transpose(&self, axes: &[usize]) -> NdArray {
+        NdArray {
+            storage: self.storage.clone(),
+            offset: self.offset,
+            shape: axes.iter().map(|&axis| self.shape[axis]).collect(),
+            strides: axes.iter().map(|&axis| self.strides[axis]).collect(),
+        }
+    }
+
+    pub(crate) fn strides(&self) -> &[isize] {
+        &self.strides
+    }
+
+    /// Returns a shared C-order reshape when the existing strides permit it.
+    pub(crate) fn reshape_view(&self, shape: &[usize]) -> Option<NdArray> {
+        let strides = crate::layout::reshape_strides(&self.shape, &self.strides, shape)?;
+        Some(NdArray {
+            storage: self.storage.clone(),
+            offset: self.offset,
+            shape: shape.to_vec(),
             strides,
         })
     }

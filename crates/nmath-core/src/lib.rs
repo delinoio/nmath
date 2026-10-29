@@ -13,6 +13,7 @@ pub mod gpu;
 pub mod io;
 pub mod io_npz;
 pub mod kernels;
+pub mod layout;
 pub mod memory;
 pub mod random;
 pub mod shape;

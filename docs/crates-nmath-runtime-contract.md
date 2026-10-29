@@ -47,9 +47,17 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 - A shared view reflects later changes to its storage. An execution snapshot copies or pins the visible bytes when a job starts, so later writes do not affect a running job.
 - Every storage records its byte size against its context's CPU or GPU budget until the last reference drops.
 
+### Shape transformations
+
+`Expr::transpose` permutes all axes, reversing them when axes are omitted. Explicit axes may be negative but must normalize to a complete permutation. `Expr::reshape` supports C logical traversal and one inferred `-1` dimension. It preserves element count, dtype metadata and context. Shapes and stride arithmetic are checked before execution, including empty shapes. An empty input reshapes to `[-1]` as `[0]`; an inferred dimension with a zero known product is ambiguous and fails.
+
+`CopyPolicy::IfNeeded` shares storage when signed strides permit the reshape; `Always` returns independent storage; `Never` rejects a copy-required layout. Regular stepped and reversed runs can reshape without copying. Pure chains of basic indexing, transpose and compatible reshape return live shared views. Writes through these views retain original-storage serialization and lifetime rules. Shape transforms over computed values retain their internal layouts, while all materialization and arithmetic read execution-start snapshots. Intermediate and copy-required results reserve managed CPU bytes before allocation and check cancellation during logical-order copies without element-sized offsets scratch.
+
+C-order reshape and transpose are CPU operations. Other reshape traversal orders remain compatibility targets. GPU shape-transform nodes reject before queue admission without fallback.
+
 ### Lazy expressions
 
-- `Expr` is an immutable graph node. Constructors: `Input(array)`, `Scalar(value)`, `Unary(op, expr)`, `Binary(op, lhs, rhs)`, `Reduce(op, expr, axes)`, `MatMul(lhs, rhs)`, `Index(expr, selectors)`, `Cast(expr, dtype)`.
+- `Expr` is an immutable graph node. Constructors: `Input(array)`, `Scalar(value)`, `Unary(op, expr)`, `Binary(op, lhs, rhs)`, `Reduce(op, expr, axes)`, `MatMul(lhs, rhs)`, `Index(expr, selectors)`, `Cast(expr, dtype)`, `Transpose(expr, axes)`, `Reshape(expr, copy_policy)`.
 - Metadata discovery and input freezing visit each distinct expression node once per traversal, in first-encounter order. A shared node keeps its identity across incoming edges. Numerical evaluation remains a separate operation.
 - Binary operator IDs: `add`, `sub`, `mul`, `div`, `mod`, `pow`. Unary operator IDs: `pos`, `neg`. Reduction IDs: `sum`, `mean`, `min`, `max`.
 - Shape and dtype of every node are inferred at construction. Invalid broadcasting fails at construction with `NMATH_SHAPE_BROADCAST`.
