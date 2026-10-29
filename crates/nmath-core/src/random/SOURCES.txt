@@ -1,0 +1,11 @@
+NumPy 2.5.4 reference sources
+
+Rust distribution routines and constants are derived from the files below.
+Original copyright and full licenses are retained beside the Rust modules.
+Include NUMPY-LICENSE.txt and NUMPY-RANDOM-LICENSE.txt in binary license bundles.
+Repository-owned orchestration and tests remain Apache-2.0.
+
+291d105e0199eec38f41dd958b9027dc227127182b3df81525254e148e367aed  numpy/random/src/distributions/distributions.c
+9f8b114014b8475777e88c6af80e126654fe0753693d6eabba365d3c4051236c  numpy/random/src/distributions/ziggurat_constants.h
+103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f  numpy/random/LICENSE.md
+1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491  LICENSE.txt

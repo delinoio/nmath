@@ -1,6 +1,10 @@
 //! NumPy-compatible `SeedSequence` and `PCG64`.
 
+mod distributions;
+mod operation;
 use std::sync::{Arc, Mutex};
+
+pub use operation::RandomOperation;
 
 use crate::sync::{FifoLock, Ticket};
 
@@ -95,6 +99,8 @@ const PCG_MULT: u128 = 0x2360_ed05_1fc6_5da4_4385_df64_9fcc_f645;
 pub struct Pcg64 {
     pub state: u128,
     pub inc: u128,
+    pub has_uint32: bool,
+    pub uinteger: u32,
 }
 
 impl Pcg64 {
@@ -104,6 +110,8 @@ impl Pcg64 {
         let init_seq = ((words[2] as u128) << 64) | words[3] as u128;
         let mut rng = Pcg64 {
             state: 0,
+            has_uint32: false,
+            uinteger: 0,
             inc: (init_seq << 1) | 1,
         };
         rng.step();
@@ -120,6 +128,21 @@ impl Pcg64 {
         self.step();
         let s = self.state;
         ((s >> 64) as u64 ^ s as u64).rotate_right((s >> 122) as u32)
+    }
+
+    pub fn next_u32(&mut self) -> u32 {
+        if self.has_uint32 {
+            self.has_uint32 = false;
+            return self.uinteger;
+        }
+        let value = self.next_u64();
+        self.has_uint32 = true;
+        self.uinteger = (value >> 32) as u32;
+        value as u32
+    }
+
+    pub fn next_f32(&mut self) -> f32 {
+        (self.next_u32() >> 8) as f32 * (1.0 / 16777216.0)
     }
 
     /// `Generator.random()` for float64.
@@ -200,3 +223,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "random/execution_tests.rs"]
+mod execution_tests;
