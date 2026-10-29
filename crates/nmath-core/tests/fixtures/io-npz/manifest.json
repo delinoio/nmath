@@ -1,0 +1,10 @@
+{
+  "numpy": "2.5.4",
+  "files": {
+    "bomb.npz": "e4714a8283159ab50c2d4ebbfc84c4ee5a0a703c9658eab36a6d3b091c6f1d32",
+    "deflated.npz": "d49de5503ef474d9f003d2f374b7e94c090d2774c1ba67989e066dd2dcfb551b",
+    "object.npz": "f0dabe6e04faed1ef129a350dcb34aa17d466cd53921cfd9ba0f04c2b72fae58",
+    "positional.npz": "9fed0f973e947647dbab837378605ecf64a1f1b9ba03524bad2d0d6f4b8de542",
+    "stored.npz": "c1c41e735a5d7753753159b7129c8e7bc64e65de8737841f045d26e99d77fb9d"
+  }
+}
