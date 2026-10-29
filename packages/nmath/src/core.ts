@@ -968,21 +968,6 @@ export class NMathContext {
       return new NMathArray(array, this);
     }
     if (
-      options.dtype === "float16" &&
-      typeof Float16Array !== "undefined" &&
-      data instanceof Float16Array
-    ) {
-      this.ensureCpuBudget(data.length, options.dtype);
-      const array = native(() =>
-        this.nativeContext.array(
-          options.shape ? [...options.shape] : [data.length],
-          options.dtype,
-          Buffer.from(data.buffer, data.byteOffset, data.byteLength),
-        ),
-      );
-      return new NMathArray(array, this);
-    }
-    if (
       ArrayBuffer.isView(data) &&
       (options.dtype === "complex64" || options.dtype === "complex128")
     ) {

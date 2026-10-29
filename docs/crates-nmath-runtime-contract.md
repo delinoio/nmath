@@ -62,7 +62,7 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 - Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Workers check cancellation before starting work. Kernels check the token between chunks; a cancelled read or computation does not return its result. File writers check cancellation before atomic publication. Successful publication is terminal success: cancellation received after publication does not change the completion or metrics to cancelled.
 - `Context::close()` rejects new work with `NMATH_CONTEXT_CLOSED`, cancels queued work, cancels running work cooperatively and resolves after all jobs release their resources.
 - A terminal job records its status, releases its execution slot, and starts the next queued job before it invokes its completion callback. The callback runs without the scheduler or callback-storage lock. It can close its context or submit and wait for another job, subject to normal admission and cancellation rules.
-- Jobs on one storage that write are serialized in request order. A write commits only after it fully succeeds.
+- Jobs on one storage that write are serialized in admission order. Ticket creation and scheduler admission use one critical section, so a running context job never waits for a ticket held by a queued successor. A write commits only after it fully succeeds. Rejected and cancelled jobs give up unused tickets.
 
 ### Memory accounting
 
@@ -74,7 +74,7 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 ### Random generation
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
-- Jobs that share a generator serialize. A job reads state at start and commits the advanced state only on success.
+- Jobs that share a generator serialize in admission order. The same critical section coordinates generator tickets with scheduler admission. A job reads state at start and commits the advanced state only on success.
 - Scalar-parameter random operations support `random` in float32/float64, `integers` in bool and signed/unsigned 8/16/32/64-bit dtypes, `uniform`, float32/float64 `standard_normal`, `normal`, and `exponential`. Uniform, normal and exponential return float64. Integer high bounds are exclusive unless `endpoint` is true. Full-width 64-bit bounds are represented without float conversion.
 - PCG64 state includes the cached upper uint32 word and its validity flag. Small-integer distribution buffers are local to one call. Each execution reads the last successful state and independently advances it. FIFO guards remain held through the scheduler's final cancellation decision and state commit. Error or pre-completion cancellation discards pending state. An array assignment that has published its atomic write completes successfully; a later cancellation cannot undo the array or generator commit.
 - Normal and exponential use the pinned NumPy Ziggurat routines and constants. Arithmetic preserves the pinned oracle's contracted multiply-add behavior. Exact cross-platform transcendental results still require platform-specific acceptance.
@@ -184,6 +184,8 @@ Stable sorting uses an iterative merge sort with cooperative cancellation. Joins
 ### NPZ archives
 
 `Context::save_npz` admits one file-write job with ordered `(name, array)` entries, `NpzCompression::Stored` or `NpzCompression::Deflated`, a `WriteMode`, and a cancellation token. Every input must belong to that context. The worker snapshots inputs at actual execution start. Empty archives are valid. `Context::load_npz` admits one file-read job and returns ordered contextual arrays; rank-zero members remain arrays. Loading completes eagerly through this file job and does not construct a lazy multi-result expression.
+
+One save freezes all input members under a single snapshot boundary. A mutation cannot commit between member copies, including when different member names refer to the same storage. The boundary ends before archive encoding or file work. Each member's offset scratch is reserved before its snapshot copy and released after that copy. During copying, peak usage includes completed member snapshots, the current member's offsets and payload, and metadata. During encoding, completed snapshots and metadata remain charged alongside codec workspace.
 
 Members contain NPY data. Writers append `.npy` to each member name; readers remove that suffix once. Names must be nonempty UTF-8 components, must not be `.` or `..`, and must not contain `/`, `\`, `:`, or control characters. A name is limited to 65,531 UTF-8 bytes before its `.npy` suffix. Duplicate names, non-NPY members, encryption, pickle/object data, and unsupported compression methods fail with `NMATH_IO_FORMAT`. Members are never extracted to disk.
 
