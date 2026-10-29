@@ -8,6 +8,7 @@ import {
   type NMathArray,
 } from "../../src/index.js";
 import * as nts from "../../src/nts-runtime.js";
+import * as pd from "../../src/pandas.js";
 
 declare function expectType<T>(value: T): void;
 type Equal<A, B> =
@@ -87,3 +88,9 @@ async function assignment() {
   expectType<number>(await nts.set(m, [0, 1], 2));
 }
 void assignment;
+
+// Integer Series.iloc yields a scalar expression; other selectors keep the Series.
+declare const series: pd.Series;
+const first = series.iloc(0);
+assertTrue<Equal<(typeof first)["shape"], []>>();
+expectType<pd.Series>(series.iloc(slice(1)));

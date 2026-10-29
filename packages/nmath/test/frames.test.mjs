@@ -21,6 +21,18 @@ test("numpy entry point builds the same lazy expressions", async () => {
   await ctx.close();
 });
 
+test("pandas Series.iloc returns scalars for integers and Series otherwise", async () => {
+  const ctx = context();
+  const s = new pd.Series(ctx.array([1, 2, 3], { dtype: "float64" }), "x");
+  assert.equal(await s.iloc(1).compute(), 2);
+  assert.equal(await s.iloc(-1).compute(), 3);
+  const sliced = s.iloc(np.slice(1));
+  assert.ok(sliced instanceof pd.Series);
+  assert.equal(sliced.name, "x");
+  assert.deepEqual((await sliced.toArray()).toArray(), [2, 3]);
+  await ctx.close();
+});
+
 test("pandas Series and DataFrame keep names and compute lazily", async () => {
   const ctx = context();
   const price = new pd.Series(

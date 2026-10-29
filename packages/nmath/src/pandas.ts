@@ -5,8 +5,12 @@
 import {
   type ComputeOptions,
   type Expr,
+  type Indices,
+  type Lazy,
+  type Mask,
   NMathArray,
   type Operand,
+  type Slice,
 } from "./core.js";
 import {
   type Column,
@@ -70,8 +74,19 @@ export class Series {
     return this.values.max();
   }
 
-  /** Positional selection (`Series.iloc`). */
-  iloc(selector: Parameters<Column["get"]>[0]): Series {
+  /**
+   * Positional selection (`Series.iloc`). An integer returns a lazy scalar expression;
+   * slices, `indices` and `mask` return a Series.
+   */
+  iloc(selector: number): Expr<ComputableDType, []>;
+  iloc(selector: Slice | Indices | Mask): Series;
+  iloc(
+    selector: number | Slice | Indices | Mask,
+  ): Series | Expr<ComputableDType, []> {
+    if (typeof selector === "number") {
+      // Columns are 1-D, so an integer selector drops the only axis.
+      return (this.values as Lazy<ComputableDType, [number]>).get(selector);
+    }
     return new Series(this.values.get(selector), this.name);
   }
 
