@@ -903,3 +903,5 @@ pub struct NativeNpzEntry {
     pub name: String,
     pub array: NativeArray,
 }
+
+mod io_text;

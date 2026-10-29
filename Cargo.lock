@@ -757,6 +757,8 @@ dependencies = [
  "flate2",
  "naga",
  "pollster",
+ "serde",
+ "serde_json",
  "tempfile",
  "tracing",
  "wgpu",

@@ -55,6 +55,8 @@ export declare class NativeContext {
    */
   close(): Promise<void>
   metrics(): NativeMetrics
+  readText(path: string, kind: string, names: Array<string>, dtypes: Array<string>, signal?: NativeCancellation | undefined | null): Promise<NativeTextTable>
+  writeText(path: string, kind: string, names: Array<string>, values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>, overwrite: boolean, signal?: NativeCancellation | undefined | null): Promise<void>
 }
 
 export declare class NativeExpr {
@@ -148,4 +150,10 @@ export interface NativeTableResult {
   values: Array<NativeArray>
   valid: Array<NativeArray>
   rows: number
+}
+
+export interface NativeTextTable {
+  names: Array<string>
+  values: Array<NativeArray>
+  valid: Array<NativeArray>
 }

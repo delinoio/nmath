@@ -222,3 +222,44 @@ The save helpers append `.npz` if needed. Named Map entries precede positional `
 For exact paths, use `ctx.saveNpz(path, map, { compressed, overwrite, signal })` and `ctx.loadNpz(path, { signal })`. Compression and overwrite default to false. All saved arrays must belong to the context. Cancellation before publication preserves existing output. A write that has already published completes successfully even if its signal aborts before the Promise settles.
 
 NPZ supports stored and deflated numeric/boolean NPY members, including complex64 and complex128. Complex input supports both byte orders and C/Fortran layout; output is little-endian C order. Pickle/object data, string/date/structured/extended dtypes, unsupported noncomplex byte orders/layouts, encrypted members and other compression methods are unsupported. Names must be nonempty UTF-8 components other than `.` or `..`, without slashes, backslashes, colons or control characters, and at most 65,531 UTF-8 bytes. Duplicate names and non-NPY members are rejected. ZIP64 central directories, multi-disk archives, 65,535 or more members and output capacity bounds at or above 4 GiB are unsupported. Conservative memory and output reservations can reject an archive earlier. These limits do not establish full NumPy compatibility.
+
+### Numeric CSV and JSON files
+
+```ts
+import { createContext } from '@delinoio/nmath';
+const ctx = createContext({ maxConcurrentJobs: 2, maxQueueLength: 8,
+  cpuMemoryBudget: 1n << 30n, gpuMemoryBudget: 0n });
+const table = await ctx.readText('input.csv', 'csv', {
+  schema: new Map([['id', 'uint64'], ['value', 'float64']]),
+});
+await ctx.writeText('output.json', 'json', table.columns, table.validity);
+for (const value of table.columns.values()) value.dispose();
+for (const mask of table.validity.values()) mask.dispose();
+await ctx.close();
+```
+
+Both pandas and Polars export `read_csv(context, path, options?)` and `read_json`.
+CSV is UTF-8 with comma-separated fields and a header. JSON is an array of numeric
+record objects. pandas writes with `frame.toCsv(context, path, options?)` and
+`toJson`; Polars uses `writeCsv` and `writeJson`. These are explicit JS adaptations,
+including JSON records orientation instead of pandas' default columns orientation.
+Files retain numeric values and nulls. Supply a complete ordered schema Map to
+preserve narrow dtypes, all-null columns and empty JSON schemas. int64 and uint64
+remain exact bigint values. A custom pandas index requires `dropIndex:true` on
+write; reads create a positional index.
+
+Use `{overwrite:true}` to authorize atomic replacement and `{signal}` to cancel.
+Writes preserve the original destination on failure before publication. A completed
+publication remains successful after late cancellation. All file work runs in the
+native CPU scheduler. Readers currently materialize files with conservative memory
+reservations, so a large file can exceed the budget before parsing. Keep source
+files unchanged during reads; modification detection is best effort.
+
+The core methods `ctx.readText(path, format, options?)` and
+`ctx.writeText(path, format, columns, validity?, options?)` use `format: 'csv'|'json'`
+and Maps of columns/masks. Dispose both Maps returned by a core read.
+Custom delimiters, compressed/alternate encodings, other JSON orientations/JSONL,
+string/datetime columns and full upstream read/write options remain unsupported.
+CSV empty cells and JSON null become invalid values. JSON non-finite floats become
+null. CSV non-finite numeric tokens remain valid floating values; full pandas
+missing-token and blank-line defaults are not yet implemented.
