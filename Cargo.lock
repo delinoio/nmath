@@ -1572,7 +1572,7 @@ source = "git+https://github.com/oxc-project/tsrs?rev=77d3cddb44540734abc33a42cc
 dependencies = [
  "bitflags",
  "indexmap",
- "rustc-hash",
+ "rustc-hash 2.1.3",
  "tsrs_ast",
  "tsrs_astnav",
  "tsrs_binder",
@@ -1598,7 +1598,7 @@ name = "tsrs_lsproto"
 version = "0.20.1"
 source = "git+https://github.com/oxc-project/tsrs?rev=77d3cddb44540734abc33a42ccca4d3f33bee527#77d3cddb44540734abc33a42ccca4d3f33bee527"
 dependencies = [
- "rustc-hash",
+ "rustc-hash 2.1.3",
  "tsrs_core",
  "tsrs_vfs",
 ]
@@ -1661,7 +1661,7 @@ name = "tsrs_projectutil"
 version = "0.20.1"
 source = "git+https://github.com/oxc-project/tsrs?rev=77d3cddb44540734abc33a42ccca4d3f33bee527#77d3cddb44540734abc33a42ccca4d3f33bee527"
 dependencies = [
- "rustc-hash",
+ "rustc-hash 2.1.3",
  "tsrs_core",
 ]
 

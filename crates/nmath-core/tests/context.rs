@@ -390,7 +390,13 @@ fn gpu_requests_fail_without_fallback() {
         done,
     )
     .unwrap();
-    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::GpuUnavailable);
+    // This context has no device budget. A host without a usable adapter
+    // reports discovery failure; otherwise allocation must fail without
+    // fallback.
+    assert!(matches!(
+        wait(&rx).unwrap_err().code,
+        ErrorCode::GpuUnavailable | ErrorCode::MemoryBudgetExceeded
+    ));
 }
 
 #[test]

@@ -256,14 +256,6 @@ impl Context {
                 .into_iter()
                 .map(|t| t.wait(&env.token))
                 .collect::<Result<_>>()?;
-            if env.device == Device::Gpu {
-                // Gap: the wgpu backend is not built yet. GPU jobs fail without
-                // CPU fallback.
-                return Err(Error::new(
-                    ErrorCode::GpuUnavailable,
-                    "This build has no GPU backend; no CPU fallback is attempted.",
-                ));
-            }
             env.freeze(&expr)?;
             let value = env.eval(&expr)?;
             env.token.check()?;
@@ -600,11 +592,10 @@ fn run_job(
                 context = inner.id,
                 execution = id
             );
-            let budget = match device {
-                Device::Cpu => inner.cpu.clone(),
-                Device::Gpu => inner.gpu.clone(),
-            };
-            let mut env = JobEnv::new(device, budget, token.clone());
+            // Snapshots and returned host arrays use CPU memory even for GPU
+            // jobs.
+            let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
+            env.gpu_budget = Some(inner.gpu.clone());
             let mut result = work(&mut env);
             drop(env);
             // A cancelled job never returns a computed result.
