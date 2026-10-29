@@ -94,6 +94,30 @@ const tables = binding as unknown as {
     ): NativeTable;
   };
 };
+export function validateColumns(
+  columns: ReadonlyMap<string, Column>,
+  validity: Validity = new Map(),
+): NMathContext {
+  ensureSameLength(columns);
+  const context = columnContext(
+    new Map(
+      [...columns.values(), ...validity.values()].map((v, i) => [String(i), v]),
+    ),
+  );
+  if (!context)
+    throw tableError(
+      "A nonempty table requires an explicit context. Supply context-owned columns.",
+    );
+  for (const [name, mask] of validity)
+    if (
+      !columns.has(name) ||
+      mask.dtype !== "bool" ||
+      mask.shape.length !== 1 ||
+      mask.shape[0] !== columns.get(name)!.shape[0]
+    )
+      throw shapeError();
+  return context;
+}
 export class TablePlan {
   constructor(
     readonly plan: NativeTable,
@@ -105,27 +129,7 @@ export class TablePlan {
     columns: ReadonlyMap<string, Column>,
     validity: Validity = new Map(),
   ): TablePlan {
-    ensureSameLength(columns);
-    const context = columnContext(
-      new Map(
-        [...columns.values(), ...validity.values()].map((v, i) => [
-          String(i),
-          v,
-        ]),
-      ),
-    );
-    if (!context)
-      throw tableError(
-        "A nonempty table requires an explicit context. Supply context-owned columns.",
-      );
-    for (const [name, mask] of validity)
-      if (
-        !columns.has(name) ||
-        mask.dtype !== "bool" ||
-        mask.shape.length !== 1 ||
-        mask.shape[0] !== columns.get(name)!.shape[0]
-      )
-        throw shapeError();
+    const context = validateColumns(columns, validity);
     const names = [...columns.keys()];
     return new TablePlan(
       native(() =>
@@ -246,9 +250,7 @@ export class TablePlan {
       ]),
     );
   }
-  async compute(
-    options: ComputeOptions = {},
-  ): Promise<{
+  async compute(options: ComputeOptions = {}): Promise<{
     columns: Map<string, NMathArray<ComputableDType, Shape>>;
     validity: Map<string, Column>;
   }> {

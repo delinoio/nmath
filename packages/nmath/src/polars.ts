@@ -8,6 +8,7 @@ import {
   type Aggregate,
   type Validity,
   TablePlan,
+  validateColumns,
   tableError,
   computeColumns,
   ensureColumn,
@@ -27,7 +28,7 @@ export class Series {
     this.values = ensureColumn(name, values);
     this.validity = validity;
     if (validity)
-      TablePlan.source(new Map([[name, values]]), new Map([[name, validity]]));
+      validateColumns(new Map([[name, values]]), new Map([[name, validity]]));
   }
 
   get dtype(): ComputableDType {
@@ -137,7 +138,7 @@ export class DataFrame {
               .filter((s) => s.validity)
               .map((s) => [s.name, s.validity!])),
     );
-    if (this.#columns.size) TablePlan.source(this.#columns, this.validity);
+    if (this.#columns.size) validateColumns(this.#columns, this.validity);
   }
 
   get columns(): string[] {
@@ -200,12 +201,12 @@ export class LazyFrame {
   }
 
   select(...exprs: (ColumnExpr | string)[]): LazyFrame {
-    if (this.#table) {
+    if (this.#table || this.#validity.size) {
       if (exprs.some((e) => typeof e !== "string"))
         throw tableError(
           "Computed projections after row operations are pending. Select columns by name.",
         );
-      return this.#next(this.#table.select(exprs as string[]));
+      return this.#next(this.#native().select(exprs as string[]));
     }
     return new LazyFrame(
       this.#source,

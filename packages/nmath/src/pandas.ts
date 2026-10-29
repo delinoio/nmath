@@ -18,6 +18,7 @@ import {
   type Aggregate,
   type Validity,
   TablePlan,
+  validateColumns,
   tableError,
   computeColumns,
   ensureColumn,
@@ -79,7 +80,7 @@ export class Series {
     this.validity = validity;
     if (this.index.length !== values.shape[0]) throw tableError();
     if (validity)
-      TablePlan.source(new Map([[name, values]]), new Map([[name, validity]]));
+      validateColumns(new Map([[name, values]]), new Map([[name, validity]]));
   }
 
   get dtype(): ComputableDType {
@@ -316,7 +317,7 @@ export class DataFrame {
       options.validity ??
         series.filter(([, s]) => s.validity).map(([n, s]) => [n, s.validity!]),
     );
-    if (this.#columns.size) TablePlan.source(this.#columns, this.validity);
+    if (this.#columns.size) validateColumns(this.#columns, this.validity);
   }
 
   get columns(): string[] {
@@ -394,7 +395,7 @@ export class DataFrame {
     operation: (plan: TablePlan) => TablePlan,
     options: ComputeOptions,
   ): Promise<DataFrame> {
-    const ctx = TablePlan.source(this.#columns, this.validity).context;
+    const ctx = validateColumns(this.#columns, this.validity);
     let internal = "";
     while (this.#columns.has(internal)) internal += "_";
     const ordinal = ctx.array(
