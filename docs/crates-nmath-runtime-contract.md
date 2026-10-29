@@ -27,6 +27,12 @@ This contract owns the `nmath-core` and `nmath-node` components of the [`nmath` 
 
 Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`int16`, `uint16`) storage. Arithmetic wraps at the result dtype width. Mixed signed/unsigned arrays promote to a signed width that can represent both ranges, or to `float64` when no such integer width exists. Weak integer operands must fit the promoted dtype. Integer true division and mean return `float64`; sum widens small signed integers to `int64` and small unsigned integers to `uint64`. NPY uses `|i1`, `|u1`, `<i2` and `<u2` descriptors for these dtypes.
 
+`complex64` stores two IEEE-754 binary32 components in 8 bytes; `complex128` stores two binary64 components in 16 bytes. Components are ordered real, imaginary. Array promotion follows NumPy 2.5.4: `complex64` remains `complex64` with boolean, 8-bit/16-bit integers and `float32`, and promotes to `complex128` with 32-bit/64-bit integers, `float64` or `complex128`. A weak complex scalar promotes boolean/integer arrays to `complex128`, `float32` arrays to `complex64`, and preserves an existing complex dtype.
+
+Complex CPU kernels support `add`, `sub`, `mul`, `div`, `pow`, `pos`, `neg`, `sum`, `mean`, lexicographic `min`/`max`, and the existing 1-D/2-D `matmul` forms. Complex remainder is unsupported and fails at expression construction. Complex extrema propagate NaNs and preserve the first equal complex element. Sum and mean preserve the complex dtype. Contiguous complex reductions use pairwise accumulation in component precision.
+
+Basic indexing shares complex storage; advanced indexing and explicit context copies preserve both components. An explicit `astype` may discard the imaginary component when converting to a real dtype. Complex-to-boolean casts test both components. Assignment from complex values to real numeric storage requires an explicit cast before the write; assignment to boolean storage uses complex truth semantics. Failed writes preserve the target.
+
 ### Arrays and storage
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.
@@ -52,6 +58,8 @@ Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`
 
 - `MemoryBudget` tracks `used`, `peak` and `limit` separately for `cpu` and `gpu`. `reserve(bytes)` fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before any allocation when `used + bytes > limit`.
 - Inputs, snapshots, intermediates and results are all charged. Charges release on drop. GPU execution charges snapshots and host results to the CPU budget, and upload, storage, parameter, status and readback buffers to the GPU budget. Submitted allocations stay charged until device work finishes, including after cancellation. Driver and compiler internal allocations are outside the managed-allocation accounting boundary.
+
+Reduction and matrix-multiplication kernels borrow operands whose dtype already matches. Required operand conversions reserve their full byte size before allocation and release that reservation when the temporary drops. Reductions traverse output offsets without input-sized slot or integer scratch vectors. Min/max reserve their output-initialization flags. Casts and kernels check cancellation between chunks; failure and cancellation release temporary reservations.
 
 ### Random generation
 
@@ -101,6 +109,8 @@ GPU initialization occurs only on an execution worker after admission. Native ba
 - Local files only: CSV, JSON, Parquet, Arrow IPC, NPY and NPZ. This deviates from the repository R2 default because NMath is a local library; see the [project index](project-nmath.md#deviations-from-repository-defaults).
 - Writers never overwrite an existing file unless the caller passes an explicit overwrite option. Output is written to a temporary file in the destination directory and published with an atomic rename. Cancellation or error removes the temporary file and preserves the original.
 - Readers record file size and modification time at job start and fail with `NMATH_IO_MODIFIED` when a change is detected. Detection is best effort.
+
+Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input accepts little- or big-endian components and C or Fortran order; the loader converts Fortran input to logical C order. Header, shape and payload-length validation applies before decoded allocation. These additions do not enable NPZ or Fortran-order input for other dtypes.
 
 ## Security
 
