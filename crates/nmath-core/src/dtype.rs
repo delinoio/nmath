@@ -15,6 +15,7 @@ pub enum DType {
     UInt16,
     UInt32,
     UInt64,
+    Float16,
     Float32,
     Float64,
     Complex64,
@@ -36,7 +37,7 @@ pub enum DTypeKind {
 }
 
 impl DType {
-    pub const ALL: [DType; 16] = [
+    pub const ALL: [DType; 17] = [
         DType::Bool,
         DType::Int8,
         DType::Int16,
@@ -46,6 +47,7 @@ impl DType {
         DType::UInt16,
         DType::UInt32,
         DType::UInt64,
+        DType::Float16,
         DType::Float32,
         DType::Float64,
         DType::Complex64,
@@ -66,6 +68,7 @@ impl DType {
             DType::UInt16 => "uint16",
             DType::UInt32 => "uint32",
             DType::UInt64 => "uint64",
+            DType::Float16 => "float16",
             DType::Float32 => "float32",
             DType::Float64 => "float64",
             DType::Complex64 => "complex64",
@@ -102,6 +105,7 @@ impl DType {
                 | DType::Int64
                 | DType::UInt32
                 | DType::UInt64
+                | DType::Float16
                 | DType::Float32
                 | DType::Float64
                 | DType::Complex64
@@ -131,7 +135,7 @@ impl DType {
             | DType::UInt16
             | DType::UInt32
             | DType::UInt64 => DTypeKind::Int,
-            DType::Float32 | DType::Float64 => DTypeKind::Float,
+            DType::Float16 | DType::Float32 | DType::Float64 => DTypeKind::Float,
             DType::Complex64 | DType::Complex128 => DTypeKind::Complex,
             _ => DTypeKind::Other,
         }
@@ -148,7 +152,7 @@ impl DType {
     pub fn item_size(self) -> usize {
         match self {
             DType::Bool | DType::Int8 | DType::UInt8 => 1,
-            DType::Int16 | DType::UInt16 => 2,
+            DType::Int16 | DType::UInt16 | DType::Float16 => 2,
             DType::Int32 | DType::UInt32 | DType::Float32 => 4,
             DType::Int64
             | DType::UInt64
@@ -209,7 +213,7 @@ impl DType {
         Ok(match (array.kind(), scalar) {
             (DTypeKind::Bool | DTypeKind::Int, ScalarKind::Complex) => DType::Complex128,
             (DTypeKind::Float, ScalarKind::Complex) => {
-                if array == DType::Float32 {
+                if matches!(array, DType::Float16 | DType::Float32) {
                     DType::Complex64
                 } else {
                     DType::Complex128
@@ -253,7 +257,9 @@ pub enum ScalarKind {
 /// integer exactly enough by its rules: int8/int16/uint8/uint16 with float32
 /// stay float32.
 fn float_for_int(float: DType, int: DType) -> DType {
-    if float == DType::Float32 && int.bits() <= 16 {
+    if float == DType::Float16 && int.bits() <= 8 {
+        DType::Float16
+    } else if matches!(float, DType::Float16 | DType::Float32) && int.bits() <= 16 {
         DType::Float32
     } else {
         DType::Float64

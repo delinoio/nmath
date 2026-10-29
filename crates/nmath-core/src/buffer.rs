@@ -1,5 +1,7 @@
 //! Typed contiguous buffers and scalar values.
 
+pub use half::f16 as Float16;
+
 use crate::{
     dtype::{DType, ScalarKind},
     error::{Error, ErrorCode, Result},
@@ -78,6 +80,7 @@ pub enum Buffer {
     U16(Vec<u16>),
     U32(Vec<u32>),
     U64(Vec<u64>),
+    F16(Vec<Float16>),
     F32(Vec<f32>),
     F64(Vec<f64>),
     C64(Vec<[f32; 2]>),
@@ -96,6 +99,7 @@ macro_rules! each_buffer {
             Buffer::U16($v) => $body,
             Buffer::U32($v) => $body,
             Buffer::U64($v) => $body,
+            Buffer::F16($v) => $body,
             Buffer::F32($v) => $body,
             Buffer::F64($v) => $body,
             Buffer::C64($v) => $body,
@@ -116,6 +120,7 @@ impl Buffer {
             Buffer::U16(_) => DType::UInt16,
             Buffer::U32(_) => DType::UInt32,
             Buffer::U64(_) => DType::UInt64,
+            Buffer::F16(_) => DType::Float16,
             Buffer::F32(_) => DType::Float32,
             Buffer::F64(_) => DType::Float64,
             Buffer::C64(_) => DType::Complex64,
@@ -155,6 +160,7 @@ impl Buffer {
             DType::UInt16 => Buffer::U16(vec![value.as_i128() as u16; len]),
             DType::UInt32 => Buffer::U32(vec![value.as_i128() as u32; len]),
             DType::UInt64 => Buffer::U64(vec![value.as_i128() as u64; len]),
+            DType::Float16 => Buffer::F16(vec![Float16::from_f64(value.as_f64()); len]),
             DType::Float32 => Buffer::F32(vec![value.as_f64() as f32; len]),
             DType::Float64 => Buffer::F64(vec![value.as_f64(); len]),
             DType::Complex64 => Buffer::C64(vec![value.as_complex().map(|x| x as f32); len]),
@@ -174,6 +180,7 @@ impl Buffer {
             Buffer::U16(v) => Scalar::UInt(v[i] as u64),
             Buffer::U32(v) => Scalar::UInt(v[i] as u64),
             Buffer::U64(v) => Scalar::UInt(v[i]),
+            Buffer::F16(v) => Scalar::Float(v[i].to_f64()),
             Buffer::F32(v) => Scalar::Float(v[i] as f64),
             Buffer::F64(v) => Scalar::Float(v[i]),
             Buffer::C64(v) => Scalar::Complex(v[i].map(f64::from)),
@@ -194,6 +201,7 @@ impl Buffer {
             (Buffer::U16(a), Buffer::U16(b)) => a[i] = b[j],
             (Buffer::U32(a), Buffer::U32(b)) => a[i] = b[j],
             (Buffer::U64(a), Buffer::U64(b)) => a[i] = b[j],
+            (Buffer::F16(a), Buffer::F16(b)) => a[i] = b[j],
             (Buffer::F32(a), Buffer::F32(b)) => a[i] = b[j],
             (Buffer::F64(a), Buffer::F64(b)) => a[i] = b[j],
             (Buffer::C64(a), Buffer::C64(b)) => a[i] = b[j],
@@ -217,6 +225,41 @@ impl Buffer {
         dtype.ensure_computable()?;
         if self.dtype() == dtype {
             return Ok(each_buffer!(self, v => map_elements(v, token, |x| x)?.into()));
+        }
+        // NumPy's half casts saturate at the conversion width. Small integer
+        // targets narrow the signed 32-bit conversion; wide unsigned targets
+        // saturate negative values at zero.
+        if let Buffer::F16(values) = self {
+            let converted = match dtype {
+                DType::Int8 => Some(Buffer::I8(map_elements(values, token, |x| {
+                    x.to_f32() as i32 as i8
+                })?)),
+                DType::Int16 => Some(Buffer::I16(map_elements(values, token, |x| {
+                    x.to_f32() as i32 as i16
+                })?)),
+                DType::Int32 => Some(Buffer::I32(map_elements(values, token, |x| {
+                    x.to_f32() as i32
+                })?)),
+                DType::Int64 => Some(Buffer::I64(map_elements(values, token, |x| {
+                    x.to_f32() as i64
+                })?)),
+                DType::UInt8 => Some(Buffer::U8(map_elements(values, token, |x| {
+                    x.to_f32() as i32 as u8
+                })?)),
+                DType::UInt16 => Some(Buffer::U16(map_elements(values, token, |x| {
+                    x.to_f32() as i32 as u16
+                })?)),
+                DType::UInt32 => Some(Buffer::U32(map_elements(values, token, |x| {
+                    x.to_f32() as u32
+                })?)),
+                DType::UInt64 => Some(Buffer::U64(map_elements(values, token, |x| {
+                    x.to_f32() as u64
+                })?)),
+                _ => None,
+            };
+            if let Some(buffer) = converted {
+                return Ok(buffer);
+            }
         }
         // NumPy complex-to-real astype explicitly discards the imaginary part.
         // Integer conversions saturate at the conversion width; small integer
@@ -274,6 +317,9 @@ impl Buffer {
                     DType::UInt16 => Buffer::U16(map_elements($v, token, |x| to_i128(x) as u16)?),
                     DType::UInt32 => Buffer::U32(map_elements($v, token, |x| to_i128(x) as u32)?),
                     DType::UInt64 => Buffer::U64(map_elements($v, token, |x| to_i128(x) as u64)?),
+                    DType::Float16 => {
+                        Buffer::F16(map_elements($v, token, |x| Float16::from_f64(to_f64(x)))?)
+                    }
                     DType::Float32 => Buffer::F32(map_elements($v, token, |x| to_f64(x) as f32)?),
                     DType::Float64 => Buffer::F64(map_elements($v, token, |x| to_f64(x))?),
                     DType::Complex64 => {
@@ -322,6 +368,15 @@ macro_rules! elem_num {
     )*};
 }
 elem_num!(i8, i16, u8, u16, i32, i64, u32, u64, f32, f64);
+impl Elem for Float16 {
+    fn f64(self) -> f64 {
+        self.to_f64()
+    }
+
+    fn i128(self) -> i128 {
+        self.to_f64() as i128
+    }
+}
 impl Elem for bool {
     fn f64(self) -> f64 {
         self as u8 as f64
@@ -379,7 +434,7 @@ macro_rules! from_vec {
         }
     )*};
 }
-from_vec!(bool => Bool, i8 => I8, i16 => I16, u8 => U8, u16 => U16, i32 => I32, i64 => I64, u32 => U32, u64 => U64, f32 => F32, f64 => F64, [f32; 2] => C64, [f64; 2] => C128);
+from_vec!(Float16 => F16, bool => Bool, i8 => I8, i16 => I16, u8 => U8, u16 => U16, i32 => I32, i64 => I64, u32 => U32, u64 => U64, f32 => F32, f64 => F64, [f32; 2] => C64, [f64; 2] => C128);
 
 /// An owned contiguous C-order array charged to a budget.
 #[derive(Debug)]
@@ -421,6 +476,37 @@ impl DenseArray {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binary16_roundtrips_every_encoding_and_rounds_ties_to_even() {
+        let all = Buffer::F16((0..=u16::MAX).map(Float16::from_bits).collect());
+        assert_eq!(all.byte_len(), 131072);
+        let copy = all.cast(DType::Float16).unwrap();
+        let Buffer::F16(values) = copy else {
+            unreachable!()
+        };
+        for (bits, value) in values.iter().enumerate() {
+            assert_eq!(value.to_bits(), bits as u16);
+            if !value.is_nan() {
+                assert_eq!(Float16::from_f64(value.to_f64()).to_bits(), bits as u16);
+            }
+        }
+        let input = Buffer::F64(vec![
+            1.00048828125,
+            1.00146484375,
+            2f64.powi(-25),
+            2f64.powi(-24),
+            65520.0,
+            -0.0,
+        ]);
+        let Buffer::F16(values) = input.cast(DType::Float16).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(
+            values.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            vec![0x3c00, 0x3c02, 0, 1, 0x7c00, 0x8000]
+        );
+    }
 
     #[test]
     fn element_mapping_observes_cancellation_between_chunks() {
