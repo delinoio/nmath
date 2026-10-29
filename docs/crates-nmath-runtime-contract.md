@@ -60,7 +60,7 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 - Each job carries a `CancellationToken`. Cancelling a queued job removes it and completes it with `NMATH_CANCELLED`. Workers check cancellation before starting work. Kernels check the token between chunks; a cancelled read or computation does not return its result. File writers check cancellation before atomic publication. Successful publication is terminal success: cancellation received after publication does not change the completion or metrics to cancelled.
 - `Context::close()` rejects new work with `NMATH_CONTEXT_CLOSED`, cancels queued work, cancels running work cooperatively and resolves after all jobs release their resources.
 - A terminal job records its status, releases its execution slot, and starts the next queued job before it invokes its completion callback. The callback runs without the scheduler or callback-storage lock. It can close its context or submit and wait for another job, subject to normal admission and cancellation rules.
-- Jobs on one storage that write are serialized in request order. A write commits only after it fully succeeds.
+- Jobs on one storage that write are serialized in admission order. Ticket creation and scheduler admission use one critical section, so a running context job never waits for a ticket held by a queued successor. A write commits only after it fully succeeds. Rejected and cancelled jobs give up unused tickets.
 
 ### Memory accounting
 
@@ -72,7 +72,7 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 ### Random generation
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
-- Jobs that share a generator serialize. A job reads state at start and commits the advanced state only on success.
+- Jobs that share a generator serialize in admission order. The same critical section coordinates generator tickets with scheduler admission. A job reads state at start and commits the advanced state only on success.
 - CPU random evaluation checks the element count, float64 byte count and vector capacity before reserving or allocating the result. Unrepresentable sizes fail through the job callback with `NMATH_MEMORY_BUDGET_EXCEEDED`; a zero-length dimension produces an empty result even when other dimensions are large. Failed jobs do not advance generator state.
 
 ### Measurements
