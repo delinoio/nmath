@@ -1,5 +1,5 @@
 /// <reference lib="esnext.float16" preserve="true" />
-import type { Complex } from "./core.js";
+import type { Complex, Temporal } from "./core.js";
 // SPDX-License-Identifier: Apache-2.0
 // Type-level dtype promotion and shape inference. Static rules mirror the native runtime;
 // dimensions typed as `number` are dynamic and validated at runtime.
@@ -26,6 +26,9 @@ export type DType =
 
 /** Dtypes with CPU kernels in this build. */
 export type ComputableDType =
+  | "str"
+  | "datetime64"
+  | "timedelta64"
   | "bool"
   | "int8"
   | "int16"
@@ -57,36 +60,46 @@ export type IntDType =
 export type Shape = readonly number[];
 
 /** JS representation of one element of dtype `D`. */
-export type ScalarOf<D extends DType> = D extends ComplexDType
-  ? Complex
-  : D extends "int64" | "uint64"
-    ? bigint
-    : D extends "bool"
-      ? boolean
-      : number;
+export type ScalarOf<D extends DType> = D extends "str"
+  ? string
+  : D extends TemporalDType
+    ? Temporal<D>
+    : D extends ComplexDType
+      ? Complex
+      : D extends "int64" | "uint64"
+        ? bigint
+        : D extends "bool"
+          ? boolean
+          : number;
 
 /** Typed array used to exchange data of dtype `D`. */
-export type TypedArrayOf<D extends ComputableDType> = D extends "float16"
-  ? Float16Array
-  : D extends "int8"
-    ? Int8Array
-    : D extends "int16"
-      ? Int16Array
-      : D extends "uint16"
-        ? Uint16Array
-        : D extends "bool" | "uint8"
-          ? Uint8Array
-          : D extends "int32"
-            ? Int32Array
-            : D extends "int64"
-              ? BigInt64Array
-              : D extends "uint32"
-                ? Uint32Array
-                : D extends "uint64"
-                  ? BigUint64Array
-                  : D extends "float32" | "complex64"
-                    ? Float32Array
-                    : Float64Array;
+export type TemporalDType = "datetime64" | "timedelta64";
+export type NumericDType = Exclude<ComputableDType, "str" | TemporalDType>;
+export type TypedArrayOf<D extends ComputableDType> = D extends "str"
+  ? never
+  : D extends TemporalDType
+    ? BigInt64Array
+    : D extends "float16"
+      ? Float16Array
+      : D extends "int8"
+        ? Int8Array
+        : D extends "int16"
+          ? Int16Array
+          : D extends "uint16"
+            ? Uint16Array
+            : D extends "bool" | "uint8"
+              ? Uint8Array
+              : D extends "int32"
+                ? Int32Array
+                : D extends "int64"
+                  ? BigInt64Array
+                  : D extends "uint32"
+                    ? Uint32Array
+                    : D extends "uint64"
+                      ? BigUint64Array
+                      : D extends "float32" | "complex64"
+                        ? Float32Array
+                        : Float64Array;
 
 // NumPy 2.5.4 result_type; tested against the recorded integer dtype fixture.
 type PromoteTable = {
@@ -264,15 +277,27 @@ type PromoteTable = {
 export type Promote<
   A extends ComputableDType,
   B extends ComputableDType,
-> = A extends ComplexDType
-  ? ComplexPromote<A, B>
-  : B extends ComplexDType
-    ? ComplexPromote<B, A>
-    : A extends keyof PromoteTable
-      ? B extends keyof PromoteTable[A]
-        ? PromoteTable[A][B]
-        : never
-      : never;
+> = A extends "str"
+  ? B extends "str"
+    ? "str"
+    : never
+  : A extends TemporalDType
+    ? B extends TemporalDType
+      ? A extends "datetime64"
+        ? "datetime64"
+        : B
+      : never
+    : B extends "str" | TemporalDType
+      ? never
+      : A extends ComplexDType
+        ? ComplexPromote<A, B>
+        : B extends ComplexDType
+          ? ComplexPromote<B, A>
+          : A extends keyof PromoteTable
+            ? B extends keyof PromoteTable[A]
+              ? PromoteTable[A][B]
+              : never
+            : never;
 
 type ComplexPromote<
   A extends ComplexDType,
@@ -284,26 +309,39 @@ type ComplexPromote<
     : "complex64";
 
 /** Weak JS scalar kinds: `number` is a Python float, `bigint` a Python int. */
-export type WeakScalar = number | bigint | boolean | Complex;
+export type WeakScalar =
+  number | bigint | boolean | Complex | string | Temporal;
 
 export type PromoteWeak<
   D extends ComputableDType,
   S extends WeakScalar,
-> = S extends Complex
-  ? D extends ComplexDType
-    ? D
-    : D extends "float16" | "float32"
-      ? "complex64"
-      : "complex128"
-  : S extends number
-    ? D extends FloatDType | ComplexDType
-      ? D
-      : "float64"
-    : S extends bigint
-      ? D extends "bool"
-        ? "int64"
-        : D
-      : D;
+> = S extends string
+  ? D extends "str"
+    ? "str"
+    : never
+  : S extends Temporal<infer K>
+    ? Promote<D, K>
+    : D extends "str"
+      ? never
+      : D extends TemporalDType
+        ? S extends bigint
+          ? D
+          : never
+        : S extends Complex
+          ? D extends ComplexDType
+            ? D
+            : D extends "float16" | "float32"
+              ? "complex64"
+              : "complex128"
+          : S extends number
+            ? D extends FloatDType | ComplexDType
+              ? D
+              : "float64"
+            : S extends bigint
+              ? D extends "bool"
+                ? "int64"
+                : D
+              : D;
 
 /** Boolean remainder and power use the NumPy int8 loop. */
 export type BoolArithmetic<D extends ComputableDType> = D extends "bool"
@@ -452,3 +490,107 @@ export type IndexShape<
     : S extends readonly number[]
       ? [...S]
       : never;
+
+/** Operation-specific temporal results, distinct from general promotion. */
+export type BinaryDType<
+  O extends string,
+  A extends ComputableDType,
+  B extends ComputableDType,
+> = O extends "mod"
+  ? A extends ComplexDType
+    ? never
+    : B extends ComplexDType
+      ? never
+      : BinaryNonComplex<O, A, B>
+  : BinaryNonComplex<O, A, B>;
+type BinaryNonComplex<
+  O extends string,
+  A extends ComputableDType,
+  B extends ComputableDType,
+> = A extends "str"
+  ? O extends "add"
+    ? B extends "str"
+      ? "str"
+      : never
+    : never
+  : B extends "str"
+    ? never
+    : A extends TemporalDType
+      ? B extends TemporalDType
+        ? O extends "add"
+          ? A extends "datetime64"
+            ? B extends "datetime64"
+              ? never
+              : "datetime64"
+            : B
+          : O extends "sub"
+            ? A extends "datetime64"
+              ? B extends "datetime64"
+                ? "timedelta64"
+                : "datetime64"
+              : B extends "timedelta64"
+                ? "timedelta64"
+                : never
+            : O extends "div"
+              ? A extends "timedelta64"
+                ? B extends "timedelta64"
+                  ? "float64"
+                  : never
+                : never
+              : O extends "mod"
+                ? A extends "timedelta64"
+                  ? B extends "timedelta64"
+                    ? "timedelta64"
+                    : never
+                  : never
+                : never
+        : A extends "timedelta64"
+          ? B extends IntDType
+            ? O extends "mul" | "div"
+              ? A
+              : never
+            : never
+          : never
+      : B extends TemporalDType
+        ? B extends "timedelta64"
+          ? A extends IntDType
+            ? O extends "mul"
+              ? B
+              : never
+            : never
+          : never
+        : O extends "div"
+          ? TrueDivide<Promote<A, B>>
+          : O extends "mod" | "pow"
+            ? BoolArithmetic<Promote<A, B>>
+            : Promote<A, B>;
+export type BinaryCheck<
+  O extends string,
+  A extends ComputableDType,
+  B extends ComputableDType,
+> = [BinaryDType<O, A, B>] extends [never] ? never : unknown;
+export type WeakDType<W extends WeakScalar> =
+  W extends Temporal<infer K>
+    ? K
+    : W extends string
+      ? "str"
+      : W extends bigint
+        ? "int64"
+        : W extends boolean
+          ? "bool"
+          : W extends Complex
+            ? "complex128"
+            : "float64";
+export type WeakBinary<
+  O extends string,
+  D extends ComputableDType,
+  W extends WeakScalar,
+> = D extends "str" | TemporalDType
+  ? BinaryDType<O, D, WeakDType<W>>
+  : W extends string | Temporal
+    ? BinaryDType<O, D, WeakDType<W>>
+    : O extends "div"
+      ? TrueDivide<PromoteWeak<D, W>>
+      : O extends "mod" | "pow"
+        ? BoolArithmetic<PromoteWeak<D, W>>
+        : PromoteWeak<D, W>;

@@ -9,6 +9,10 @@ import {
   type Operand,
 } from "./core.js";
 import type {
+  BinaryDType,
+  BinaryCheck,
+  WeakBinary,
+  WeakDType,
   BoolArithmetic,
   Broadcast,
   BroadcastCheck,
@@ -22,6 +26,7 @@ import type {
 
 export {
   Complex,
+  Temporal,
   Expr,
   Lazy,
   NMathArray,
@@ -33,6 +38,9 @@ export {
   slice,
 } from "./core.js";
 export type {
+  TimeUnit,
+  TimeBase,
+  DTypeMetadata,
   NMathValue,
   ArrayOptions,
   BinaryOperator,
@@ -66,7 +74,7 @@ export function isNMath(value: unknown): value is Lazy<ComputableDType, Shape> {
  * the methods. A scalar may appear on either side. Dtypes are inferred from
  * operand properties so recursive method signatures cannot widen promotion.
  */
-export interface BinaryFunction {
+export interface BinaryFunction<O extends BinaryOperator = "add"> {
   <
     D1 extends ComputableDType,
     S1 extends Shape,
@@ -74,92 +82,31 @@ export interface BinaryFunction {
     S2 extends Shape,
   >(
     a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
-    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
-  ): Expr<Promote<D1, D2>, Broadcast<S1, S2>>;
+    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2> &
+      BinaryCheck<O, D1, D2>,
+  ): Expr<BinaryDType<O, D1, D2>, Broadcast<S1, S2>>;
   <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
     a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-    b: W,
-  ): Expr<PromoteWeak<D, W>, S>;
+    b: W & ([WeakBinary<O, D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<O, D, W>, S>;
   <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
-    a: W,
+    a: W & BinaryCheck<O, WeakDType<W>, D>,
     b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  ): Expr<PromoteWeak<D, W>, S>;
+  ): Expr<
+    D extends "str" | "datetime64" | "timedelta64"
+      ? BinaryDType<O, WeakDType<W>, D>
+      : WeakBinary<O, D, W>,
+    S
+  >;
 }
-
-export interface RemainderFunction {
-  <
-    D1 extends Exclude<ComputableDType, "complex64" | "complex128">,
-    S1 extends Shape,
-    D2 extends Exclude<ComputableDType, "complex64" | "complex128">,
-    S2 extends Shape,
-  >(
-    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
-    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
-  ): Expr<BoolArithmetic<Promote<D1, D2>>, Broadcast<S1, S2>>;
-  <
-    D extends Exclude<ComputableDType, "complex64" | "complex128">,
-    S extends Shape,
-    W extends Exclude<WeakScalar, Complex>,
-  >(
-    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-    b: W,
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
-  <
-    W extends Exclude<WeakScalar, Complex>,
-    D extends Exclude<ComputableDType, "complex64" | "complex128">,
-    S extends Shape,
-  >(
-    a: W,
-    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
-}
-
-/** {@link BinaryFunction} with true-division result dtypes. */
-export interface DivideFunction {
-  <
-    D1 extends ComputableDType,
-    S1 extends Shape,
-    D2 extends ComputableDType,
-    S2 extends Shape,
-  >(
-    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
-    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
-  ): Expr<TrueDivide<Promote<D1, D2>>, Broadcast<S1, S2>>;
-  <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
-    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-    b: W,
-  ): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
-  <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
-    a: W,
-    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  ): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
-}
-
-export interface PowerFunction {
-  <
-    D1 extends ComputableDType,
-    S1 extends Shape,
-    D2 extends ComputableDType,
-    S2 extends Shape,
-  >(
-    a: Lazy<NoInfer<D1>, S1> & { readonly dtype: D1 },
-    b: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S1, S2>,
-  ): Expr<BoolArithmetic<Promote<D1, D2>>, Broadcast<S1, S2>>;
-  <D extends ComputableDType, S extends Shape, W extends WeakScalar>(
-    a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-    b: W,
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
-  <W extends WeakScalar, D extends ComputableDType, S extends Shape>(
-    a: W,
-    b: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
-}
-
-export const add: BinaryFunction = (a: Operand, b: Operand) =>
+export type RemainderFunction = BinaryFunction<"mod">;
+export type DivideFunction = BinaryFunction<"div">;
+export type PowerFunction = BinaryFunction<"pow">;
+export const add: BinaryFunction<"add"> = (a: Operand, b: Operand) =>
   binary("add", a, b);
-export const sub: BinaryFunction = (a: Operand, b: Operand) =>
+export const sub: BinaryFunction<"sub"> = (a: Operand, b: Operand) =>
   binary("sub", a, b);
-export const mul: BinaryFunction = (a: Operand, b: Operand) =>
+export const mul: BinaryFunction<"mul"> = (a: Operand, b: Operand) =>
   binary("mul", a, b);
 export const div: DivideFunction = (a: Operand, b: Operand) =>
   binary("div", a, b);

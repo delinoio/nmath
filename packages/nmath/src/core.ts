@@ -23,6 +23,12 @@ import type {
   NativeSelector,
 } from "./native-binding.generated.js";
 import type {
+  BinaryDType,
+  BinaryCheck,
+  WeakBinary,
+  WeakDType,
+  TemporalDType,
+  NumericDType,
   BoolArithmetic,
   Broadcast,
   BroadcastCheck,
@@ -67,12 +73,94 @@ export class Complex {
   }
 }
 
+export type TimeBase =
+  | "Y"
+  | "M"
+  | "W"
+  | "D"
+  | "h"
+  | "m"
+  | "s"
+  | "ms"
+  | "us"
+  | "ns"
+  | "ps"
+  | "fs"
+  | "as";
+export type TimeUnit = TimeBase | `${number}${TimeBase}`;
+
+/** Exact signed 64-bit ticks and NumPy unit metadata. */
+export class Temporal<K extends TemporalDType = TemporalDType> {
+  constructor(
+    readonly ticks: bigint,
+    readonly unit: TimeUnit,
+    readonly dtype: K,
+  ) {
+    if (typeof ticks !== "bigint" || ticks < -(1n << 63n) || ticks >= 1n << 63n)
+      throw new RangeError("Temporal ticks must fit signed int64.");
+    if (dtype !== "datetime64" && dtype !== "timedelta64")
+      throw new TypeError("A temporal dtype is required.");
+    native(() => binding.NativeExpr.temporalScalar(ticks, `${dtype}[${unit}]`));
+    Object.freeze(this);
+  }
+  get isNaT(): boolean {
+    return this.ticks === -(1n << 63n);
+  }
+  /** Explicit conversion to the millisecond precision and range of JS Date. */
+  toDate(this: Temporal<"datetime64">): Date {
+    if (this.dtype !== "datetime64")
+      throw new TypeError("Only datetime64 converts to Date.");
+    if (this.isNaT) return new Date(NaN);
+    const ms = native(() =>
+      binding.NativeExpr.temporalMilliseconds(this.ticks, this.unit),
+    );
+    if (ms < -8640000000000000n || ms > 8640000000000000n)
+      throw new RangeError("The datetime is outside the Date range.");
+    return new Date(Number(ms));
+  }
+  valueOf(): never {
+    throw new TypeError(
+      "Temporal values require explicit conversion. Use ticks or toDate().",
+    );
+  }
+}
+
 function scalarResult(
-  value: number | bigint | boolean | { real: number; imag: number },
+  value:
+    | number
+    | bigint
+    | boolean
+    | string
+    | { real: number; imag: number }
+    | { ticks: bigint; dtype: string; unit: string },
 ): WeakScalar {
-  return typeof value === "object"
-    ? new Complex(value.real, value.imag)
-    : value;
+  if (typeof value !== "object") return value;
+  return "ticks" in value
+    ? new Temporal(
+        value.ticks,
+        value.unit as TimeUnit,
+        value.dtype as TemporalDType,
+      )
+    : new Complex(value.real, value.imag);
+}
+
+export interface DTypeMetadata {
+  unit?: TimeUnit;
+  stringWidth?: number;
+}
+function descriptor(
+  dtype: ComputableDType,
+  metadata: DTypeMetadata = {},
+): string {
+  if (dtype === "str") {
+    const n = metadata.stringWidth ?? 1;
+    if (!Number.isSafeInteger(n) || n <= 0)
+      throw new RangeError("String width must be a positive safe integer.");
+    return `str[${n}]`;
+  }
+  return dtype === "datetime64" || dtype === "timedelta64"
+    ? `${dtype}[${metadata.unit ?? "ns"}]`
+    : dtype;
 }
 
 export type Device = "cpu" | "gpu";
@@ -187,6 +275,23 @@ function withSignal<T>(
 export type Operand = Lazy<any, any> | WeakScalar;
 
 function scalarExpr(value: WeakScalar): NativeExpr {
+  if (typeof value === "string") {
+    for (const c of value) {
+      const cp = c.codePointAt(0)!;
+      if (cp >= 0xd800 && cp <= 0xdfff)
+        throw new TypeError(
+          "Unpaired UTF-16 surrogates cannot be stored as Unicode scalars.",
+        );
+    }
+    return native(() => binding.NativeExpr.textScalar(value));
+  }
+  if (value instanceof Temporal)
+    return native(() =>
+      binding.NativeExpr.temporalScalar(
+        value.ticks,
+        `${value.dtype}[${value.unit}]`,
+      ),
+    );
   if (value instanceof Complex) {
     return binding.NativeExpr.complexScalar(value.real, value.imag);
   }
@@ -242,6 +347,17 @@ export abstract class Lazy<
   abstract readonly context: NMathContext | undefined;
   abstract get dtype(): D;
   abstract get shape(): S;
+  abstract get dtypeDescriptor(): string;
+  get unit(): TimeUnit | undefined {
+    return this.dtype === "datetime64" || this.dtype === "timedelta64"
+      ? (this.dtypeDescriptor.slice(this.dtype.length + 1, -1) as TimeUnit)
+      : undefined;
+  }
+  get stringWidth(): number | undefined {
+    return this.dtype === "str"
+      ? Number(this.dtypeDescriptor.slice(4, -1))
+      : undefined;
+  }
 
   get ndim(): number {
     return this.shape.length;
@@ -266,45 +382,45 @@ export abstract class Lazy<
   // Infer dtype from the operand property, not recursively from method results:
   // mixed small integer operations otherwise infer an extra float64 alternative.
   add<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
-  add<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
+    other: BinaryCheck<"add", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"add", D, D2>, Broadcast<S, S2>>;
+  add<W extends WeakScalar>(
+    other: W & ([WeakBinary<"add", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"add", D, W>, S>;
   add(other: Operand): Expr<any, any> {
     return this.binaryOp("add", other);
   }
 
   sub<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
-  sub<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
+    other: BinaryCheck<"sub", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"sub", D, D2>, Broadcast<S, S2>>;
+  sub<W extends WeakScalar>(
+    other: W & ([WeakBinary<"sub", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"sub", D, W>, S>;
   sub(other: Operand): Expr<any, any> {
     return this.binaryOp("sub", other);
   }
 
   mul<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<Promote<D, D2>, Broadcast<S, S2>>;
-  mul<W extends WeakScalar>(other: W): Expr<PromoteWeak<D, W>, S>;
+    other: BinaryCheck<"mul", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"mul", D, D2>, Broadcast<S, S2>>;
+  mul<W extends WeakScalar>(
+    other: W & ([WeakBinary<"mul", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"mul", D, W>, S>;
   mul(other: Operand): Expr<any, any> {
     return this.binaryOp("mul", other);
   }
 
   div<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<TrueDivide<Promote<D, D2>>, Broadcast<S, S2>>;
-  div<W extends WeakScalar>(other: W): Expr<TrueDivide<PromoteWeak<D, W>>, S>;
+    other: BinaryCheck<"div", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"div", D, D2>, Broadcast<S, S2>>;
+  div<W extends WeakScalar>(
+    other: W & ([WeakBinary<"div", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"div", D, W>, S>;
   div(other: Operand): Expr<any, any> {
     return this.binaryOp("div", other);
   }
@@ -314,40 +430,40 @@ export abstract class Lazy<
     S2 extends Shape,
   >(
     this: D extends "complex64" | "complex128" ? never : Lazy<D, S>,
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<BoolArithmetic<Promote<D, D2>>, Broadcast<S, S2>>;
+    other: BinaryCheck<"mod", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"mod", D, D2>, Broadcast<S, S2>>;
   mod<W extends Exclude<WeakScalar, Complex>>(
     this: D extends "complex64" | "complex128" ? never : Lazy<D, S>,
-    other: W,
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
+    other: W & ([WeakBinary<"mod", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"mod", D, W>, S>;
   mod(other: Operand): Expr<any, any> {
     return this.binaryOp("mod", other);
   }
 
   pow<D2 extends ComputableDType, S2 extends Shape>(
-    other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<
-        S,
-        S2
-      >,
-  ): Expr<BoolArithmetic<Promote<D, D2>>, Broadcast<S, S2>>;
+    other: BinaryCheck<"pow", D, D2> &
+      Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & BroadcastCheck<S, S2>,
+  ): Expr<BinaryDType<"pow", D, D2>, Broadcast<S, S2>>;
   pow<W extends WeakScalar>(
-    other: W,
-  ): Expr<BoolArithmetic<PromoteWeak<D, W>>, S>;
+    other: W & ([WeakBinary<"pow", D, W>] extends [never] ? never : unknown),
+  ): Expr<WeakBinary<"pow", D, W>, S>;
   pow(other: Operand): Expr<any, any> {
     return this.binaryOp("pow", other);
   }
 
-  neg(this: [D] extends ["bool"] ? never : Lazy<D, S>): Expr<D, S> {
+  neg(
+    this: [D] extends ["bool" | "str" | "datetime64"] ? never : Lazy<D, S>,
+  ): Expr<D, S> {
     return new Expr(
       native(() => binding.NativeExpr.unary("neg", this.nativeExpr())),
       this.context,
     );
   }
 
-  pos(this: [D] extends ["bool"] ? never : Lazy<D, S>): Expr<D, S> {
+  pos(
+    this: [D] extends ["bool" | "str" | "datetime64"] ? never : Lazy<D, S>,
+  ): Expr<D, S> {
     return new Expr(
       native(() => binding.NativeExpr.unary("pos", this.nativeExpr())),
       this.context,
@@ -371,30 +487,55 @@ export abstract class Lazy<
   }
 
   sum<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
     axis?: A,
   ): Expr<SumDType<D>, ReduceShape<S, A>> {
     return this.reduceOp("sum", axis);
   }
 
   mean<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
     axis?: A,
-  ): Expr<TrueDivide<D>, ReduceShape<S, A>> {
+  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A>> {
     return this.reduceOp("mean", axis);
   }
 
   min<A extends number | undefined = undefined>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
     axis?: A,
   ): Expr<D, ReduceShape<S, A>> {
     return this.reduceOp("min", axis);
   }
 
   max<A extends number | undefined = undefined>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
     axis?: A,
   ): Expr<D, ReduceShape<S, A>> {
     return this.reduceOp("max", axis);
   }
 
-  matmul<D2 extends ComputableDType, S2 extends Shape>(
+  matmul<D2 extends NumericDType, S2 extends Shape>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
     other: Lazy<NoInfer<D2>, S2> & { readonly dtype: D2 } & MatMulCheck<S, S2>,
   ): Expr<Promote<D, D2>, MatMulShape<S, S2>> {
     return new Expr(
@@ -421,9 +562,14 @@ export abstract class Lazy<
   }
 
   /** Explicit dtype conversion (NumPy `astype`). */
-  astype<D2 extends ComputableDType>(dtype: D2): Expr<D2, S> {
+  astype<D2 extends ComputableDType>(
+    dtype: D2,
+    metadata: DTypeMetadata = {},
+  ): Expr<D2, S> {
     return new Expr(
-      native(() => binding.NativeExpr.cast(this.nativeExpr(), dtype)),
+      native(() =>
+        binding.NativeExpr.cast(this.nativeExpr(), descriptor(dtype, metadata)),
+      ),
       this.context,
     );
   }
@@ -484,6 +630,10 @@ export class Expr<D extends ComputableDType, S extends Shape> extends Lazy<
     return this.#expr;
   }
 
+  get dtypeDescriptor(): string {
+    return this.#expr.dtypeDescriptor;
+  }
+
   get dtype(): D {
     return this.#expr.dtype as D;
   }
@@ -518,6 +668,10 @@ export class NMathArray<
   /** @internal */
   nativeExpr(): NativeExpr {
     return native(() => binding.NativeExpr.input(this.#array));
+  }
+
+  get dtypeDescriptor(): string {
+    return native(() => this.#array.dtypeDescriptor);
   }
 
   get dtype(): D {
@@ -560,6 +714,19 @@ export class NMathArray<
 
   /** Copies the elements into nested JS arrays. */
   toArray(): Nested<ScalarOf<D>> {
+    if (
+      this.dtype === "str" ||
+      this.dtype === "datetime64" ||
+      this.dtype === "timedelta64"
+    ) {
+      const build = (axis: number, indices: number[]): unknown =>
+        axis === this.ndim
+          ? this.item(...indices)
+          : Array.from({ length: this.shape[axis] }, (_, i) =>
+              build(axis + 1, [...indices, i]),
+            );
+      return build(0, []) as Nested<ScalarOf<D>>;
+    }
     const typed = this.toTypedArray();
     const flat = (
       this.dtype === "complex64" || this.dtype === "complex128"
@@ -650,6 +817,11 @@ function float16Constructor(): Float16ArrayConstructor {
 
 function typedArrayFor(dtype: ComputableDType, buffer: ArrayBuffer) {
   switch (dtype) {
+    case "str":
+      throw new TypeError("String arrays use toArray() to return JS strings.");
+    case "datetime64":
+    case "timedelta64":
+      return new BigInt64Array(buffer);
     case "bool":
       return new Uint8Array(buffer);
     case "int8":
@@ -720,7 +892,10 @@ export interface ContextMetrics {
   gpuMemory: MemoryMeasurement;
 }
 
-export interface ArrayOptions<D extends ComputableDType, S extends Shape> {
+export interface ArrayOptions<
+  D extends ComputableDType,
+  S extends Shape,
+> extends DTypeMetadata {
   dtype: D;
   shape?: S;
 }
@@ -838,7 +1013,58 @@ export function validatedShape(shape: readonly number[]): number[] {
   return copy;
 }
 
-function toBytes(dtype: ComputableDType, values: ArrayLike<unknown>): Buffer {
+function toBytes(
+  dtype: ComputableDType,
+  values: ArrayLike<unknown>,
+  metadata: DTypeMetadata = {},
+): Buffer {
+  if (dtype === "str") {
+    const width = metadata.stringWidth ?? 1;
+    const data = new Uint32Array(values.length * width);
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      if (typeof value !== "string")
+        throw new TypeError("String storage requires JS strings.");
+      let j = 0;
+      for (const c of value) {
+        const cp = c.codePointAt(0)!;
+        if (cp >= 0xd800 && cp <= 0xdfff)
+          throw new TypeError(
+            "Unpaired UTF-16 surrogates cannot be stored as Unicode scalars.",
+          );
+        if (j >= width)
+          throw new RangeError(
+            "String input exceeds the selected width. Use an explicit cast to truncate.",
+          );
+        data[i * width + j++] = cp;
+      }
+    }
+    return Buffer.from(data.buffer);
+  }
+  if (dtype === "datetime64" || dtype === "timedelta64") {
+    const ticks = new BigInt64Array(values.length);
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      if (value instanceof Temporal) {
+        if (value.dtype !== dtype || value.unit !== (metadata.unit ?? "ns"))
+          throw new TypeError(
+            "Temporal scalar kind and unit must match array metadata. Convert units explicitly.",
+          );
+        ticks[i] = value.ticks;
+      } else if (
+        typeof value === "bigint" &&
+        value >= -(1n << 63n) &&
+        value < 1n << 63n
+      )
+        ticks[i] = value;
+      else
+        throw new TypeError(
+          "Temporal input requires exact int64 ticks or Temporal scalars.",
+        );
+    }
+    return Buffer.from(ticks.buffer);
+  }
+
   if (dtype !== "complex64" && dtype !== "complex128") {
     for (let i = 0; i < values.length; i++) {
       if (values[i] instanceof Complex)
@@ -947,6 +1173,28 @@ export class NMathContext {
     data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
     options: ArrayOptions<D, S>,
   ): NMathArray<D, S> {
+    if (options.dtype === "str") {
+      let width = 1;
+      const visit = (v: unknown): void => {
+        if (Array.isArray(v)) {
+          for (const x of v) visit(x);
+        } else if (typeof v === "string") {
+          let n = 0;
+          for (const _ of v) n++;
+          width = Math.max(width, n);
+        } else throw new TypeError("String storage requires JS strings.");
+      };
+      visit(data);
+      options = { ...options, stringWidth: options.stringWidth ?? width };
+      descriptor(options.dtype, options);
+      if (width > options.stringWidth!)
+        throw new RangeError("String input exceeds the selected width.");
+      native(() =>
+        this.nativeContext.checkCpuBudget(
+          BigInt(product(inferShape(data))) * BigInt(options.stringWidth!) * 4n,
+        ),
+      );
+    }
     let values: ArrayLike<unknown>;
     let shape: number[];
     const explicitShape = options.shape
@@ -996,7 +1244,8 @@ export class NMathContext {
     } else {
       const inferred = inferShape(data);
       validatedShape(inferred);
-      this.ensureCpuBudget(product(inferred), options.dtype);
+      if (options.dtype !== "str")
+        this.ensureCpuBudget(product(inferred), options.dtype);
       const flat: unknown[] = [];
       flatten(data, inferred, 0, flat);
       values = flat;
@@ -1005,8 +1254,8 @@ export class NMathContext {
     const array = native(() =>
       this.nativeContext.array(
         shape,
-        options.dtype,
-        toBytes(options.dtype, values),
+        descriptor(options.dtype, options),
+        toBytes(options.dtype, values, options),
       ),
     );
     return new NMathArray(array, this);
@@ -1035,9 +1284,42 @@ export class NMathContext {
     shape: S,
     value: ScalarOf<D>,
     dtype: D,
+    metadata: DTypeMetadata = {},
   ): NMathArray<D, S> {
     const checkedShape = validatedShape(shape);
     const size = product(checkedShape);
+    if (dtype === "str" || dtype === "datetime64" || dtype === "timedelta64") {
+      if (dtype === "str")
+        metadata = {
+          ...metadata,
+          stringWidth:
+            metadata.stringWidth ??
+            (typeof value === "string" ? [...value].length || 1 : 1),
+        };
+      if (value instanceof Temporal)
+        metadata = { unit: value.unit, ...metadata };
+      const desc = descriptor(dtype, metadata);
+      native(() =>
+        this.nativeContext.checkCpuBudget(
+          BigInt(size) *
+            BigInt(dtype === "str" ? metadata.stringWidth! * 4 : 8),
+        ),
+      );
+      const values = { length: size } as ArrayLike<unknown>;
+      const repeated = new Proxy(values, {
+        get: (_target, key) => (key === "length" ? size : value),
+      });
+      return new NMathArray(
+        native(() =>
+          this.nativeContext.array(
+            checkedShape,
+            desc,
+            toBytes(dtype, repeated, metadata),
+          ),
+        ),
+        this,
+      );
+    }
     this.ensureCpuBudget(size, dtype);
     // Fill a typed array directly instead of building a JS array of `size` values.
     const typed = filled(dtype, size, value);
@@ -1181,6 +1463,10 @@ function filled(
     );
   }
   switch (dtype) {
+    case "str":
+    case "datetime64":
+    case "timedelta64":
+      throw new TypeError("Use metadata-aware array creation.");
     case "float16":
       return new (float16Constructor())(size).fill(Number(value));
     case "complex64":
@@ -1218,13 +1504,17 @@ function filled(
 
 function zeroOf<D extends ComputableDType>(dtype: D): ScalarOf<D> {
   return (
-    dtype === "complex64" || dtype === "complex128"
-      ? new Complex(0)
-      : dtype === "int64" || dtype === "uint64"
-        ? 0n
-        : dtype === "bool"
-          ? false
-          : 0
+    dtype === "str"
+      ? ""
+      : dtype === "datetime64" || dtype === "timedelta64"
+        ? new Temporal(0n, "ns", dtype)
+        : dtype === "complex64" || dtype === "complex128"
+          ? new Complex(0)
+          : dtype === "int64" || dtype === "uint64"
+            ? 0n
+            : dtype === "bool"
+              ? false
+              : 0
   ) as ScalarOf<D>;
 }
 

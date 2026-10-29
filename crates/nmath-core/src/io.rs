@@ -37,7 +37,7 @@ fn format_error(detail: &str) -> Error {
     )
 }
 
-fn descr(dtype: DType) -> Result<&'static str> {
+fn descr(dtype: DType) -> Result<String> {
     Ok(match dtype {
         DType::Bool => "|b1",
         DType::Int8 => "|i1",
@@ -53,16 +53,11 @@ fn descr(dtype: DType) -> Result<&'static str> {
         DType::Float64 => "<f8",
         DType::Complex64 => "<c8",
         DType::Complex128 => "<c16",
-        other => {
-            return Err(Error::new(
-                ErrorCode::DTypeUnsupported,
-                format!(
-                    "NPY output does not support dtype '{}' in this build.",
-                    other.id()
-                ),
-            ));
-        }
-    })
+        DType::Str(n) => return Ok(format!("<U{n}")),
+        DType::Datetime64(u) => return Ok(format!("<M8[{}]", u.id())),
+        DType::Timedelta64(u) => return Ok(format!("<m8[{}]", u.id())),
+    }
+    .into())
 }
 
 /// Encodes a C-order array as NPY version 1.0.
@@ -93,6 +88,12 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
     out.extend_from_slice(&(header.len() as u16).to_le_bytes());
     out.extend_from_slice(header.as_bytes());
     match buffer {
+        Buffer::Unicode { values, .. } => values
+            .iter()
+            .for_each(|v| out.extend_from_slice(&v.to_le_bytes())),
+        Buffer::Temporal { ticks, .. } => ticks
+            .iter()
+            .for_each(|v| out.extend_from_slice(&v.to_le_bytes())),
         Buffer::Bool(v) => out.extend(v.iter().map(|&b| b as u8)),
         Buffer::I8(v) => v
             .iter()
@@ -208,16 +209,29 @@ fn decode_npy_with<R>(
         "<f8" => DType::Float64,
         "<c8" | ">c8" => DType::Complex64,
         "<c16" | ">c16" => DType::Complex128,
-        other => {
-            return Err(Error::new(
-                ErrorCode::DTypeUnsupported,
-                format!("NPY input with descr '{other}' is not supported in this build."),
-            ));
+        other if other.starts_with("<U") || other.starts_with(">U") => {
+            DType::from_id(&format!("str[{}]", &other[2..]))?
         }
+        other if other.starts_with("<M8[") || other.starts_with(">M8[") => {
+            DType::from_id(&format!("datetime64{}", &other[3..]))?
+        }
+        other if other.starts_with("<m8[") || other.starts_with(">m8[") => {
+            DType::from_id(&format!("timedelta64{}", &other[3..]))?
+        }
+        _ => return Err(format_error("unsupported dtype descriptor")),
     };
     let fortran = header_value(header, "fortran_order")?.starts_with("True");
     if (!fortran && !header_value(header, "fortran_order")?.starts_with("False"))
-        || (fortran && !matches!(dtype, DType::Float16 | DType::Complex64 | DType::Complex128))
+        || (fortran
+            && !matches!(
+                dtype,
+                DType::Float16
+                    | DType::Complex64
+                    | DType::Complex128
+                    | DType::Str(_)
+                    | DType::Datetime64(_)
+                    | DType::Timedelta64(_)
+            ))
     {
         return Err(format_error(
             "Fortran-order data is not supported in this build",
@@ -275,6 +289,36 @@ fn decode_npy_with<R>(
         &data[offset * dtype.item_size()..(offset + 1) * dtype.item_size()]
     };
     let buffer = match dtype {
+        DType::Str(width) => {
+            let mut values = Vec::with_capacity(count * width);
+            for i in 0..count {
+                for c in complex_chunk(i).chunks_exact(4) {
+                    let c = if descr_text.starts_with('>') {
+                        u32::from_be_bytes(c.try_into().unwrap())
+                    } else {
+                        u32::from_le_bytes(c.try_into().unwrap())
+                    };
+                    if char::from_u32(c).is_none() {
+                        return Err(format_error("invalid Unicode scalar"));
+                    }
+                    values.push(c);
+                }
+            }
+            Buffer::Unicode { width, values }
+        }
+        DType::Datetime64(_) | DType::Timedelta64(_) => Buffer::Temporal {
+            dtype,
+            ticks: (0..count)
+                .map(|i| {
+                    let c = complex_chunk(i).try_into().unwrap();
+                    if descr_text.starts_with('>') {
+                        i64::from_be_bytes(c)
+                    } else {
+                        i64::from_le_bytes(c)
+                    }
+                })
+                .collect(),
+        },
         DType::Bool => {
             if data.iter().any(|&b| b > 1) {
                 return Err(format_error("bool data contains values other than 0 and 1"));
@@ -335,7 +379,6 @@ fn decode_npy_with<R>(
                 })
                 .collect(),
         ),
-        _ => unreachable!(),
     };
     Ok((shape, buffer, reservation))
 }

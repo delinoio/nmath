@@ -215,6 +215,26 @@ impl NdArray {
                 "Complex writes to real storage require an explicit cast before assignment.",
             ));
         }
+        if let (DType::Str(target), Buffer::Unicode { width, values }) = (dtype, &value.buffer) {
+            if *width > target
+                && values
+                    .chunks_exact(*width)
+                    .any(|row| row[target..].iter().any(|&c| c != 0))
+            {
+                return Err(Error::new(
+                    ErrorCode::DTypeUnsupported,
+                    "String assignment would truncate a value. Cast explicitly to the target \
+                     width first.",
+                ));
+            }
+        }
+        if dtype.temporal_unit().is_some() && value.dtype() != dtype {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Temporal assignment requires matching kind and unit. Cast explicitly before \
+                 assignment.",
+            ));
+        }
         let source = value.buffer.cast(dtype)?;
         let strides = broadcast_strides(&value.shape, &target_shape);
         let mut source_offsets = Vec::with_capacity(offsets.len());

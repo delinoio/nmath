@@ -113,6 +113,7 @@ impl ReduceOp {
     pub fn result_dtype(self, input: DType) -> DType {
         match self {
             ReduceOp::Sum => input.sum_dtype(),
+            ReduceOp::Mean if input.temporal_unit().is_some() => input,
             ReduceOp::Mean => input.true_divide(),
             ReduceOp::Min | ReduceOp::Max => input,
         }
@@ -612,6 +613,9 @@ pub fn binary(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    if lhs.dtype().kind() == DTypeKind::Other || rhs.dtype().kind() == DTypeKind::Other {
+        return special_binary(op, lhs, rhs, budget, token);
+    }
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;
     let work_dtype = if op == BinaryOp::Div
@@ -671,10 +675,12 @@ pub fn unary(
     token: &CancellationToken,
 ) -> Result<DenseArray> {
     token.check()?;
-    if input.dtype() == DType::Bool {
+    if input.dtype() == DType::Bool || matches!(input.dtype(), DType::Str(_) | DType::Datetime64(_))
+    {
         return Err(Error::new(
             ErrorCode::DTypeUnsupported,
-            "Unary arithmetic is not supported for bool operands.",
+            "Unary arithmetic is not supported for bool, string or datetime operands. Use a \
+             supported numeric or duration dtype.",
         ));
     }
     let reservation = reserve_for(budget, input.dtype(), input.size())?;
@@ -694,7 +700,11 @@ pub fn unary(
             Buffer::F64(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
             Buffer::C64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
             Buffer::C128(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
-            Buffer::Bool(_) => unreachable!(),
+            Buffer::Temporal { dtype, ticks } => Buffer::Temporal {
+                dtype: *dtype,
+                ticks: crate::buffer::map_elements(ticks, token, |x| x.wrapping_neg())?,
+            },
+            Buffer::Unicode { .. } | Buffer::Bool(_) => return Err(crate::dtype::unsupported()),
         },
     };
     DenseArray::new(input.shape.clone(), buffer, reservation)
@@ -759,6 +769,7 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    validate_special_reduce(op, input.dtype())?;
     let rank = input.shape.len();
     let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
@@ -822,6 +833,59 @@ pub fn reduce(
     } else {
         input.size() / out_len
     };
+    if let Buffer::Temporal { dtype, ticks } = &input.buffer {
+        let _seen = budget.reserve(out_len as u64)?;
+        let mut seen = vec![false; out_len];
+        let mut out = vec![0i64; out_len];
+        for (i, (slot, _)) in slots.enumerate() {
+            if i % CHUNK == 0 {
+                token.check()?;
+            }
+            let t = ticks[i];
+            out[slot] =
+                if t == crate::temporal::NAT || (seen[slot] && out[slot] == crate::temporal::NAT) {
+                    crate::temporal::NAT
+                } else {
+                    match op {
+                        ReduceOp::Sum | ReduceOp::Mean => {
+                            crate::temporal::checked_tick(out[slot].checked_add(t))?
+                        }
+                        ReduceOp::Min => {
+                            if seen[slot] {
+                                out[slot].min(t)
+                            } else {
+                                t
+                            }
+                        }
+                        ReduceOp::Max => {
+                            if seen[slot] {
+                                out[slot].max(t)
+                            } else {
+                                t
+                            }
+                        }
+                    }
+                };
+            seen[slot] = true;
+        }
+        if op == ReduceOp::Mean {
+            for x in &mut out {
+                if count == 0 {
+                    *x = crate::temporal::NAT;
+                } else if *x != crate::temporal::NAT {
+                    *x /= count as i64;
+                }
+            }
+        }
+        return DenseArray::new(
+            out_shape,
+            Buffer::Temporal {
+                dtype: *dtype,
+                ticks: out,
+            },
+            reservation,
+        );
+    }
     // Borrow matching input storage. Widening for sum/mean is reserved before
     // conversion; no input-sized offset or i128 scratch vectors are needed.
     let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
@@ -946,6 +1010,7 @@ pub fn reduce(
         Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
         Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        _ => return Err(crate::dtype::unsupported()),
     };
     DenseArray::new(out_shape, buffer, reservation)
 }
@@ -958,6 +1023,12 @@ pub fn matmul(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    if lhs.dtype().kind() == DTypeKind::Other
+        || rhs.dtype().kind() == DTypeKind::Other
+        || dtype.kind() == DTypeKind::Other
+    {
+        return Err(crate::dtype::unsupported());
+    }
     let (n, k, out_shape_rows) = match lhs.shape.as_slice() {
         [k] => (1, *k, false),
         [n, k] => (*n, *k, true),
@@ -1753,4 +1824,165 @@ mod tests {
             ErrorCode::MemoryBudgetExceeded
         );
     }
+}
+/// Operation-specific loops are needed because datetime subtraction changes
+/// kind.
+pub fn special_binary_dtype(op: BinaryOp, a: DType, b: DType) -> Result<DType> {
+    use BinaryOp::*;
+    use DType::*;
+
+    use crate::dtype::unsupported;
+    match (a, b, op) {
+        (Str(x), Str(y), Add) => Ok(Str(x
+            .checked_add(y)
+            .filter(|n| *n <= usize::MAX / 4)
+            .ok_or_else(unsupported)?)),
+        (Datetime64(x), Timedelta64(y), Add | Sub) | (Timedelta64(y), Datetime64(x), Add) => {
+            Ok(Datetime64(x.common(y)?))
+        }
+        (Datetime64(x), Datetime64(y), Sub) => Ok(Timedelta64(x.common(y)?)),
+        (Timedelta64(x), Timedelta64(y), Add | Sub | Mod) => Ok(Timedelta64(x.common(y)?)),
+        (Timedelta64(x), Timedelta64(y), Div) => {
+            x.common(y)?;
+            Ok(Float64)
+        }
+        (Timedelta64(_), n, Mul | Div) if n.kind() == DTypeKind::Int => Ok(a),
+        (n, Timedelta64(_), Mul) if n.kind() == DTypeKind::Int => Ok(b),
+        _ => Err(unsupported()),
+    }
+}
+fn special_binary(
+    op: BinaryOp,
+    lhs: &DenseArray,
+    rhs: &DenseArray,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    use crate::{
+        buffer::Scalar,
+        dtype::unsupported,
+        temporal::{NAT, convert},
+    };
+    token.check()?;
+    let dtype = special_binary_dtype(op, lhs.dtype(), rhs.dtype())?;
+    let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
+    let size = shape.iter().product();
+    let reservation = reserve_for(budget, dtype, size)?;
+    let pairs = BroadcastPairs::new(
+        &shape,
+        broadcast_strides(&lhs.shape, &shape),
+        broadcast_strides(&rhs.shape, &shape),
+    );
+    if let DType::Str(width) = dtype {
+        let (
+            Buffer::Unicode {
+                width: aw,
+                values: av,
+            },
+            Buffer::Unicode {
+                width: bw,
+                values: bv,
+            },
+        ) = (&lhs.buffer, &rhs.buffer)
+        else {
+            unreachable!()
+        };
+        let mut values = vec![0; size * width];
+        for (n, (i, j)) in pairs.enumerate() {
+            if n % CHUNK == 0 {
+                token.check()?;
+            }
+            let a = &av[i * aw..(i + 1) * aw];
+            let b = &bv[j * bw..(j + 1) * bw];
+            let an = a.iter().rposition(|&c| c != 0).map_or(0, |x| x + 1);
+            let bn = b.iter().rposition(|&c| c != 0).map_or(0, |x| x + 1);
+            values[n * width..n * width + an].copy_from_slice(&a[..an]);
+            values[n * width + an..n * width + an + bn].copy_from_slice(&b[..bn]);
+        }
+        return DenseArray::new(shape, Buffer::Unicode { width, values }, reservation);
+    }
+    let unit = match (lhs.dtype().temporal_unit(), rhs.dtype().temporal_unit()) {
+        (Some(a), Some(b)) => a.common(b)?,
+        (Some(a), None) | (None, Some(a)) => a,
+        _ => unreachable!(),
+    };
+    for dtype in [lhs.dtype(), rhs.dtype()] {
+        if let Some(from) = dtype.temporal_unit() {
+            convert(NAT, from, unit, matches!(dtype, DType::Datetime64(_)))?;
+        }
+    }
+    let tick = |buffer: &Buffer, i| -> Result<i64> {
+        match buffer.get(i) {
+            Scalar::Temporal(t, d) => convert(
+                t,
+                d.temporal_unit().unwrap(),
+                unit,
+                matches!(d, DType::Datetime64(_)),
+            ),
+            Scalar::Int(t) => Ok(t),
+            Scalar::UInt(t) => i64::try_from(t).map_err(|_| unsupported()),
+            _ => Err(unsupported()),
+        }
+    };
+    let mut out = Vec::with_capacity(if dtype == DType::Float64 { 0 } else { size });
+    let mut floats = Vec::with_capacity(if dtype == DType::Float64 { size } else { 0 });
+    for (n, (i, j)) in pairs.enumerate() {
+        if n % CHUNK == 0 {
+            token.check()?;
+        }
+        let (a, b) = (tick(&lhs.buffer, i)?, tick(&rhs.buffer, j)?);
+        let nat = (lhs.dtype().temporal_unit().is_some() && a == NAT)
+            || (rhs.dtype().temporal_unit().is_some() && b == NAT);
+        if dtype == DType::Float64 {
+            floats.push(if nat { f64::NAN } else { a as f64 / b as f64 });
+            continue;
+        }
+        out.push(if nat {
+            NAT
+        } else {
+            match op {
+                BinaryOp::Add => crate::temporal::checked_tick(a.checked_add(b))?,
+                BinaryOp::Sub => crate::temporal::checked_tick(a.checked_sub(b))?,
+                BinaryOp::Mul => crate::temporal::checked_tick(a.checked_mul(b))?,
+                BinaryOp::Div => {
+                    if b == 0 {
+                        NAT
+                    } else {
+                        a.wrapping_div(b)
+                    }
+                }
+                BinaryOp::Mod => {
+                    if b == 0 {
+                        NAT
+                    } else {
+                        let r = a.wrapping_rem(b);
+                        if r != 0 && (r < 0) != (b < 0) {
+                            r.wrapping_add(b)
+                        } else {
+                            r
+                        }
+                    }
+                }
+                _ => return Err(unsupported()),
+            }
+        });
+    }
+    DenseArray::new(
+        shape,
+        if dtype == DType::Float64 {
+            Buffer::F64(floats)
+        } else {
+            Buffer::Temporal { dtype, ticks: out }
+        },
+        reservation,
+    )
+}
+
+pub fn validate_special_reduce(op: ReduceOp, dtype: DType) -> Result<()> {
+    if matches!(dtype, DType::Str(_))
+        || (matches!(dtype, DType::Datetime64(_)) && matches!(op, ReduceOp::Sum | ReduceOp::Mean))
+    {
+        return Err(crate::dtype::unsupported());
+    }
+    Ok(())
 }
