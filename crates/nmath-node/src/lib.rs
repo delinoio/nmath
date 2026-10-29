@@ -905,3 +905,4 @@ pub struct NativeNpzEntry {
 }
 
 mod io_text;
+mod columnar;
