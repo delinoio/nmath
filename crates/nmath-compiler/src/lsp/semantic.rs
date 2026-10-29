@@ -2,7 +2,11 @@
 //! language service. The direct mapper avoids the tsrs LSP process-spawn gap;
 //! remove this adapter when that server can host the NMath mapper itself.
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    sync::Arc,
+};
 
 use serde_json::{Value, json};
 use tsrs_compiler::{ProgramOptions, new_compiler_host, new_program};
@@ -73,11 +77,28 @@ pub fn query(
         settings["compilerOptions"]["target"] = json!("esnext");
         settings["compilerOptions"]["module"] = json!("nodenext");
     }
+    settings["files"] = json!([file]);
     files.insert(wrapper.clone(), settings.to_string());
     files.insert(format!("{cwd}/node_modules/{package}/package.json"), json!({
         "name":package,"version":"0.0.0",
         "typescript":{"contentMapper":{"exec":["nmath-in-process"],"outputExtensions":{".nts":".js"}}}
     }).to_string());
+    let plans =
+        crate::project::analyze_project(&files.clone().into_iter().collect(), &wrapper, &cwd)?;
+    let original_diagnostics = files
+        .get(&file)
+        .map(|text| {
+            nmath_nts::transform_with_plan(
+                &file,
+                text,
+                nmath_nts::TransformOptions {
+                    rewrite_import_extensions: false,
+                },
+                &plans.get(&file).cloned().unwrap_or_default(),
+            )
+            .diagnostics
+        })
+        .unwrap_or_default();
     let fs: Arc<dyn FS> = Arc::new(Snapshot::new(files));
     let host = ConfigHost {
         fs: fs.clone(),
@@ -126,7 +147,7 @@ pub fn query(
         &bundled::lib_path(),
         None,
         None,
-        Some(Arc::new(Mapper)),
+        Some(Arc::new(Mapper { plans })),
     );
     let mut options = ProgramOptions::new(config, compiler_host);
     options.single_threaded = Tristate::True;
@@ -196,6 +217,25 @@ pub fn query(
     .map_err(|error| format!("{error:?}"));
     if let Ok(value) = &mut result {
         map_response(program, &file, value, strict_ranges);
+        if !strict_ranges {
+            if let Some(items) = value.get_mut("items").and_then(Value::as_array_mut) {
+                // tsrs converts external byte offsets using the generated text.
+                // Rebuild mapper diagnostics from original source coordinates
+                // until its language service supports original external ranges.
+                items.retain(|d| d["source"] != "nmath");
+                let text = program
+                    .get_source_file(&file)
+                    .map(|f| f.original_text())
+                    .unwrap_or("");
+                items.extend(original_diagnostics.iter().map(|d| {
+                    json!({
+                        "range": super::range(text, d.start, d.start + d.length),
+                        "severity": 1, "code": d.code.as_str(), "source": "nmath",
+                        "message": format!("{}\n{}", d.message, d.recovery),
+                    })
+                }));
+            }
+        }
         if let Some(items) = value.get_mut("items").and_then(Value::as_array_mut) {
             items.retain(|item| {
                 item.get("label")
@@ -268,6 +308,19 @@ fn map_response(
         Value::Object(object) => {
             // Mapper-authored diagnostics already use original coordinates.
             if object.get("source").and_then(Value::as_str) == Some("nmath") {
+                if let Some(code) = object
+                    .get("code")
+                    .and_then(Value::as_i64)
+                    .and_then(|code| nmath_nts::DiagnosticCode::from_mapper_code(code as i32))
+                {
+                    object.insert("code".into(), json!(code.as_str()));
+                    if let Some(message) = object.get("message").and_then(Value::as_str) {
+                        object.insert(
+                            "message".into(),
+                            json!(format!("{message}\n{}", code.recovery())),
+                        );
+                    }
+                }
                 return true;
             }
             let target = object
@@ -422,7 +475,9 @@ impl Host for ServiceHost {
     }
 }
 
-struct Mapper;
+struct Mapper {
+    plans: BTreeMap<String, nmath_nts::semantic::LoweringPlan>,
+}
 impl mapper::Project for Mapper {
     fn refresh(&self) -> Result<(), mapper::Error> {
         Ok(())
@@ -453,12 +508,18 @@ impl mapper::Project for Mapper {
         _: &mapper::Mapper,
         request: mapper::Request<'_>,
     ) -> Result<mapper::TransformResultFiles, mapper::Error> {
-        let output = nmath_nts::transform_with_options(
+        let plan = self
+            .plans
+            .get(request.file_name)
+            .cloned()
+            .unwrap_or_default();
+        let output = nmath_nts::transform_with_plan(
             request.file_name,
             request.content,
             nmath_nts::TransformOptions {
                 rewrite_import_extensions: false,
             },
+            &plan,
         );
         let mappings =
             tsrs_spanmap::unmarshal(&serde_json::to_vec(&output.span_map.to_tuples()).unwrap())

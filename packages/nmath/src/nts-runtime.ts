@@ -20,15 +20,26 @@ import type {
 export { add, sub, mul, div, mod, pow } from "./index.js";
 export { indices, mask, slice } from "./core.js";
 
-export function neg<D extends ComputableDType, S extends Shape>(
-  a: Lazy<D, S>,
-): Expr<D, S> {
-  return a.neg();
+export function neg<
+  D extends Exclude<ComputableDType, "bool">,
+  S extends Shape,
+>(a: Lazy<NoInfer<D>, S> & { readonly dtype: D }): Expr<D, S> {
+  // TypeScript cannot resolve the conditional receiver for a generic dtype.
+  // D excludes bool above; widen only the internal call until it can.
+  return (a as unknown as Lazy<ComputableDType, S>).neg() as unknown as Expr<
+    D,
+    S
+  >;
 }
-export function pos<D extends ComputableDType, S extends Shape>(
-  a: Lazy<D, S>,
-): Expr<D, S> {
-  return a.pos();
+export function pos<
+  D extends Exclude<ComputableDType, "bool">,
+  S extends Shape,
+>(a: Lazy<NoInfer<D>, S> & { readonly dtype: D }): Expr<D, S> {
+  // Match neg: the public constraint excludes bool before this internal cast.
+  return (a as unknown as Lazy<ComputableDType, S>).pos() as unknown as Expr<
+    D,
+    S
+  >;
 }
 
 type Key = Selector | readonly Selector[];
@@ -45,7 +56,10 @@ export function get<
   D extends ComputableDType,
   S extends Shape,
   const K extends Key,
->(a: Lazy<D, S>, key: K): Expr<D, IndexShape<S, Axes<K>>> {
+>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  key: K,
+): Expr<D, IndexShape<S, Axes<K>>> {
   return a.get(...axes(key));
 }
 

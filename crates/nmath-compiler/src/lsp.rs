@@ -220,34 +220,11 @@ impl Server {
             .get(uri)
             .map(String::as_str)
             .unwrap_or_default();
-        let output = nmath_nts::transform(uri, text);
-        let mut diagnostics: Vec<Value> = output
-            .diagnostics
-            .iter()
-            .filter(|_| nmath_nts::is_nts_file(&tsrs_lsproto::DocumentUri(uri.into()).file_name()))
-            .map(|d| {
-                json!({
-                    "range": range(text, d.start, d.start + d.length),
-                    "severity": 1,
-                    "code": d.code.as_str(),
-                    "source": "nmath",
-                    "message": format!("{}\n{}", d.message, d.recovery),
-                })
-            })
-            .collect();
+        let mut diagnostics: Vec<Value> = Vec::new();
         match semantic::query(&self.documents, uri, semantic::Query::Diagnostics) {
             Ok(report) => {
                 if let Some(items) = report.get("items").and_then(Value::as_array) {
-                    diagnostics.extend(
-                        items
-                            .iter()
-                            .filter(|d| {
-                                // Keep the transform diagnostics above, with
-                                // stable NMath codes and recovery guidance.
-                                d.get("source").and_then(Value::as_str) != Some("nmath")
-                            })
-                            .cloned(),
-                    );
+                    diagnostics.extend(items.iter().cloned());
                 }
             }
             Err(message) => diagnostics.push(json!({

@@ -159,16 +159,7 @@ fn language_server_round_trip() {
         published["method"],
         json!("textDocument/publishDiagnostics")
     );
-    let diagnostic = &published["params"]["diagnostics"][0];
-    assert_eq!(diagnostic["code"], json!("NMATH_NTS_ASSIGN_REQUIRES_ASYNC"));
-    assert_eq!(
-        diagnostic["range"]["start"],
-        json!({ "line": 1, "character": 2 })
-    );
-    assert_eq!(
-        diagnostic["range"]["end"],
-        json!({ "line": 1, "character": 10 })
-    );
+    assert_eq!(published["params"]["diagnostics"], json!([]));
 
     lsp.send(&notification(
         "textDocument/didChange",
@@ -461,6 +452,45 @@ fn semantic_lsp_resolves_lexical_scope_and_plain_typescript_imports() {
         at(declaration, "x: number")
     );
     lsp.call(5, "shutdown", Value::Null);
+    lsp.send(&notification("exit", Value::Null));
+    assert_eq!(lsp.finish(), 0);
+}
+
+#[test]
+fn language_server_lowers_inferred_nmath_operations() {
+    let fixture = common::Fixture::new("lsp-lowering");
+    fixture.write("node_modules/@delinoio/nmath/package.json", r#"{"name":"@delinoio/nmath","type":"module","exports":{".":"./core.d.ts","./nts-runtime":"./nts-runtime.d.ts"}}"#);
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.d.ts",
+        "export declare class NMathArray { private arrayBrand; }\nexport declare class Expr { \
+         private exprBrand; }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.d.ts",
+        "import {NMathArray, Expr} from './core.js';\nexport declare function \
+         add(a:NMathArray|Expr,b:NMathArray|Expr):Expr;\nexport declare function \
+         set<T>(a:NMathArray,i:number,v:T):Promise<T>;\n",
+    );
+    let uri = format!("file://{}", fixture.path("src/main.nts").display());
+    let source = "import {NMathArray} from '@delinoio/nmath';\ndeclare const a:NMathArray;\nconst \
+                  b=a+a;\nexport const c=b+b;\nexport function update(){ a[0]=1; }\n";
+    let mut lsp = Session::start("lsp");
+    lsp.call(1, "initialize", json!({"capabilities":{}}));
+    open_document(&mut lsp, &uri, source);
+    let published = lsp.receive();
+    let diagnostics = published["params"]["diagnostics"].as_array().unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d["code"] == "NMATH_NTS_ASSIGN_REQUIRES_ASYNC"
+                && d["range"]["start"]["line"] == 4),
+        "{published}"
+    );
+    let edited = source.replace("function update", "async function update");
+    change_document(&mut lsp, &uri, 2, &edited);
+    let published = lsp.receive();
+    assert_eq!(published["params"]["diagnostics"], json!([]), "{published}");
+    lsp.call(2, "shutdown", Value::Null);
     lsp.send(&notification("exit", Value::Null));
     assert_eq!(lsp.finish(), 0);
 }
