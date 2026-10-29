@@ -906,8 +906,8 @@ mod random_tests {
         .unwrap();
         let result = rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(
-            rx.try_recv(),
-            Err(mpsc::TryRecvError::Disconnected)
+            rx.recv_timeout(Duration::from_secs(1)),
+            Err(mpsc::RecvTimeoutError::Disconnected)
         ));
         result
     }
