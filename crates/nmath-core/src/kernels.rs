@@ -412,11 +412,18 @@ pub fn reduce(
     let out_len: usize = out_shape.iter().product();
     let in_dtype = input.dtype();
     let dtype = op.result_dtype(in_dtype);
-    if matches!(op, ReduceOp::Min | ReduceOp::Max) && input.size() == 0 {
+    // Only an empty reduced dimension lacks an identity; empty kept dimensions
+    // simply produce an empty result.
+    let empty_reduction = input
+        .shape
+        .iter()
+        .zip(&reduced)
+        .any(|(&len, &r)| r && len == 0);
+    if matches!(op, ReduceOp::Min | ReduceOp::Max) && empty_reduction {
         return Err(Error::new(
             ErrorCode::ShapeMismatch,
             format!(
-                "A zero-size array has no identity for the '{}' reduction.",
+                "The '{}' reduction has no identity over a zero-size axis.",
                 op.id()
             ),
         ));
@@ -717,6 +724,25 @@ mod tests {
             reduce(ReduceOp::Sum, &empty, None, &b, &t).unwrap().buffer,
             Buffer::F64(vec![0.0])
         );
+    }
+
+    #[test]
+    fn min_max_allow_empty_inputs_with_nonempty_reduced_axes() {
+        // NumPy 2.5.4: np.zeros((0, 2)).min(axis=1) has shape (0,), while
+        // np.zeros((0, 2)).max(axis=0) raises ValueError.
+        let (b, t) = env();
+        let empty = dense(vec![0, 2], Buffer::F64(vec![]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            let r = reduce(op, &empty, Some(&[1]), &b, &t).unwrap();
+            assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::F64(vec![])));
+            assert_eq!(
+                reduce(op, &empty, Some(&[0]), &b, &t).unwrap_err().code,
+                ErrorCode::ShapeMismatch
+            );
+        }
+        let ints = dense(vec![0, 2], Buffer::I32(vec![]));
+        let r = reduce(ReduceOp::Max, &ints, Some(&[-1]), &b, &t).unwrap();
+        assert_eq!((r.shape.clone(), r.buffer), (vec![0], Buffer::I32(vec![])));
     }
 
     #[test]
