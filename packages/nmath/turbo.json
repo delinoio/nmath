@@ -1,0 +1,21 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build:native": {
+      "cache": false,
+      "outputs": ["native/**"]
+    },
+    "build": {
+      "dependsOn": ["^build", "build:native"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck", "build:native"]
+    },
+    "test": {
+      "dependsOn": ["^build", "build"],
+      "cache": false
+    }
+  }
+}

@@ -45,7 +45,9 @@ pub struct NdArray {
 }
 
 impl NdArray {
-    pub(crate) fn from_dense(context_id: u64, dense: DenseArray) -> NdArray {
+    /// Wraps an owned dense array (already charged to its budget) as new
+    /// storage.
+    pub fn from_dense(context_id: u64, dense: DenseArray) -> NdArray {
         let strides = contiguous_strides(&dense.shape);
         NdArray {
             storage: Arc::new(Storage {

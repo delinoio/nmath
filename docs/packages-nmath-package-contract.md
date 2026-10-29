@@ -50,6 +50,7 @@ All four options are required. `ctx.close(): Promise<void>` follows the runtime 
 - `expr.compute({ device?: 'cpu' | 'gpu', signal?: AbortSignal }): Promise<Result>` runs one independent job.
 - Results with rank 0 are JS scalars: `number` for floating and 32-bit-or-smaller integer dtypes, `bigint` for 64-bit integers, `boolean` and `string`. Complex values use the lossless `Complex` class. Other results are `NMathArray` values.
 - Explicit lossy conversions: `toNumber()`, `toDate()`.
+- Weak operand scalars follow NumPy NEP 50 with a fixed JS mapping: `number` acts as a Python `float`, `bigint` as a Python `int` and `boolean` as a Python `bool`.
 
 ### Typing
 
