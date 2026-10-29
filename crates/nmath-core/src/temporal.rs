@@ -118,7 +118,9 @@ pub fn milliseconds(tick: i64, from: TimeUnit) -> Result<i64> {
     let value = if from.calendar() {
         let months =
             tick as i128 * from.step as i128 * if from.base == TimeBase::Year { 12 } else { 1 };
-        days_from_month(months) * 86400000
+        days_from_month(months)
+            .checked_mul(86400000)
+            .ok_or_else(overflow)?
     } else {
         let ms = TimeUnit::parse("ms")?;
         let (mut a, mut b) = (from.scale(), ms.scale());
@@ -185,6 +187,14 @@ mod tests {
             convert(i64::MAX, unit("M"), unit("Y"), true).unwrap(),
             i64::MAX / 12
         );
+    }
+    #[test]
+    fn calendar_milliseconds_reject_intermediate_overflow() {
+        for tick in [5021401446218110977, -5021401446218110977, i64::MAX] {
+            assert!(milliseconds(tick, unit("2147432158Y")).is_err());
+        }
+        assert_eq!(milliseconds(0, unit("2147432158Y")).unwrap(), 0);
+        assert_eq!(milliseconds(1, unit("Y")).unwrap(), 31536000000);
     }
     #[test]
     fn metadata_and_unicode_storage_follow_view_lifetime_and_budget() {
