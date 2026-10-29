@@ -51,7 +51,7 @@ Small signed and unsigned integers use one-byte (`int8`, `uint8`) or two-byte (`
 ### Memory accounting
 
 - `MemoryBudget` tracks `used`, `peak` and `limit` separately for `cpu` and `gpu`. `reserve(bytes)` fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before any allocation when `used + bytes > limit`.
-- Inputs, snapshots, intermediates and results are all charged. Charges release on drop.
+- Inputs, snapshots, intermediates and results are all charged. Charges release on drop. GPU execution charges snapshots and host results to the CPU budget, and upload, storage, parameter, status and readback buffers to the GPU budget. Submitted allocations stay charged until device work finishes, including after cancellation. Driver and compiler internal allocations are outside the managed-allocation accounting boundary.
 
 ### Random generation
 
@@ -93,6 +93,8 @@ Every error message is English and includes recovery guidance.
 ### GPU subset
 
 GPU jobs support `float32`, `int32` and `uint32` arrays for elementwise `add`, `sub`, `mul`, `div`, `mod`, `pow`, `pos`, `neg`, broadcasting, `sum`, `mean`, `min`, `max` and `matmul`. Any other dtype or operation fails with `NMATH_GPU_UNSUPPORTED_OPERATION` before queue admission when the condition is known statically.
+
+GPU initialization occurs only on an execution worker after admission. Native backend selection is restricted to Metal on macOS arm64, Vulkan on Linux x64 glibc and DX12 on Windows x64. Software adapters are rejected. Device discovery, allocation and device-loss errors remain distinct; execution never retries or falls back. Float32 execution requires preservation of subnormal arithmetic. A device that fails the precision probe is rejected; passing that probe alone is not numerical acceptance or an official hardware allowlist.
 
 ## Storage
 

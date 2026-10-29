@@ -9,6 +9,7 @@ pub mod context;
 pub mod dtype;
 pub mod error;
 pub mod expr;
+pub mod gpu;
 pub mod io;
 pub mod kernels;
 pub mod memory;

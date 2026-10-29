@@ -170,7 +170,7 @@ The `@delinoio/nmath/compiler` entry point exposes asynchronous `check({ tsconfi
 
 GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmetic, broadcasting, `sum`, `mean`, `min`, `max` and `matmul` on macOS arm64 (Metal), Linux x64 glibc (Vulkan) and Windows x64 (DX12). NMath never falls back to the CPU, never lowers precision and never retries. Unsupported dtypes or operations reject with `NMATH_GPU_UNSUPPORTED_OPERATION` before the job is queued.
 
-> The GPU backend is not in this prerelease. GPU requests in the supported subset reject with `NMATH_GPU_UNAVAILABLE`. NMath makes no official GPU support claim until tested hardware combinations are published.
+> GPU acceptance remains incomplete. Native execution rejects devices that cannot preserve required float32 subnormal arithmetic with `NMATH_GPU_UNAVAILABLE`. No fallback or relaxed precision is used. NMath makes no official GPU support claim until the complete tested hardware matrix is published.
 
 ## Files
 
@@ -196,7 +196,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`          | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
 | Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                  | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
 | `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                           | Marketplace publication and editor acceptance                                                                                                 |
-| GPU                  | —                                                                                                               | GPU backend                                                                                                                                   |
+| GPU                  | Native backend with strict device and precision rejection                                                       | Complete numerical and hardware acceptance                                                                                                    |
 
 ## Build from source
 

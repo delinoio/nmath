@@ -356,9 +356,12 @@ test("GPU execution fails without CPU fallback", async () => {
     "NMATH_GPU_UNSUPPORTED_OPERATION",
   );
   const f32 = ctx.array([1], { dtype: "float32" });
-  await rejectsWith(
-    f32.add(1).compute({ device: "gpu" }),
-    "NMATH_GPU_UNAVAILABLE",
+  // A zero GPU budget cannot execute, whether discovery fails first or
+  // a native adapter reaches the allocation check.
+  await assert.rejects(f32.add(1).compute({ device: "gpu" }), (error) =>
+    ["NMATH_GPU_UNAVAILABLE", "NMATH_MEMORY_BUDGET_EXCEEDED"].includes(
+      error.code,
+    ),
   );
   await ctx.close();
 });

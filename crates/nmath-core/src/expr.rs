@@ -279,37 +279,7 @@ impl Expr {
     /// Checks the GPU subset statically. Errors here reject `compute()` before
     /// admission.
     pub fn check_gpu_support(&self) -> Result<()> {
-        let mut problem = None;
-        self.visit(&mut |e| {
-            if problem.is_some() {
-                return;
-            }
-            let dtype_ok = matches!(e.dtype(), DType::Float32 | DType::Int32 | DType::UInt32);
-            let op_ok = match &e.0.kind {
-                ExprKind::Input(_)
-                | ExprKind::Scalar(_)
-                | ExprKind::Unary(..)
-                | ExprKind::Binary { .. }
-                | ExprKind::Reduce(..)
-                | ExprKind::MatMul(..) => true,
-                ExprKind::Index(..) | ExprKind::Cast(..) | ExprKind::Random(..) => false,
-            };
-            // Weak scalars adopt the array dtype, so their own default dtype
-            // does not matter.
-            let is_scalar = matches!(e.0.kind, ExprKind::Scalar(_));
-            if !op_ok || (!dtype_ok && !is_scalar) {
-                problem = Some(Error::new(
-                    ErrorCode::GpuUnsupportedOperation,
-                    format!(
-                        "The GPU does not support '{}' with dtype '{}'. Convert explicitly or run \
-                         on 'cpu'.",
-                        e.operation_id(),
-                        e.dtype().id()
-                    ),
-                ));
-            }
-        });
-        problem.map_or(Ok(()), Err)
+        crate::gpu::validate(self)
     }
 }
 
@@ -371,6 +341,7 @@ pub enum Value {
 pub struct JobEnv {
     pub device: Device,
     pub budget: MemoryBudget,
+    pub gpu_budget: Option<MemoryBudget>,
     pub token: CancellationToken,
     snapshots: HashMap<*const NdArray, DenseArray>,
     rng: Vec<(Generator, Pcg64)>,
@@ -385,6 +356,7 @@ impl JobEnv {
         Self {
             device,
             budget,
+            gpu_budget: None,
             token,
             snapshots: HashMap::new(),
             rng: Vec::new(),
@@ -438,8 +410,20 @@ impl JobEnv {
         DenseArray::new(d.shape.clone(), d.buffer.clone(), reservation)
     }
 
-    /// Evaluates `expr` on the CPU.
+    /// Evaluates `expr` on the explicitly requested device.
     pub fn eval(&mut self, expr: &Expr) -> Result<Value> {
+        if self.device == Device::Gpu {
+            let gpu = self.gpu_budget.as_ref().ok_or_else(|| {
+                Error::new(
+                    ErrorCode::ContextInvalidOptions,
+                    "The GPU budget is missing.",
+                )
+            })?;
+            return crate::gpu::execute(expr, &self.budget, gpu, &self.token, |array| {
+                self.snapshot(array)
+            })
+            .map(Value::Dense);
+        }
         if let ExprKind::Index(inner, selectors) = &expr.0.kind
             && let ExprKind::Input(array) = &inner.0.kind
             && selectors.iter().all(Selector::is_basic)
