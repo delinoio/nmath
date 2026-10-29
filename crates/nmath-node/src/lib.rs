@@ -172,6 +172,28 @@ fn buffer_from_bytes(dtype: DType, bytes: &[u8]) -> Result<CoreBuffer> {
         DType::UInt64 => read!(u64),
         DType::Float32 => read!(f32),
         DType::Float64 => read!(f64),
+        DType::Complex64 => CoreBuffer::C64(
+            bytes
+                .chunks_exact(8)
+                .map(|c| {
+                    [
+                        f32::from_ne_bytes(c[..4].try_into().unwrap()),
+                        f32::from_ne_bytes(c[4..].try_into().unwrap()),
+                    ]
+                })
+                .collect(),
+        ),
+        DType::Complex128 => CoreBuffer::C128(
+            bytes
+                .chunks_exact(16)
+                .map(|c| {
+                    [
+                        f64::from_ne_bytes(c[..8].try_into().unwrap()),
+                        f64::from_ne_bytes(c[8..].try_into().unwrap()),
+                    ]
+                })
+                .collect(),
+        ),
         _ => unreachable!(),
     })
 }
@@ -189,7 +211,21 @@ fn buffer_to_bytes(buffer: &CoreBuffer) -> Vec<u8> {
         CoreBuffer::U64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::F32(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
         CoreBuffer::F64(v) => v.iter().flat_map(|x| x.to_ne_bytes()).collect(),
+        CoreBuffer::C64(v) => v
+            .iter()
+            .flat_map(|z| z.iter().flat_map(|x| x.to_ne_bytes()))
+            .collect(),
+        CoreBuffer::C128(v) => v
+            .iter()
+            .flat_map(|z| z.iter().flat_map(|x| x.to_ne_bytes()))
+            .collect(),
     }
+}
+
+#[napi(object)]
+pub struct NativeComplex {
+    pub real: f64,
+    pub imag: f64,
 }
 
 #[napi]
@@ -223,18 +259,19 @@ impl NativeArray {
     /// Reads one element. 64-bit integers are returned as bigint so they stay
     /// exact.
     #[napi]
-    pub fn item(&self, index: Vec<i64>) -> Result<Either3<f64, BigInt, bool>> {
+    pub fn item(&self, index: Vec<i64>) -> Result<Either4<f64, BigInt, bool, NativeComplex>> {
         let array = self.get()?;
         let wide = matches!(array.dtype(), DType::Int64 | DType::UInt64);
         let value = array.get_scalar(&index).map_err(to_napi)?;
         Ok(match value {
-            Scalar::Bool(b) => Either3::C(b),
-            Scalar::Int(i) if wide => Either3::B(BigInt::from(i)),
-            Scalar::UInt(u) if wide => Either3::B(BigInt::from(u)),
+            Scalar::Bool(b) => Either4::C(b),
+            Scalar::Int(i) if wide => Either4::B(BigInt::from(i)),
+            Scalar::UInt(u) if wide => Either4::B(BigInt::from(u)),
             // 32-bit integers are exact as JS numbers.
-            Scalar::Int(i) => Either3::A(i as f64),
-            Scalar::UInt(u) => Either3::A(u as f64),
-            Scalar::Float(f) => Either3::A(f),
+            Scalar::Int(i) => Either4::A(i as f64),
+            Scalar::UInt(u) => Either4::A(u as f64),
+            Scalar::Float(f) => Either4::A(f),
+            Scalar::Complex([real, imag]) => Either4::D(NativeComplex { real, imag }),
         })
     }
 
@@ -269,6 +306,13 @@ impl NativeExpr {
         Ok(Self {
             inner: Expr::input(array.get()?),
         })
+    }
+
+    #[napi(factory)]
+    pub fn complex_scalar(real: f64, imag: f64) -> Self {
+        Self {
+            inner: Expr::scalar(Scalar::Complex([real, imag])),
+        }
     }
 
     #[napi(factory)]

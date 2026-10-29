@@ -64,8 +64,27 @@ await a.set([0, 0], 100); // atomic, asynchronous write
 | `float32`, `float64`, `int8`, `int16`, `int32`, `uint8`, `uint16`, `uint32` | `number`  |
 | `int64`, `uint64`                                                           | `bigint`  |
 | `bool`                                                                      | `boolean` |
+| `complex64`, `complex128`                                                   | `Complex` |
+
+A `Complex` operand acts like a Python `complex`. Adding it to `float32` produces `complex64`, while adding it to an integer array produces `complex128`.
 
 As operands, a JS `number` acts like a Python `float`, a `bigint` like a Python `int` and a `boolean` like a Python `bool` (NumPy NEP 50 rules). For example, `int32Array.add(1n)` stays `int32`, and `int32Array.add(1)` becomes `float64`.
+
+```ts
+import { Complex } from "@delinoio/nmath";
+
+const z = ctx.array([new Complex(1, 2), new Complex(3, -4)], {
+  dtype: "complex64",
+});
+const total: Complex = await z.sum().compute();
+console.log(total.real, total.imag); // 4, -2
+const parts: Float32Array = z.toTypedArray(); // [1, 2, 3, -4]
+const restored = ctx.array(parts, { dtype: "complex64" });
+```
+
+`Complex` stores separate `real` and `imag` numbers. Complex scalar reads and rank-0 results retain both components. `toTypedArray()` returns interleaved real/imaginary components: `Float32Array` for `complex64`, `Float64Array` for `complex128`. Array shapes count complex elements. Nested array input uses `Complex` instances.
+
+Numeric conversion is explicit: `value.toNumber()` returns only the real component, and `array.astype("float64")` discards imaginary components. Assigning complex values to a real numeric array requires that explicit cast first. Complex-to-boolean casts test both components. Complex remainder is undefined and is rejected; the other listed arithmetic operations support complex arrays. Complex min/max compare real components first, then imaginary components, and propagate NaNs. Complex arrays execute on the CPU.
 
 ## Types
 
@@ -176,6 +195,8 @@ GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmet
 
 `array.save(path, { overwrite })` writes NPY files and `ctx.load(path)` reads them. NMath never replaces an existing file unless you pass `overwrite: true`. Output goes to a temporary file that is renamed into place, so cancellation or failure leaves the original file unchanged. Keep input files unchanged while a job reads them; NMath reports changes it detects with `NMATH_IO_MODIFIED`, but it cannot detect every change.
 
+Complex NPY output uses little-endian components in C order. Complex NPY input accepts either byte order and C or Fortran order. Loading preserves dtype, logical shape and both components.
+
 ## Errors
 
 Every failure is an `NMathError` with a stable `code` (for example `NMATH_SCHED_QUEUE_FULL`) and an English message with recovery guidance. Error messages and measurements never include input data, file paths or file contents. NMath sends no telemetry. `ctx.metrics()` returns per-execution status and timing and memory use, so you can collect measurements yourself. Set `NMATH_LOG=debug` to write structured native logs to stderr (`NO_COLOR` disables color).
@@ -184,19 +205,19 @@ Every failure is an `NMathError` with a stable `code` (for example `NMATH_SCHED_
 
 Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease covers a small part of each library. Every API not listed as available is a planned support target unless a published exclusion says otherwise.
 
-| Area                 | Available now                                                                                                   | Not yet available                                                                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`          | complex, string, datetime, timedelta, categorical, structured                                                                                 |
-| NumPy arithmetic     | `+ - * / % **`, unary `+ -`, broadcasting, NEP 50 promotion                                                     | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                  |
-| NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                              | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                              |
-| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment | several advanced selectors combined, `newaxis`, ellipsis                                                                                      |
-| NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                        | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                 |
-| NumPy random         | `default_rng(seed).random(shape)` with NumPy-identical PCG64 streams                                            | other distributions and bit generators                                                                                                        |
-| NumPy I/O            | NPY (C order, little endian)                                                                                    | NPZ, Fortran order                                                                                                                            |
-| pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`          | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
-| Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                  | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
-| `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                           | Marketplace publication and editor acceptance                                                                                                 |
-| GPU                  | Native backend with strict device and precision rejection                                                       | Complete numerical and hardware acceptance                                                                                                    |
+| Area                 | Available now                                                                                                                     | Not yet available                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dtypes               | `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `complex64`, `complex128` | float16, extended precision, string, datetime, timedelta, categorical, structured                                                             |
+| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                          | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                  |
+| NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                              |
+| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                   | several advanced selectors combined, `newaxis`, ellipsis                                                                                      |
+| NumPy linear algebra | `matmul` for 1-D and 2-D                                                                                                          | batched `matmul`, `linalg`, `fft`, polynomials, masked arrays                                                                                 |
+| NumPy random         | `default_rng(seed).random(shape)` with NumPy-identical PCG64 streams                                                              | other distributions and bit generators                                                                                                        |
+| NumPy I/O            | NPY (C order, little endian; complex input also supports big endian and Fortran order)                                            | NPZ; Fortran-order input for non-complex dtypes                                                                                               |
+| pandas               | `Series` arithmetic and reductions, `iloc`, `DataFrame` construction, `get`, `assign`, `select`, `sum`                            | indexes and labels, missing values, joins, group-by, pivots, windows, time series, string and categorical methods, CSV/JSON/Parquet/Arrow I/O |
+| Polars               | `Series`, `DataFrame`, `col` arithmetic, `alias`, `LazyFrame.select`, `withColumns`, `collect`                                    | filters, joins, group-by, windows, streaming execution, string and temporal namespaces, file I/O                                              |
+| `.nts` compiler      | Project checking, ESM/declarations/original-source maps, semantic LSP                                                             | Marketplace publication and editor acceptance                                                                                                 |
+| GPU                  | Native backend with strict device and precision rejection                                                                         | Complete numerical and hardware acceptance                                                                                                    |
 
 ## Build from source
 

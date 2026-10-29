@@ -52,9 +52,15 @@ Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones
 - `expr.compute({ device?: 'cpu' | 'gpu', signal?: AbortSignal }): Promise<Result>` runs one independent job.
 - Results with rank 0 are JS scalars: `number` for floating and 32-bit-or-smaller integer dtypes, `bigint` for 64-bit integers, `boolean` and `string`. Complex values use the lossless `Complex` class. Other results are `NMathArray` values.
 - Explicit lossy conversions: `toNumber()`, `toDate()`.
-- Weak operand scalars follow NumPy NEP 50 with a fixed JS mapping: `number` acts as a Python `float`, `bigint` as a Python `int` and `boolean` as a Python `bool`.
+- Weak operand scalars follow NumPy NEP 50 with a fixed JS mapping: `number` acts as a Python `float`, `bigint` as a Python `int` and `boolean` as a Python `bool`. `Complex` acts as a Python `complex` weak operand.
 
 Small integer arrays exchange data through `Int8Array`, `Int16Array`, `Uint8Array` and `Uint16Array`. Scalar reads return `number`; signed and unsigned small-integer sums return `bigint`. Array-to-array promotion follows NumPy, including `int8` with `uint8` becoming `int16`, and `float32` with any 8-bit or 16-bit integer remaining `float32`.
+
+`new Complex(real, imag = 0)` is the dedicated immutable complex scalar. `real` and `imag` are JS numbers and preserve both IEEE-754 components, including signed zeros and non-finite values. `item()`, nested `toArray()` output and rank-0 `compute()` results return `Complex` for complex dtypes. Implicit numeric conversion throws; `Complex.toNumber()` explicitly returns the real component and discards the imaginary component.
+
+Complex array creation accepts nested `Complex` values or interleaved typed-array components in real/imaginary order. `complex64` requires `Float32Array`; `complex128` requires `Float64Array`. Typed input must contain an even number of components. Shape counts complex elements, not components. `toTypedArray()` returns an independent interleaved copy with the corresponding floating type. `full()` takes a `Complex` scalar and `zeros()` creates complex zero values.
+
+Complex arithmetic, unary operations, reductions, indexing, writes, copies, explicit casts and 1-D/2-D matrix multiplication follow the runtime contract. Complex remainder is rejected by ordinary TypeScript declarations and by runtime expression validation. Complex GPU computation remains outside the GPU dtype subset.
 
 ### Typing
 

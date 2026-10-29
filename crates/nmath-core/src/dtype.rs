@@ -31,6 +31,7 @@ pub enum DTypeKind {
     Bool,
     Int,
     Float,
+    Complex,
     Other,
 }
 
@@ -103,6 +104,8 @@ impl DType {
                 | DType::UInt64
                 | DType::Float32
                 | DType::Float64
+                | DType::Complex64
+                | DType::Complex128
         )
     }
 
@@ -129,6 +132,7 @@ impl DType {
             | DType::UInt32
             | DType::UInt64 => DTypeKind::Int,
             DType::Float32 | DType::Float64 => DTypeKind::Float,
+            DType::Complex64 | DType::Complex128 => DTypeKind::Complex,
             _ => DTypeKind::Other,
         }
     }
@@ -175,6 +179,20 @@ impl DType {
         if kb == DTypeKind::Bool {
             return Ok(a);
         }
+        if ka == DTypeKind::Complex || kb == DTypeKind::Complex {
+            let other = if ka == DTypeKind::Complex { b } else { a };
+            return Ok(
+                if a == DType::Complex128
+                    || b == DType::Complex128
+                    || other == DType::Float64
+                    || (other.kind() == DTypeKind::Int && other.bits() > 16)
+                {
+                    DType::Complex128
+                } else {
+                    DType::Complex64
+                },
+            );
+        }
         match (ka, kb) {
             (DTypeKind::Float, DTypeKind::Float) => Ok(if a.bits() >= b.bits() { a } else { b }),
             (DTypeKind::Float, DTypeKind::Int) => Ok(float_for_int(a, b)),
@@ -189,6 +207,14 @@ impl DType {
     pub fn promote_weak(array: DType, scalar: ScalarKind) -> Result<DType> {
         array.ensure_computable()?;
         Ok(match (array.kind(), scalar) {
+            (DTypeKind::Bool | DTypeKind::Int, ScalarKind::Complex) => DType::Complex128,
+            (DTypeKind::Float, ScalarKind::Complex) => {
+                if array == DType::Float32 {
+                    DType::Complex64
+                } else {
+                    DType::Complex128
+                }
+            }
             (DTypeKind::Bool, ScalarKind::Bool) => DType::Bool,
             (DTypeKind::Bool, ScalarKind::Int) => DType::Int64,
             (DTypeKind::Bool | DTypeKind::Int, ScalarKind::Float) => DType::Float64,
@@ -199,7 +225,7 @@ impl DType {
     /// Dtype of true division (`/`) and `mean`.
     pub fn true_divide(self) -> DType {
         match self.kind() {
-            DTypeKind::Float => self,
+            DTypeKind::Float | DTypeKind::Complex => self,
             _ => DType::Float64,
         }
     }
@@ -220,6 +246,7 @@ pub enum ScalarKind {
     Bool,
     Int,
     Float,
+    Complex,
 }
 
 /// NumPy promotes an integer with a float to the smallest float that holds the
@@ -301,7 +328,7 @@ mod tests {
 
     #[test]
     fn uncomputable_dtypes_are_rejected() {
-        let err = DType::promote(DType::Complex128, DType::Float64).unwrap_err();
+        let err = DType::promote(DType::Str, DType::Float64).unwrap_err();
         assert_eq!(err.code, ErrorCode::DTypeUnsupported);
     }
 }

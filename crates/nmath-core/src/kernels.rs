@@ -7,7 +7,7 @@ use crate::{
     dtype::{DType, DTypeKind},
     error::{Error, ErrorCode, Result},
     memory::MemoryBudget,
-    shape::{broadcast_shapes, broadcast_strides, for_each_offset},
+    shape::{broadcast_shapes, broadcast_strides},
     sync::CancellationToken,
 };
 
@@ -54,6 +54,12 @@ impl BinaryOp {
 
     /// Result dtype given the promoted operand dtype.
     pub fn result_dtype(self, promoted: DType) -> Result<DType> {
+        if promoted.kind() == DTypeKind::Complex && self == BinaryOp::Mod {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Remainder is not defined for complex operands. Use real operands.",
+            ));
+        }
         if promoted == DType::Bool && matches!(self, BinaryOp::Sub | BinaryOp::Mod | BinaryOp::Pow)
         {
             return Err(Error::new(
@@ -116,7 +122,18 @@ impl ReduceOp {
 /// Elements processed between cancellation checks.
 const CHUNK: usize = 1 << 14;
 
-trait Num: Copy + PartialOrd + Send + Sync {
+trait Num: Copy + PartialOrd + Send + Sync + Default {
+    fn nan(self) -> bool {
+        false
+    }
+    fn take_equal() -> bool {
+        true
+    }
+    fn pairwise_sum(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
+        Ok(None)
+    }
+    fn mean(self, count: usize) -> Self;
+
     fn add(a: Self, b: Self) -> Self;
     fn sub(a: Self, b: Self) -> Self;
     fn mul(a: Self, b: Self) -> Self;
@@ -129,6 +146,7 @@ trait Num: Copy + PartialOrd + Send + Sync {
 macro_rules! int_num {
     ($($t:ty),*) => {$(
         impl Num for $t {
+            fn mean(self, count: usize) -> Self { self / count as $t }
             fn add(a: Self, b: Self) -> Self { a.wrapping_add(b) }
             fn sub(a: Self, b: Self) -> Self { a.wrapping_sub(b) }
             fn mul(a: Self, b: Self) -> Self { a.wrapping_mul(b) }
@@ -171,6 +189,8 @@ int_num!(i8, i16, u8, u16, i32, i64, u32, u64);
 macro_rules! float_num {
     ($($t:ty),*) => {$(
         impl Num for $t {
+            fn nan(self) -> bool { self.is_nan() }
+            fn mean(self, count: usize) -> Self { self / count as $t }
             fn add(a: Self, b: Self) -> Self { a + b }
             fn sub(a: Self, b: Self) -> Self { a - b }
             fn mul(a: Self, b: Self) -> Self { a * b }
@@ -187,6 +207,136 @@ macro_rules! float_num {
 }
 float_num!(f32, f64);
 
+// Complex operations keep component precision. Division uses a ratio to avoid
+// squaring the denominator. Power handles zero and small integer exponents
+// before the logarithmic path, as NumPy 2.5.4 does.
+macro_rules! complex_num {
+    ($($t:ty),*) => {$(
+        impl Num for [$t; 2] {
+            fn take_equal() -> bool { false }
+            fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+                token.check()?;
+                let n = values.len();
+                let sum = if n < 4 {
+                    values.iter().fold([-0.0, -0.0], |a, &b| Self::add(a, b))
+                } else if n <= 64 {
+                    // Four complex lanes keep the component addition order of
+                    // NumPy's eight real-component pairwise accumulators.
+                    let mut lanes = [values[0], values[1], values[2], values[3]];
+                    let end = n - n % 4;
+                    for i in (4..end).step_by(4) {
+                        for j in 0..4 { lanes[j] = Self::add(lanes[j], values[i+j]); }
+                    }
+                    let mut total = Self::add(Self::add(lanes[0], lanes[1]), Self::add(lanes[2], lanes[3]));
+                    for &value in &values[end..] { total = Self::add(total, value); }
+                    total
+                } else {
+                    let mid = (n/2) / 4 * 4;
+                    Self::add(Self::pairwise_sum(&values[..mid], token)?.unwrap(), Self::pairwise_sum(&values[mid..], token)?.unwrap())
+                };
+                Ok(Some(sum))
+            }
+            fn nan(self) -> bool { self[0].is_nan() || self[1].is_nan() }
+            fn mean(self, count: usize) -> Self { Self::div(self, [count as $t, 0.0]) }
+            fn add(a: Self, b: Self) -> Self { [a[0] + b[0], a[1] + b[1]] }
+            fn sub(a: Self, b: Self) -> Self { [a[0] - b[0], a[1] - b[1]] }
+            fn mul(a: Self, b: Self) -> Self { [a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0]] }
+            fn div(a: Self, b: Self) -> Self {
+                if b[0].abs() >= b[1].abs() {
+                    if b[0] == 0.0 && b[1] == 0.0 { return [a[0]/b[0].abs(), a[1]/b[1].abs()]; }
+                    let r = b[1]/b[0];
+                    let scale = 1.0/(b[0]+b[1]*r);
+                    [(a[0]+a[1]*r)*scale, (a[1]-a[0]*r)*scale]
+                } else {
+                    let r = b[0]/b[1];
+                    let scale = 1.0/(b[1]+b[0]*r);
+                    [(a[0]*r+a[1])*scale, (a[1]*r-a[0])*scale]
+                }
+            }
+            fn rem(_: Self, _: Self) -> Self { unreachable!("complex remainder is rejected before execution") }
+            fn pow(a: Self, b: Self) -> Result<Self> {
+                if b == [0.0, 0.0] { return Ok([1.0, 0.0]); }
+                if a == [0.0, 0.0] { return Ok(if b[0] > 0.0 { [0.0, 0.0] } else { [<$t>::NAN; 2] }); }
+                if b[1] == 0.0 && b[0] > -100.0 && b[0] < 100.0 && b[0].trunc() == b[0] {
+                    if b[0] == 1.0 { return Ok(a); }
+                    if b[0] == 2.0 { return Ok(Self::mul(a, a)); }
+                    if b[0] == 3.0 { return Ok(Self::mul(a, Self::mul(a, a))); }
+                    let mut n = b[0].abs() as u32;
+                    let (mut base, mut result) = (a, [1.0, 0.0]);
+                    while n != 0 {
+                        if n & 1 != 0 { result = Self::mul(result, base); }
+                        n >>= 1;
+                        if n != 0 { base = Self::mul(base, base); }
+                    }
+                    return Ok(if b[0] < 0.0 { Self::div([1.0, 0.0], result) } else { result });
+                }
+                let log_r = a[0].hypot(a[1]).ln();
+                let theta = a[1].atan2(a[0]);
+                let mut exponent = b[0]*log_r - b[1]*theta;
+                let mut angle = b[0]*theta + b[1]*log_r;
+                // C99 multiplication used by complex power recovers infinite
+                // products when both preliminary components are NaN.
+                if exponent.is_nan() && angle.is_nan() && (log_r.is_infinite() || b[0].is_infinite() || b[1].is_infinite()) {
+                    let normalize = |z: [$t; 2]| {
+                        if z[0].is_infinite() || z[1].is_infinite() {
+                            z.map(|v| (if v.is_infinite() { 1.0 as $t } else { 0.0 as $t }).copysign(v))
+                        } else { z.map(|v| if v.is_nan() { (0.0 as $t).copysign(v) } else { v }) }
+                    };
+                    let l = normalize([log_r, theta]);
+                    let r = normalize(b);
+                    exponent = <$t>::INFINITY * (l[0]*r[0]-l[1]*r[1]);
+                    angle = <$t>::INFINITY * (l[0]*r[1]+l[1]*r[0]);
+                }
+                // Preserve the fixed NumPy oracle's non-finite power components.
+                // A negative infinite phase differs from a positive one.
+                if exponent == <$t>::INFINITY && !angle.is_finite() {
+                    return Ok([if angle == <$t>::NEG_INFINITY { <$t>::NAN } else { exponent }, <$t>::NAN]);
+                }
+                if exponent == <$t>::NEG_INFINITY && !angle.is_finite() { return Ok([0.0, 0.0]); }
+                if !exponent.is_finite() && angle == 0.0 { return Ok([exponent.exp(), angle]); }
+                let magnitude = exponent.exp();
+                Ok([magnitude * angle.cos(), magnitude * angle.sin()])
+            }
+            fn neg(a: Self) -> Self { [-a[0], -a[1]] }
+        }
+    )*};
+}
+complex_num!(f32, f64);
+
+// bool min/max use the same ordering, but sum/mean were already widened.
+impl Num for bool {
+    fn mean(self, _: usize) -> Self {
+        unreachable!()
+    }
+
+    fn add(a: Self, b: Self) -> Self {
+        a || b
+    }
+
+    fn sub(_: Self, _: Self) -> Self {
+        unreachable!()
+    }
+
+    fn mul(a: Self, b: Self) -> Self {
+        a && b
+    }
+
+    fn div(_: Self, _: Self) -> Self {
+        unreachable!()
+    }
+
+    fn rem(_: Self, _: Self) -> Self {
+        unreachable!()
+    }
+
+    fn pow(_: Self, _: Self) -> Result<Self> {
+        unreachable!()
+    }
+
+    fn neg(_: Self) -> Self {
+        unreachable!()
+    }
+}
 fn apply<T: Num>(op: BinaryOp, a: T, b: T) -> Result<T> {
     Ok(match op {
         BinaryOp::Add => T::add(a, b),
@@ -280,12 +430,16 @@ fn cast_operand<'a>(
     buffer: &'a Buffer,
     dtype: DType,
     budget: &MemoryBudget,
+    token: &CancellationToken,
 ) -> Result<(Cow<'a, Buffer>, crate::memory::Reservation)> {
     if buffer.dtype() == dtype {
         return Ok((Cow::Borrowed(buffer), crate::memory::Reservation::none()));
     }
     let reservation = reserve_for(budget, dtype, buffer.len())?;
-    Ok((Cow::Owned(buffer.cast(dtype)?), reservation))
+    Ok((
+        Cow::Owned(buffer.cast_cancellable(dtype, token)?),
+        reservation,
+    ))
 }
 
 /// Elementwise binary operation with broadcasting.
@@ -305,8 +459,8 @@ pub fn binary(
         compute_dtype
     };
     let reservation = reserve_for(budget, result_dtype, shape.iter().product())?;
-    let (a, _a_reservation) = cast_operand(&lhs.buffer, work_dtype, budget)?;
-    let (b, _b_reservation) = cast_operand(&rhs.buffer, work_dtype, budget)?;
+    let (a, _a_reservation) = cast_operand(&lhs.buffer, work_dtype, budget, token)?;
+    let (b, _b_reservation) = cast_operand(&rhs.buffer, work_dtype, budget, token)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
@@ -339,6 +493,8 @@ pub fn binary(
         (Buffer::U64(x), Buffer::U64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::F32(x), Buffer::F32(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         (Buffer::F64(x), Buffer::F64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::C64(x), Buffer::C64(y)) => binary_loop(op, x, y, pairs, token)?.into(),
+        (Buffer::C128(x), Buffer::C128(y)) => binary_loop(op, x, y, pairs, token)?.into(),
         _ => unreachable!("operands were cast to one dtype"),
     };
     DenseArray::new(shape, buffer, reservation)
@@ -359,18 +515,20 @@ pub fn unary(
     }
     let reservation = reserve_for(budget, input.dtype(), input.size())?;
     let buffer = match op {
-        UnaryOp::Pos => input.buffer.clone(),
+        UnaryOp::Pos => input.buffer.cast_cancellable(input.dtype(), token)?,
         UnaryOp::Neg => match &input.buffer {
-            Buffer::I8(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::I16(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::I32(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::I64(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::U8(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::U16(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::U32(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::U64(v) => v.iter().map(|&x| Num::neg(x)).collect::<Vec<_>>().into(),
-            Buffer::F32(v) => v.iter().map(|&x| -x).collect::<Vec<_>>().into(),
-            Buffer::F64(v) => v.iter().map(|&x| -x).collect::<Vec<_>>().into(),
+            Buffer::I8(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::I16(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::I32(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::I64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::U8(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::U16(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::U32(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::U64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::F32(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
+            Buffer::F64(v) => crate::buffer::map_elements(v, token, |x| -x)?.into(),
+            Buffer::C64(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
+            Buffer::C128(v) => crate::buffer::map_elements(v, token, |x| Num::neg(x))?.into(),
             Buffer::Bool(_) => unreachable!(),
         },
     };
@@ -446,103 +604,98 @@ pub fn reduce(
             acc *= input.shape[axis] as isize;
         }
     }
-    let mut slots = Vec::with_capacity(input.size());
-    for_each_offset(&input.shape, &out_strides, 0, |o| slots.push(o));
+    token.check()?;
+    let slots = BroadcastPairs::new(&input.shape, out_strides, vec![0; input.shape.len()]);
     let count = if out_len == 0 {
         0
     } else {
         input.size() / out_len
     };
-    token.check()?;
-
-    let buffer = if in_dtype.kind() == DTypeKind::Float {
-        let values = input.buffer.cast(DType::Float64)?;
-        let Buffer::F64(v) = values else {
-            unreachable!()
-        };
-        let mut acc = vec![
-            match op {
-                ReduceOp::Sum | ReduceOp::Mean => 0.0,
-                ReduceOp::Min => f64::INFINITY,
-                ReduceOp::Max => f64::NEG_INFINITY,
-            };
-            out_len
-        ];
-        for (chunk, slot_chunk) in v.chunks(CHUNK).zip(slots.chunks(CHUNK)) {
-            token.check()?;
-            for (&x, &s) in chunk.iter().zip(slot_chunk) {
-                acc[s] = match op {
-                    ReduceOp::Sum | ReduceOp::Mean => acc[s] + x,
-                    // NaN propagates, as in NumPy.
-                    ReduceOp::Min => {
-                        if x.is_nan() || acc[s].is_nan() {
-                            f64::NAN
-                        } else {
-                            acc[s].min(x)
-                        }
-                    }
-                    ReduceOp::Max => {
-                        if x.is_nan() || acc[s].is_nan() {
-                            f64::NAN
-                        } else {
-                            acc[s].max(x)
-                        }
-                    }
-                };
-            }
-        }
-        if op == ReduceOp::Mean {
-            for a in &mut acc {
-                *a /= count as f64;
-            }
-        }
-        Buffer::F64(acc).cast(dtype)?
+    // Borrow matching input storage. Widening for sum/mean is reserved before
+    // conversion; no input-sized offset or i128 scratch vectors are needed.
+    let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
+    let _seen_reservation = budget.reserve(if matches!(op, ReduceOp::Min | ReduceOp::Max) {
+        out_len as u64
     } else {
-        let values: Vec<i128> = match &input.buffer {
-            Buffer::Bool(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::I8(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::I16(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::I32(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::I64(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::U8(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::U16(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::U32(v) => v.iter().map(|&x| x as i128).collect(),
-            Buffer::U64(v) => v.iter().map(|&x| x as i128).collect(),
-            _ => unreachable!(),
-        };
-        if op == ReduceOp::Mean {
-            let mut acc = vec![0f64; out_len];
-            for (&x, &s) in values.iter().zip(&slots) {
-                acc[s] += x as f64;
-            }
-            Buffer::F64(acc.into_iter().map(|a| a / count as f64).collect())
-        } else {
-            let mut acc = vec![
-                match op {
-                    ReduceOp::Sum => 0i128,
-                    ReduceOp::Min => i128::MAX,
-                    _ => i128::MIN,
-                };
-                out_len
-            ];
-            for (chunk, slot_chunk) in values.chunks(CHUNK).zip(slots.chunks(CHUNK)) {
-                token.check()?;
-                for (&x, &s) in chunk.iter().zip(slot_chunk) {
-                    acc[s] = match op {
-                        ReduceOp::Sum => acc[s].wrapping_add(x),
-                        ReduceOp::Min => acc[s].min(x),
-                        _ => acc[s].max(x),
+        0
+    })?;
+    fn run<T: Num>(
+        op: ReduceOp,
+        values: &[T],
+        slots: BroadcastPairs,
+        out_len: usize,
+        count: usize,
+        contiguous: bool,
+        token: &CancellationToken,
+    ) -> Result<Vec<T>> {
+        let mut out = vec![T::default(); out_len];
+        if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
+            if T::pairwise_sum(&[], token)?.is_some() {
+                for (i, chunk) in values.chunks_exact(count).enumerate() {
+                    let total = T::add(T::default(), T::pairwise_sum(chunk, token)?.unwrap());
+                    out[i] = if op == ReduceOp::Mean {
+                        total.mean(count)
+                    } else {
+                        total
                     };
                 }
-            }
-            let ints = Buffer::I64(acc.iter().map(|&a| a as i64).collect());
-            match dtype {
-                // Keep full unsigned range for uint64 results.
-                DType::UInt64 => Buffer::U64(acc.iter().map(|&a| a as u64).collect()),
-                DType::Bool => Buffer::Bool(acc.iter().map(|&a| a != 0).collect()),
-                other => ints.cast(other)?,
+                return Ok(out);
             }
         }
+        let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
+            vec![false; out_len]
+        } else {
+            Vec::new()
+        };
+        for (i, (slot, _)) in slots.enumerate() {
+            if i % CHUNK == 0 {
+                token.check()?;
+            }
+            let x = values[i];
+            out[slot] = match op {
+                ReduceOp::Sum | ReduceOp::Mean => T::add(out[slot], x),
+                _ => {
+                    let old = out[slot];
+                    let take = !seen[slot]
+                        || (!old.nan()
+                            && (x.nan()
+                                || if op == ReduceOp::Min {
+                                    x < old || (T::take_equal() && x == old)
+                                } else {
+                                    x > old || (T::take_equal() && x == old)
+                                }));
+                    seen[slot] = true;
+                    if take { x } else { old }
+                }
+            };
+        }
+        if op == ReduceOp::Mean {
+            for (i, value) in out.iter_mut().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                *value = value.mean(count);
+            }
+        }
+        Ok(out)
+    }
+    // A suffix of reduced dimensions is contiguous in a dense C-order input.
+    let first_reduced = reduced.iter().position(|&r| r).unwrap_or(reduced.len());
+    let contiguous = reduced[first_reduced..].iter().all(|&r| r);
+    let buffer = match values.as_ref() {
+        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
     };
     DenseArray::new(out_shape, buffer, reservation)
 }
@@ -582,8 +735,9 @@ pub fn matmul(
         out_shape.push(m);
     }
     let reservation = reserve_for(budget, dtype, n * m)?;
-    let a = lhs.buffer.cast(dtype)?;
-    let b = rhs.buffer.cast(dtype)?;
+    token.check()?;
+    let (a, _a_reservation) = cast_operand(&lhs.buffer, dtype, budget, token)?;
+    let (b, _b_reservation) = cast_operand(&rhs.buffer, dtype, budget, token)?;
     fn mm<T: Num + Default>(
         a: &[T],
         b: &[T],
@@ -598,23 +752,17 @@ pub fn matmul(
             for p in 0..k {
                 let x = a[i * k + p];
                 for j in 0..m {
+                    if (p * m + j) % CHUNK == 0 {
+                        token.check()?;
+                    }
                     out[i * m + j] = T::add(out[i * m + j], T::mul(x, b[p * m + j]));
                 }
             }
         }
         Ok(out)
     }
-    let buffer = match (&a, &b) {
-        (Buffer::Bool(x), Buffer::Bool(y)) => {
-            let mut out = vec![false; n * m];
-            for i in 0..n {
-                token.check()?;
-                for j in 0..m {
-                    out[i * m + j] = (0..k).any(|p| x[i * k + p] && y[p * m + j]);
-                }
-            }
-            Buffer::Bool(out)
-        }
+    let buffer = match (a.as_ref(), b.as_ref()) {
+        (Buffer::Bool(x), Buffer::Bool(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I8(x), Buffer::I8(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I16(x), Buffer::I16(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::I32(x), Buffer::I32(y)) => mm(x, y, n, k, m, token)?.into(),
@@ -625,6 +773,8 @@ pub fn matmul(
         (Buffer::U64(x), Buffer::U64(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::F32(x), Buffer::F32(y)) => mm(x, y, n, k, m, token)?.into(),
         (Buffer::F64(x), Buffer::F64(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::C64(x), Buffer::C64(y)) => mm(x, y, n, k, m, token)?.into(),
+        (Buffer::C128(x), Buffer::C128(y)) => mm(x, y, n, k, m, token)?.into(),
         _ => unreachable!(),
     };
     DenseArray::new(out_shape, buffer, reservation)
@@ -652,6 +802,134 @@ mod tests {
             MemoryBudget::new(Device::Cpu, u64::MAX),
             CancellationToken::new(),
         )
+    }
+
+    #[test]
+    fn reductions_reserve_casts_and_release_scratch() {
+        let input = dense(vec![2, 2], Buffer::I32(vec![1, 2, 3, 4]));
+        let token = CancellationToken::new();
+        for op in [ReduceOp::Sum, ReduceOp::Mean] {
+            // Two 64-bit outputs plus four widened inputs: 16 + 32 bytes.
+            let tight = MemoryBudget::new(Device::Cpu, 47);
+            assert_eq!(
+                reduce(op, &input, Some(&[0]), &tight, &token)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::MemoryBudgetExceeded
+            );
+            assert_eq!(tight.usage().used, 0);
+            let fits = MemoryBudget::new(Device::Cpu, 48);
+            let result = reduce(op, &input, Some(&[0]), &fits, &token).unwrap();
+            assert_eq!(fits.usage().peak, 48);
+            assert_eq!(fits.usage().used, 16);
+            drop(result);
+            assert_eq!(fits.usage().used, 0);
+        }
+        // Min/max borrow the input, with one byte per output for
+        // initialization.
+        let tight = MemoryBudget::new(Device::Cpu, 9);
+        assert_eq!(
+            reduce(ReduceOp::Min, &input, Some(&[0]), &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+        let fits = MemoryBudget::new(Device::Cpu, 10);
+        let result = reduce(ReduceOp::Max, &input, Some(&[0]), &fits, &token).unwrap();
+        assert_eq!(fits.usage().peak, 10);
+        assert_eq!(fits.usage().used, 8);
+        drop(result);
+        assert_eq!(fits.usage().used, 0);
+    }
+
+    #[test]
+    fn complex_reduction_borrows_without_input_sized_scratch() {
+        let input = dense(vec![100_000], Buffer::C64(vec![[1.0, 2.0]; 100_000]));
+        let budget = MemoryBudget::new(Device::Cpu, 8);
+        let result = reduce(
+            ReduceOp::Sum,
+            &input,
+            None,
+            &budget,
+            &CancellationToken::new(),
+        )
+        .unwrap();
+        assert_eq!(result.buffer, Buffer::C64(vec![[100_000.0, 200_000.0]]));
+        assert_eq!(budget.usage().peak, 8);
+        drop(result);
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn matmul_reserves_only_required_casts_and_releases_them() {
+        let a = dense(vec![2], Buffer::I32(vec![1, 2]));
+        let b = dense(vec![2], Buffer::C128(vec![[1.0, 2.0], [3.0, 4.0]]));
+        let token = CancellationToken::new();
+        let tight = MemoryBudget::new(Device::Cpu, 47);
+        assert_eq!(
+            matmul(&a, &b, DType::Complex128, &tight, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(tight.usage().used, 0);
+        let fits = MemoryBudget::new(Device::Cpu, 48);
+        let result = matmul(&a, &b, DType::Complex128, &fits, &token).unwrap();
+        assert_eq!(result.buffer, Buffer::C128(vec![[7.0, 10.0]]));
+        assert_eq!(fits.usage().peak, 48);
+        assert_eq!(fits.usage().used, 16);
+        drop(result);
+        assert_eq!(fits.usage().used, 0);
+        let borrowed = MemoryBudget::new(Device::Cpu, 16);
+        let result = matmul(&b, &b, DType::Complex128, &borrowed, &token).unwrap();
+        assert_eq!(borrowed.usage().peak, 16);
+        drop(result);
+        assert_eq!(borrowed.usage().used, 0);
+    }
+
+    #[test]
+    fn cancelled_reductions_matmul_and_casts_release_allocations() {
+        let input = dense(vec![2], Buffer::C64(vec![[1.0, 2.0]; 2]));
+        let (budget, token) = env();
+        token.cancel();
+        for op in [ReduceOp::Sum, ReduceOp::Mean, ReduceOp::Min, ReduceOp::Max] {
+            assert_eq!(
+                reduce(op, &input, None, &budget, &token).unwrap_err().code,
+                ErrorCode::Cancelled
+            );
+            assert_eq!(budget.usage().used, 0);
+        }
+        assert_eq!(
+            matmul(&input, &input, DType::Complex128, &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+        assert_eq!(
+            input
+                .buffer
+                .cast_cancellable(DType::Complex128, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+    }
+
+    #[test]
+    fn cancellation_interrupts_a_running_complex_matmul() {
+        let input = dense(vec![512, 512], Buffer::C64(vec![[1.0, 2.0]; 512 * 512]));
+        let (budget, token) = env();
+        let cancel = token.clone();
+        let thread = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            cancel.cancel();
+        });
+        let result = matmul(&input, &input, DType::Complex64, &budget, &token);
+        thread.join().unwrap();
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        assert_eq!(budget.usage().used, 0);
     }
 
     #[test]
