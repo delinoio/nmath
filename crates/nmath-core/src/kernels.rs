@@ -149,7 +149,18 @@ macro_rules! int_num {
                         "Integers to negative integer powers are not allowed.",
                     ));
                 }
-                Ok(a.wrapping_pow(b as u32))
+                // Square-and-multiply over the full exponent: casting to the
+                // `u32` that `wrapping_pow` takes would truncate 64-bit
+                // exponents.
+                let (mut base, mut exp, mut acc) = (a, b, 1 as $t);
+                while exp != 0 {
+                    if exp & 1 == 1 {
+                        acc = acc.wrapping_mul(base);
+                    }
+                    base = base.wrapping_mul(base);
+                    exp >>= 1;
+                }
+                Ok(acc)
             }
             fn neg(a: Self) -> Self { a.wrapping_neg() }
         }
@@ -657,6 +668,31 @@ mod tests {
         let a = dense(vec![1], Buffer::I64(vec![2]));
         let e = dense(vec![1], Buffer::I64(vec![-1]));
         assert!(binary(BinaryOp::Pow, &a, &e, DType::Int64, &b, &t).is_err());
+    }
+
+    #[test]
+    fn integer_power_keeps_64_bit_exponents() {
+        // NumPy 2.5.4: np.int64(2) ** np.int64(2**32) == 0 and
+        // np.int64(3) ** np.int64(2**32 + 1) == 3 ** (2**32 + 1) mod 2**64.
+        let (b, t) = env();
+        let base = dense(vec![3], Buffer::I64(vec![2, 3, -1]));
+        let exp = dense(
+            vec![3],
+            Buffer::I64(vec![1 << 32, (1 << 32) + 1, (1 << 32) + 1]),
+        );
+        let r = binary(BinaryOp::Pow, &base, &exp, DType::Int64, &b, &t).unwrap();
+        assert_eq!(
+            r.buffer,
+            Buffer::I64(vec![
+                0,
+                3i64.wrapping_pow(1 << 31).wrapping_pow(2).wrapping_mul(3),
+                -1
+            ])
+        );
+        let ubase = dense(vec![2], Buffer::U64(vec![2, 7]));
+        let uexp = dense(vec![2], Buffer::U64(vec![u64::MAX, 0]));
+        let r = binary(BinaryOp::Pow, &ubase, &uexp, DType::UInt64, &b, &t).unwrap();
+        assert_eq!(r.buffer, Buffer::U64(vec![0, 1]));
     }
 
     #[test]
