@@ -288,9 +288,14 @@ impl Rewriter<'_> {
             return;
         }
         let bracket_end = self.open_bracket_end(end(element.expression));
+        let prefix = if self.needs_statement_separator(node, target_start) {
+            ";"
+        } else {
+            ""
+        };
         self.open(
             target_start,
-            "(await __nmath.set(".to_string(),
+            format!("{prefix}(await __nmath.set("),
             depth,
             Some((target_start, end(node))),
         );
@@ -305,6 +310,50 @@ impl Rewriter<'_> {
             None,
         );
         self.close(end(node), "))", depth);
+    }
+
+    /// Whether a lowered assignment that starts with `(` needs a leading `;` to
+    /// keep it a separate statement. In semicolonless code, `x = 1` followed by
+    /// `(await __nmath.set(...))` on the next line would otherwise parse as the
+    /// call `1(...)`. Only an expression statement that begins with the
+    /// assignment, in a statement list, after a statement that does not end in
+    /// `;`, is at risk; assignments nested in other expressions never are.
+    fn needs_statement_separator(&self, node: P<Node>, start: u32) -> bool {
+        let mut current = node;
+        let statement = loop {
+            let Some(parent) = current.parent() else {
+                return false;
+            };
+            if parent.kind() == Kind::ExpressionStatement {
+                break parent;
+            }
+            if self.token_start(parent) != start {
+                return false;
+            }
+            current = parent;
+        };
+        let Some(list) = statement.parent().filter(|list| {
+            matches!(
+                list.kind(),
+                Kind::SourceFile
+                    | Kind::Block
+                    | Kind::ModuleBlock
+                    | Kind::CaseClause
+                    | Kind::DefaultClause
+            )
+        }) else {
+            return false;
+        };
+        let mut previous = None;
+        for child in list.iter_children() {
+            if child == statement {
+                break;
+            }
+            previous = Some(child);
+        }
+        previous.is_some_and(|previous| {
+            self.text.as_bytes().get(end(previous) as usize - 1) != Some(&b';')
+        })
     }
 
     fn visit_prefix_unary(&mut self, node: P<Node>, depth: i64) {

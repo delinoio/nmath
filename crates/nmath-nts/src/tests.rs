@@ -141,6 +141,36 @@ fn rewrites_element_assignment_at_top_level_and_in_async_functions() {
 }
 
 #[test]
+fn keeps_statement_boundaries_in_semicolonless_code() {
+    assert_eq!(
+        lower("const x = 1\na[i] = v\n"),
+        "const x = 1\n;(await __nmath.set(a, i, v))\n"
+    );
+    assert_eq!(
+        lower("f()\na[i][j] = v\n"),
+        "f()\n;(await __nmath.set(__nmath.get(a, i), j, v))\n"
+    );
+    assert_eq!(
+        lower("async function g() {\n  f()\n  a[i] = v, b\n}\n"),
+        "async function g() {\n  f()\n  ;(await __nmath.set(a, i, v)), b\n}\n"
+    );
+    // No separator after `;`, at the start of a list, or in nested positions.
+    assert_eq!(
+        lower("f();\na[i] = v\n"),
+        "f();\n(await __nmath.set(a, i, v))\n"
+    );
+    assert_eq!(lower("{ a[i] = v }"), "{ (await __nmath.set(a, i, v)) }");
+    assert_eq!(
+        lower("f()\nif (c) a[i] = v\n"),
+        "f()\nif (c) (await __nmath.set(a, i, v))\n"
+    );
+    assert_eq!(
+        lower("f()\nx = a[i] = v\n"),
+        "f()\nx = (await __nmath.set(a, i, v))\n"
+    );
+}
+
+#[test]
 fn reports_element_assignment_outside_async_context() {
     let source = "function f() {\n  a[i] = v;\n}\n";
     let output = transform("a.nts", source);
