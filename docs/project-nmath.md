@@ -53,7 +53,7 @@ The npm component also owns `packages/nmath/compatibility/` for fixed-version AP
 ### Stable identifiers
 
 - Device IDs: `cpu`, `gpu`. `cpu` is the default.
-- Dtype IDs follow NumPy names: `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `complex64`, `complex128`, `str`, `datetime64`, `timedelta64`. Every layer uses these identifiers.
+- Dtype IDs follow NumPy names: `bool`, `int8`, `int16`, `int32`, `int64`, `uint8`, `uint16`, `uint32`, `uint64`, `float16`, `float32`, `float64`, `complex64`, `complex128`, `str`, `datetime64`, `timedelta64`. Every layer uses these identifiers.
 - Entry point IDs: `core`, `numpy`, `pandas`, `polars`, `compiler`.
 - Error codes use the form `NMATH_<CATEGORY>_<NAME>` (for example `NMATH_SCHED_QUEUE_FULL`). Codes are stable public API. Rust, the binding, the package and the compiler share one registry, owned by the runtime crates contract.
 - Execution status IDs: `queued`, `running`, `succeeded`, `failed`, `cancelled`.

@@ -259,6 +259,7 @@ test("creation rejects invalid dimensions before allocation or native conversion
   const rng = ctx.generator(42);
   const invalid = [1.5, -1, NaN, Infinity, -Infinity, 2 ** 32];
   const creators = [
+    (shape) => ctx.arrayFromFloat16Bits(new Uint16Array([0x3c00]), { shape }),
     (shape) => ctx.array([7], { dtype: "int32", shape }),
     (shape) => ctx.array(new Int32Array([7]), { dtype: "int32", shape }),
     (shape) => ctx.full(shape, 1, "int32"),

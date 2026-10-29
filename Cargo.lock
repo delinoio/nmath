@@ -985,6 +985,7 @@ dependencies = [
  "base64",
  "bytes",
  "flate2",
+ "half",
  "naga",
  "parquet",
  "pollster",
