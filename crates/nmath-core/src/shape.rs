@@ -141,14 +141,15 @@ pub fn resolve_slice(
             stop.map_or(-1, |s| clamp(norm(s), -1, len - 1)),
         )
     };
-    let count = if step > 0 {
-        if stop > start {
-            (stop - start + step - 1) / step
-        } else {
-            0
-        }
-    } else if start > stop {
-        (start - stop + (-step) - 1) / (-step)
+    // Ceiling division in i128: `step` may be `i64::MAX` or `i64::MIN`, which
+    // overflow the textbook i64 formula and its negation.
+    let (distance, magnitude) = if step > 0 {
+        (i128::from(stop) - i128::from(start), i128::from(step))
+    } else {
+        (i128::from(start) - i128::from(stop), -i128::from(step))
+    };
+    let count = if distance > 0 {
+        (distance + magnitude - 1) / magnitude
     } else {
         0
     };
@@ -315,6 +316,16 @@ mod tests {
         assert_eq!(resolve_slice(Some(-2), None, None, 5).unwrap(), (3, 1, 2));
         // range(5)[10:20] is empty
         assert_eq!(resolve_slice(Some(10), Some(20), None, 5).unwrap().2, 0);
+        // range(3)[::sys.maxsize] == [0] and range(3)[::-sys.maxsize - 1] ==
+        // [2]
+        assert_eq!(
+            resolve_slice(None, None, Some(i64::MAX), 3).unwrap(),
+            (0, i64::MAX as isize, 1)
+        );
+        assert_eq!(
+            resolve_slice(None, None, Some(i64::MIN), 3).unwrap(),
+            (2, i64::MIN as isize, 1)
+        );
         assert!(resolve_slice(None, None, Some(0), 5).is_err());
     }
 

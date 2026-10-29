@@ -151,7 +151,10 @@ impl NdArray {
                         offset += s * stride;
                     }
                     shape.push(n);
-                    strides.push(st * stride);
+                    // A stride is never applied on an axis with at most one
+                    // element, and extreme steps such as `i64::MAX` would
+                    // overflow the multiplication.
+                    strides.push(if n <= 1 { 0 } else { st * stride });
                 }
                 Some(_) => unreachable!(),
             }
@@ -256,6 +259,24 @@ mod tests {
         let rev = a.view(&[slice(None, None, Some(-2))]).unwrap();
         assert_eq!(rev.to_buffer(), Buffer::F64(vec![4.0, 2.0, 0.0]));
         assert_eq!(rev.get_scalar(&[-1]).unwrap(), Scalar::Float(0.0));
+    }
+
+    #[test]
+    fn extreme_slice_steps_select_one_element() {
+        let a = array(vec![3, 2], (0..6).map(|v| v as f64).collect());
+        let first = a.view(&[slice(None, None, Some(i64::MAX))]).unwrap();
+        assert_eq!(first.shape(), &[1, 2]);
+        assert_eq!(first.to_buffer(), Buffer::F64(vec![0.0, 1.0]));
+        let last = a.view(&[slice(None, None, Some(i64::MIN))]).unwrap();
+        assert_eq!(last.to_buffer(), Buffer::F64(vec![4.0, 5.0]));
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let taken = a
+            .take(
+                &[slice(None, None, Some(i64::MIN)), Selector::Index(0)],
+                &budget,
+            )
+            .unwrap();
+        assert_eq!(taken.buffer, Buffer::F64(vec![4.0]));
     }
 
     #[test]
