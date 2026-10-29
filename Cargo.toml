@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/nmath-core"]
+members = ["crates/nmath-core", "crates/nmath-node"]
 
 [workspace.package]
 version = "0.0.0"
@@ -10,4 +10,5 @@ repository = "https://github.com/delinoio/nmath"
 publish = false
 
 [workspace.dependencies]
+nmath-core = { path = "crates/nmath-core" }
 tracing = "0.1"

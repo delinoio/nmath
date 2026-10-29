@@ -1,0 +1,69 @@
+{
+  "name": "@delinoio/nmath",
+  "version": "0.0.0",
+  "description": "Python-free native numerical computing for Node.js 24 with NumPy, pandas and Polars style APIs.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/delinoio/nmath.git",
+    "directory": "packages/nmath"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./numpy": {
+      "types": "./dist/numpy.d.ts",
+      "default": "./dist/numpy.js"
+    },
+    "./pandas": {
+      "types": "./dist/pandas.d.ts",
+      "default": "./dist/pandas.js"
+    },
+    "./polars": {
+      "types": "./dist/polars.d.ts",
+      "default": "./dist/polars.js"
+    },
+    "./nts-runtime": {
+      "types": "./dist/nts-runtime.d.ts",
+      "default": "./dist/nts-runtime.js"
+    }
+  },
+  "files": [
+    "dist",
+    "native",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:native": "napi build --manifest-path ../../crates/nmath-node/Cargo.toml --platform --release --output-dir native --no-js --dts native.d.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/types/tsconfig.json",
+    "test": "node --test test/*.test.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.10.9",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  },
+  "napi": {
+    "binaryName": "nmath",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl"
+    ]
+  }
+}
