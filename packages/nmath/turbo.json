@@ -14,8 +14,13 @@
       "dependsOn": ["^typecheck", "build:native"]
     },
     "test": {
-      "dependsOn": ["^build", "build"],
+      "dependsOn": ["^build", "build", "build:compiler"],
       "cache": false
+    },
+    "build:compiler": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "outputs": ["native/**"]
     }
   }
 }

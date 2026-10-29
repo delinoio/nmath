@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "commonjs",
+    "lib": ["es2024"],
+    "types": ["node", "vscode"],
+    "strict": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

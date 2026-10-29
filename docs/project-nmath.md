@@ -27,14 +27,14 @@ Component IDs:
 
 ## Domain Ownership Map
 
-| Domain     | Canonical path           | Component ID     | Status  |
-| ---------- | ------------------------ | ---------------- | ------- |
-| `crates`   | `crates/nmath-core/`     | `nmath-core`     | active  |
-| `crates`   | `crates/nmath-node/`     | `nmath-node`     | active  |
-| `crates`   | `crates/nmath-nts/`      | `nmath-nts`      | active  |
-| `crates`   | `crates/nmath-compiler/` | `nmath-compiler` | active  |
-| `packages` | `packages/nmath/`        | `nmath-package`  | active  |
-| `apps`     | `apps/nmath-vscode/`     | `nmath-vscode`   | planned |
+| Domain     | Canonical path           | Component ID     | Status |
+| ---------- | ------------------------ | ---------------- | ------ |
+| `crates`   | `crates/nmath-core/`     | `nmath-core`     | active |
+| `crates`   | `crates/nmath-node/`     | `nmath-node`     | active |
+| `crates`   | `crates/nmath-nts/`      | `nmath-nts`      | active |
+| `crates`   | `crates/nmath-compiler/` | `nmath-compiler` | active |
+| `packages` | `packages/nmath/`        | `nmath-package`  | active |
+| `apps`     | `apps/nmath-vscode/`     | `nmath-vscode`   | active |
 
 Paths marked `planned` do not exist yet. A path becomes a Cargo workspace member or pnpm workspace package only in the change that creates its skeleton. Root `Cargo.toml` lists every active crate explicitly.
 

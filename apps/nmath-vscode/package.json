@@ -1,0 +1,75 @@
+{
+  "name": "nmath-vscode",
+  "displayName": "NMath",
+  "description": "Language support for NMath .nts files: diagnostics, completion and go to definition.",
+  "version": "0.0.0",
+  "publisher": "delinoio",
+  "license": "Apache-2.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/delinoio/nmath.git",
+    "directory": "apps/nmath-vscode"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:nts"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The NMath language server runs a compiler executable from the workspace."
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "nts",
+        "aliases": [
+          "NMath TypeScript",
+          "nts"
+        ],
+        "extensions": [
+          ".nts"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "NMath",
+      "properties": {
+        "nmath.compilerPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `nmath-compiler` executable. When empty, NMath uses `node_modules/.bin/nmath-compiler` in the workspace folder, then `nmath-compiler` on `PATH`."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "nmath.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "NMath"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "vscode-languageclient": "11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/vscode": "1.91.0",
+    "typescript": "7.0.2"
+  }
+}

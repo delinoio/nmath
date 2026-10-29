@@ -93,6 +93,13 @@ Use `tracing` with structured fields. `NMATH_LOG` enables logs on stderr; ANSI c
 - tsrs documents gaps in content-mapper support in its language server. `nmath-compiler lsp` therefore runs the NMath transform directly and does not depend on the tsrs language server for `.nts` features. Remove this workaround when tsrs ships language-server content-mapper support at a pinned commit.
 - Downstream: [npm package contract](packages-nmath-package-contract.md) for `/compiler` and `nts-runtime`; [VS Code extension contract](apps-nmath-vscode-contract.md) for `lsp`.
 
+### Integration workarounds
+
+- `check` and `build` read the user's `tsconfig.json` through an in-memory layer that adds a config extending it and registering the NMath content mapper, which runs `nmath-compiler content-mapper`. The user's files are never edited. The reserved virtual names are `__nmath_compiler__.tsconfig.json` and `__nmath_compiler_emit__.tsconfig.json` next to the user's config.
+- tsrs, like TypeScript 7.1, does not emit JavaScript for content-mapped files. `build` therefore runs a second tsrs pass with `--noCheck` over the lowered TypeScript. Its source maps point to the lowered TypeScript (with inline sources), not to original `.nts` positions. Remove this workaround when the pinned tsrs emits content-mapped files.
+- `--rewriteRelativeImportExtensions` is always enabled because tsrs requires it for the `.nts` to `.js` mapping; `build` also enables `--declaration` and `--sourceMap`.
+- Project references and `-b` builds are not supported.
+
 ## Change Triggers
 
 - Changes to rewrites or helper names update the [npm package contract](packages-nmath-package-contract.md).
