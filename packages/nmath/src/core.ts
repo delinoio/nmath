@@ -1,3 +1,4 @@
+import { NMathGenerator } from "./random.js";
 // SPDX-License-Identifier: Apache-2.0
 import {
   readText,
@@ -19,7 +20,6 @@ import { binding } from "./native.js";
 import type {
   NativeArray,
   NativeExpr,
-  NativeGenerator,
   NativeSelector,
 } from "./native-binding.generated.js";
 import type {
@@ -1202,27 +1202,7 @@ function zeroOf<D extends ComputableDType>(dtype: D): ScalarOf<D> {
   ) as ScalarOf<D>;
 }
 
-export class NMathGenerator {
-  readonly #generator: NativeGenerator;
-  readonly context: NMathContext;
-
-  /** @internal */
-  constructor(generator: NativeGenerator, context: NMathContext) {
-    this.#generator = generator;
-    this.context = context;
-  }
-
-  /**
-   * `Generator.random(shape)` as a lazy float64 expression. State advances only when a
-   * computation that uses it succeeds; jobs sharing a generator run in request order.
-   */
-  random<const S extends Shape>(shape: S): Expr<"float64", S> {
-    return new Expr(
-      binding.NativeExpr.random(this.#generator, [...shape]),
-      this.context,
-    );
-  }
-}
+export { NMathGenerator } from "./random.js";
 
 /** Creates an explicit execution context. All four limits are required. */
 export function createContext(options: ContextOptions): NMathContext {
