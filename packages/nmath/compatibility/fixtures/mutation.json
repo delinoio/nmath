@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "versions": {
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "polars": "2.1.0"
+  },
+  "environment": {
+    "python": "3.12.14",
+    "system": "Darwin",
+    "machine": "arm64",
+    "byteorder": "little"
+  },
+  "device": "cpu",
+  "cases": [
+    {
+      "id": "mutation/basic",
+      "kind": "basic",
+      "baseAfter": {
+        "dtype": "int32",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "1",
+          "99",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      "selectedAfter": {
+        "dtype": "int32",
+        "shape": [
+          2
+        ],
+        "values": [
+          "99",
+          "5"
+        ]
+      },
+      "criterion": "exact-contract"
+    },
+    {
+      "id": "mutation/advanced",
+      "kind": "advanced",
+      "baseAfter": {
+        "dtype": "int32",
+        "shape": [
+          2,
+          3
+        ],
+        "values": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      "selectedAfter": {
+        "dtype": "int32",
+        "shape": [
+          2
+        ],
+        "values": [
+          "99",
+          "2"
+        ]
+      },
+      "criterion": "exact-contract"
+    }
+  ]
+}

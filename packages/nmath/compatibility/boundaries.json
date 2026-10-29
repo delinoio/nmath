@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Fixed-version public API ledger and development-only oracle fixtures. Every non-excluded row remains a support target, including rows without a counterpart.",
+  "enumeration": {
+    "numpy": "Use module_structure.rst public namespace lists, declared exports, owned public definitions, reference directives, public class members and ufunc methods. Keep legacy namespaces. Private core namespaces and C API reference pages are outside the Python public-entry inventory; the Python extension exclusion does not waive numerical APIs.",
+    "pandas": "Use reference/index.rst public subpackages. Include documented io, tseries and util entries, public top-level exports, class members and accessors. Private core and compat names are not public entry points. __all__ alone is not the public boundary.",
+    "polars": "Use reference/index.rst families, public exports, owned public definitions, generated class members, property return annotations for namespaces, selectors, datatypes, schema, catalog, SQL, plugins, options and testing. Returning a container from an ordinary property does not create a nested accessor namespace."
+  },
+  "reconciliation": [
+    {
+      "candidate": "numpy.register_dlpack_dtype",
+      "entry": "numpy.dtypes.register_dlpack_dtype",
+      "reason": "routines.dtypes.rst uses automodule:: numpy.dtypes; resolve autosummary names in that module."
+    },
+    {
+      "candidate": "numpy.class.__array_* and numpy.object.__array_*",
+      "entry": "numpy.ndarray.__array_*",
+      "reason": "arrays.classes.rst and arrays.interface.rst use generic class/object placeholders to describe ndarray protocols, not exported names called class or object."
+    },
+    {
+      "candidate": "numpy.float96 and numpy.complex192",
+      "entry": "numpy.float96 and numpy.complex192",
+      "reason": "Documented aliases depend on long-double storage width. Absence from the current host is not an exclusion."
+    }
+  ],
+  "rowFields": {
+    "aliasOf": "Object identity among pinned upstream exports, or an explicitly documented conditional dtype alias. Aliases retain separate rows. Equal constants are not inferred to be aliases.",
+    "counterpart": "Existing partial NMath entry point. A name alone does not claim argument, dtype or semantic compatibility.",
+    "semantics": "Pinned source reference. pending-review means the per-entry semantic translation remains unverified.",
+    "arguments": "Runtime signature when introspection provides it; otherwise null. pending-adaptation retains all in-scope original forms as targets.",
+    "dtypePlatform": "Per-entry conditions remain pending unless explicitly sourced. The inventory host does not establish eight-platform support.",
+    "viewCopyMutation": "Per-entry conditions remain pending. Fixtures cover only their explicit selections and mutations.",
+    "missingValues": "Per-entry conditions remain pending. No default null/NaN equivalence is assumed across libraries.",
+    "verification": "Fixture IDs identify runnable inputs, not a passing native result. Empty IDs and null criteria mean pending verification. GPU criteria remain separate and pending."
+  },
+  "exclusionPolicy": "Only named agreed exclusions are applied. Mixed-mode APIs remain targets until argument-specific conditions are reviewed. Plotting, styles, configuration, testing, plugins and additional local file formats are not blanket exclusions.",
+  "limitations": [
+    "Enumeration is source-reconciled; semantic review and compatibility acceptance are incomplete.",
+    "Runtime introspection is from one pinned Python environment and host. Platform-dependent members require source review and platform acceptance.",
+    "Source hashes pin inspected definitions and reference inputs. They do not certify behavior.",
+    "No Python dependency is added to package exports, package installation or the production runtime."
+  ]
+}

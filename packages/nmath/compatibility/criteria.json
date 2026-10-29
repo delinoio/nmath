@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "exact-contract": {
+    "comparison": "exact",
+    "acceptance": "required",
+    "provenance": "docs/crates-nmath-runtime-contract.md; exact integer, boolean, shape, dtype and missing-value agreement",
+    "conditions": "CPU; fixed explicit dtypes; exact fixture inputs. Error fixtures require the expected native dtype/index/shape category; messages are not compared."
+  },
+  "floating-diagnostic": {
+    "comparison": "ieee-bits-with-nan-equivalence",
+    "acceptance": "pending-upstream-criterion",
+    "provenance": "docs/crates-nmath-runtime-contract.md#build-and-test",
+    "conditions": "No tolerance is assigned. Exact diagnostic comparison is stricter than a tolerance but is not an approved acceptance criterion. Find the matching pinned upstream test and dtype/input conditions before acceptance. GPU criteria remain pending."
+  },
+  "random-exact-contract": {
+    "comparison": "ieee-bits",
+    "acceptance": "required",
+    "provenance": "https://github.com/numpy/numpy/blob/a3d0ef1df045b858e68115001fdabc930bb3b68c/numpy/random/_generator.pyx",
+    "conditions": "CPU; default_rng uses PCG64; float64 random only; same seed and ordered call shapes. State is recorded for independent audits. NMath does not expose raw generator state, so the native runner verifies output progression, empty draws, repeated execution and cancellation preservation, not internal state representation."
+  }
+}
