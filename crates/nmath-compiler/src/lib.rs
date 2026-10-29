@@ -23,3 +23,5 @@ pub fn check(options: &ProjectOptions) -> CompilerResult {
 pub fn build(options: &ProjectOptions) -> CompilerResult {
     project::run(ProjectCommand::Build, options)
 }
+
+mod source_maps;
