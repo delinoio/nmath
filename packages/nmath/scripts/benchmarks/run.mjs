@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance } from "node:perf_hooks";
 import {
   aggregate,
+  gpuIdentity,
   atomicReport,
   digest,
   hashFile,
@@ -197,21 +198,10 @@ try {
       )
       .map((name) => [name, hashFile(join(packageRoot, "native", name))]),
   );
-  if (options.device === "gpu" && process.platform === "darwin") {
-    const displays = command("system_profiler", [
-      "SPDisplaysDataType",
-      "-json",
-    ]);
-    report.environment.gpu =
-      typeof displays === "string"
-        ? JSON.parse(displays).SPDisplaysDataType.map((device) => ({
-            model: device.sppci_model,
-            vendor: device.sppci_vendor,
-            metal: device.spdisplays_metal,
-            driverVersion:
-              "Bundled with the recorded macOS version; separate driver version unavailable",
-          }))
-        : displays;
+  if (options.device === "gpu") {
+    report.environment.gpu = gpuIdentity(process.platform, () =>
+      command("system_profiler", ["SPDisplaysDataType", "-json"]),
+    );
   }
   const importStart = performance.now();
   const [{ createContext }, pl, compiler] = await Promise.all([

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   aggregate,
+  gpuIdentity,
   atomicReport,
   digest,
   parseArgs,
@@ -147,3 +148,20 @@ test(
     }
   },
 );
+
+test("GPU identity reports unavailable platforms explicitly without probing macOS tools", () => {
+  for (const platform of ["linux", "win32"]) {
+    const identity = gpuIdentity(platform, () => {
+      throw new Error("macOS probe invoked");
+    });
+    assert.equal(identity.status, "unavailable");
+    assert.equal(identity.platform, platform);
+    assert.equal(identity.model, null);
+    assert.equal(identity.driverVersion, null);
+    assert.ok(identity.reason);
+  }
+  const identity = gpuIdentity("darwin", () =>
+    JSON.stringify({ SPDisplaysDataType: [{ sppci_model: "fixture GPU" }] }),
+  );
+  assert.equal(identity[0].model, "fixture GPU");
+});

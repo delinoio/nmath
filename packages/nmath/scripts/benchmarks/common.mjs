@@ -93,3 +93,25 @@ export function parseArgs(args) {
     );
   return options;
 }
+
+export function gpuIdentity(platform, probe) {
+  if (platform !== "darwin")
+    return {
+      status: "unavailable",
+      platform,
+      model: null,
+      driverVersion: null,
+      reason:
+        "GPU model and driver identification is not implemented on this platform. Record them separately before comparing GPU timings.",
+    };
+  const displays = probe();
+  return typeof displays === "string"
+    ? JSON.parse(displays).SPDisplaysDataType.map((device) => ({
+        model: device.sppci_model,
+        vendor: device.sppci_vendor,
+        metal: device.spdisplays_metal,
+        driverVersion:
+          "Bundled with the recorded macOS version; separate driver version unavailable",
+      }))
+    : displays;
+}
