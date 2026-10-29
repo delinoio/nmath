@@ -454,6 +454,17 @@ fn line_column_counts_utf16_units() {
 }
 
 #[test]
+fn lsp_coordinates_keep_cr_lf_lines_with_unicode_separators() {
+    let text = "a\u{2028}b\u{2029}c\r\nd";
+    let c = text.find('c').unwrap() as u32;
+    let d = text.find('d').unwrap() as u32;
+    assert_eq!(line_column(text, c), (1, 5));
+    assert_eq!(offset_of_line_character(text, 0, 4), c);
+    assert_eq!(line_column(text, d), (2, 1));
+    assert_eq!(offset_of_line_character(text, 1, 0), d);
+}
+
+#[test]
 fn diagnostic_codes_round_trip_through_mapper_codes() {
     for code in DiagnosticCode::ALL {
         assert_eq!(
