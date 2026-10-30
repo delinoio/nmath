@@ -76,6 +76,7 @@ export declare class NativeExpr {
   static reshape(input: NativeExpr, shape: Array<number>, copy?: boolean | undefined | null): NativeExpr
   static matmul(lhs: NativeExpr, rhs: NativeExpr): NativeExpr
   static linalg(op: string, input: NativeExpr, rhs?: NativeExpr | undefined | null): NativeExpr
+  static polynomial(coefficients: NativeExpr, points: NativeExpr, ascending: boolean, tensor: boolean): NativeExpr
   static fft(op: string, input: NativeExpr, n: number | undefined | null, axis: number, norm: string): NativeExpr
   static index(input: NativeExpr, selectors: Array<NativeSelector>): NativeExpr
   static cast(input: NativeExpr, dtype: string): NativeExpr
