@@ -279,3 +279,11 @@ export function loadNpz(
 
 export * as linalg from "./linalg.js";
 export * as fft from "./fft.js";
+
+export { polynomial, polyval } from "./polynomial.js";
+export type {
+  PolynomialDType,
+  PolynomialShape,
+  PolyvalDType,
+  PolyvalShape,
+} from "./polynomial.js";

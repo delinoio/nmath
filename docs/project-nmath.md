@@ -109,3 +109,5 @@ The npm component owns `packages/nmath/scripts/benchmarks/`, `packages/nmath/tes
 Square linear algebra and one-axis FFT operations use the shared lazy execution graph. Their runtime and JS adaptation boundaries are specified in the runtime and package contracts. They do not establish complete numerical family coverage.
 
 Broadcast-batched matrix products and vector promotion share native shape inference across CPU, GPU and the package APIs. The [runtime contract](crates-nmath-runtime-contract.md#matrix-products) and [package contract](packages-nmath-package-contract.md#matrix-product-adaptation) define the behavior and type boundary.
+
+Polynomial power-series evaluation shares the lazy execution graph across native and NumPy APIs. The [runtime polynomial contract](crates-nmath-runtime-contract.md#polynomial-evaluation) owns coefficient ordering and execution, and the [package adaptation](packages-nmath-package-contract.md#polynomial-js-adaptation) owns tensor options, type inference and explicit-context operands.
