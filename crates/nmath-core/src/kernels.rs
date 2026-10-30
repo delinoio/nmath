@@ -846,6 +846,172 @@ pub(crate) fn polynomial(
     DenseArray::new(shape, buffer, charge)
 }
 
+pub(crate) fn polynomial_derivative(
+    options: crate::polynomial::DerivativeOptions,
+    coefficients: &DenseArray,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    use crate::polynomial::{DerivativeScale, PolynomialOrder};
+    token.check()?;
+    let rank = coefficients.shape.len().max(1);
+    let shape_bytes = crate::numerical::bytes(rank, std::mem::size_of::<usize>())?;
+    let _metadata = budget.reserve(shape_bytes)?;
+    let (shape, dtype, axis) = options.infer(&coefficients.shape, coefficients.dtype())?;
+    let count = if shape.contains(&0) {
+        0
+    } else {
+        crate::numerical::size(&shape)?
+    };
+    let reservation = budget.reserve(
+        (crate::buffer::checked_byte_len(count, dtype)? as u64)
+            .checked_add(shape_bytes)
+            .ok_or_else(crate::numerical::overflow)?,
+    )?;
+    if count == 0 {
+        return DenseArray::new(
+            shape,
+            Buffer::filled(dtype, 0, crate::Scalar::Int(0))?,
+            reservation,
+        );
+    }
+    let (c, _cast) = cast_operand(&coefficients.buffer, dtype, budget, token)?;
+    let n = coefficients.shape.get(axis).copied().unwrap_or(1);
+    let remaining = shape[axis];
+    let inner = crate::numerical::size(&shape[axis + 1..])?;
+    let ascending = options.order == PolynomialOrder::Ascending;
+    let zero = options.count > 0 && options.count >= n as u64;
+    let steps = if zero { 0 } else { options.count as usize };
+    let source = |i: usize| {
+        let degree = (i / inner) % remaining;
+        let original_degree = degree + if ascending && !zero { steps } else { 0 };
+        let index = (i / inner / remaining * n + original_degree) * inner + i % inner;
+        (index, original_degree)
+    };
+    fn run<T: Num>(
+        c: &[T],
+        count: usize,
+        source: impl Fn(usize) -> (usize, usize),
+        ascending: bool,
+        n: usize,
+        steps: usize,
+        zero: bool,
+        scale: T,
+        factor: impl Fn(usize) -> T,
+        token: &CancellationToken,
+    ) -> Result<Vec<T>> {
+        let mut out = Vec::with_capacity(count);
+        for i in 0..count {
+            if i % CHUNK == 0 {
+                token.check()?;
+            }
+            let (index, degree) = source(i);
+            let mut value = c[index];
+            if zero {
+                // NumPy's c[:1] * 0 deliberately preserves NaN/Inf effects.
+                value = T::mul(value, factor(0));
+            } else {
+                for step in 0..steps {
+                    if step % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if ascending {
+                        value = T::mul(value, scale);
+                        value = T::mul(factor(degree - step), value);
+                    } else {
+                        value = T::mul(value, factor(n - 1 - degree - step));
+                    }
+                }
+            }
+            out.push(value);
+        }
+        token.check()?;
+        Ok(out)
+    }
+    let scale = match options.scale {
+        DerivativeScale::Real(v) => [v, 0.0],
+        DerivativeScale::Complex(v) => v,
+    };
+    macro_rules! real {
+        ($c:expr, $variant:ident, $t:ty) => {
+            Buffer::$variant(run(
+                $c,
+                count,
+                source,
+                ascending,
+                n,
+                steps,
+                zero,
+                scale[0] as $t,
+                |v| v as $t,
+                token,
+            )?)
+        };
+    }
+    let buffer = match c.as_ref() {
+        Buffer::Bool(v) => Buffer::Bool(run(
+            v,
+            count,
+            source,
+            ascending,
+            n,
+            steps,
+            zero,
+            scale[0] != 0.0,
+            |v| v != 0,
+            token,
+        )?),
+        Buffer::I8(v) => real!(v, I8, i8),
+        Buffer::I16(v) => real!(v, I16, i16),
+        Buffer::I32(v) => real!(v, I32, i32),
+        Buffer::I64(v) => real!(v, I64, i64),
+        Buffer::U8(v) => real!(v, U8, u8),
+        Buffer::U16(v) => real!(v, U16, u16),
+        Buffer::U32(v) => real!(v, U32, u32),
+        Buffer::U64(v) => real!(v, U64, u64),
+        Buffer::F16(v) => Buffer::F16(run(
+            v,
+            count,
+            source,
+            ascending,
+            n,
+            steps,
+            zero,
+            Float16::from_f64(scale[0]),
+            |v| Float16::from_f64(v as f64),
+            token,
+        )?),
+        Buffer::F32(v) => real!(v, F32, f32),
+        Buffer::F64(v) => real!(v, F64, f64),
+        Buffer::C64(v) => Buffer::C64(run(
+            v,
+            count,
+            source,
+            ascending,
+            n,
+            steps,
+            zero,
+            [scale[0] as f32, scale[1] as f32],
+            |v| [v as f32, 0.0],
+            token,
+        )?),
+        Buffer::C128(v) => Buffer::C128(run(
+            v,
+            count,
+            source,
+            ascending,
+            n,
+            steps,
+            zero,
+            scale,
+            |v| [v as f64, 0.0],
+            token,
+        )?),
+        _ => unreachable!("derivative coefficients have a numeric dtype"),
+    };
+    DenseArray::new(shape, buffer, reservation)
+}
+
 pub fn unary(
     op: UnaryOp,
     input: &DenseArray,

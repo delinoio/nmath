@@ -240,3 +240,133 @@ fn lazy_polynomial_uses_execution_snapshots_for_both_operands() {
     };
     assert_eq!(out.buffer, Buffer::I32(vec![202, 42]));
 }
+
+fn derivative_options(ascending: bool, count: u64, axis: i64) -> polynomial::DerivativeOptions {
+    polynomial::DerivativeOptions {
+        order: if ascending {
+            PolynomialOrder::Ascending
+        } else {
+            PolynomialOrder::Descending
+        },
+        count,
+        axis,
+        scale: polynomial::DerivativeScale::Real(1.0),
+    }
+}
+
+#[test]
+fn fixed_numpy_derivative_oracle() {
+    let fixture: Json =
+        serde_json::from_str(include_str!("fixtures/polynomial/derivative-oracle.json")).unwrap();
+    assert_eq!(fixture["numpy"], "2.5.4");
+    for (i, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
+        let c = unpack(&case["c"]);
+        let expected = unpack(&case["expected"]);
+        let mut opts = derivative_options(
+            case["ascending"].as_bool().unwrap(),
+            case["m"].as_u64().unwrap(),
+            case["axis"].as_i64().unwrap(),
+        );
+        let scale = [
+            case["scale"][0].as_f64().unwrap(),
+            case["scale"][1].as_f64().unwrap(),
+        ];
+        opts.scale = if case["complexScale"].as_bool().unwrap() {
+            polynomial::DerivativeScale::Complex(scale)
+        } else {
+            polynomial::DerivativeScale::Real(scale[0])
+        };
+        let budget = MemoryBudget::new(Device::Cpu, 1 << 20);
+        let out = polynomial::derivative(opts, &c, &budget, &CancellationToken::new()).unwrap();
+        let label = format!(
+            "derivative case {i}: {:?}, {:?}, {opts:?}",
+            c.dtype(),
+            c.shape
+        );
+        assert_eq!(out.shape, expected.shape, "{label}");
+        equal(&out.buffer, &expected.buffer, &label);
+        assert!(budget.usage().used >= out.buffer.byte_len());
+        drop(out);
+        assert_eq!(budget.usage().used, 0);
+    }
+}
+
+#[test]
+fn derivative_validation_budgets_cancellation_and_snapshots() {
+    let mut opts = derivative_options(true, 1, 0);
+    assert_eq!(
+        opts.infer(&[3], DType::Str(2)).unwrap_err().code,
+        ErrorCode::DTypeUnsupported
+    );
+    opts.axis = i64::MIN;
+    assert_eq!(
+        opts.infer(&[3], DType::Float32).unwrap_err().code,
+        ErrorCode::IndexInvalid
+    );
+    opts.axis = 1;
+    assert!(opts.infer(&[3], DType::Float32).is_err());
+    opts.axis = 0;
+    opts.scale = polynomial::DerivativeScale::Complex([1.0, 0.0]);
+    assert_eq!(
+        opts.infer(&[3], DType::Float32).unwrap_err().code,
+        ErrorCode::DTypeUnsupported
+    );
+    assert!(
+        derivative_options(false, 1, 0)
+            .infer(&[3, 2], DType::Float32)
+            .is_err()
+    );
+    opts = derivative_options(true, 2, 0);
+    let c = dense(&[4], Buffer::I32(vec![1, 2, 3, 4]));
+    for limit in [0, 23, 24, 40] {
+        let budget = MemoryBudget::new(Device::Cpu, limit);
+        assert_eq!(
+            polynomial::derivative(opts, &c, &budget, &CancellationToken::new())
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(budget.usage().used, 0);
+    }
+    let token = CancellationToken::new();
+    token.cancel();
+    assert_eq!(
+        polynomial::derivative(opts, &c, &MemoryBudget::new(Device::Cpu, 4096), &token)
+            .unwrap_err()
+            .code,
+        ErrorCode::Cancelled
+    );
+    let c = NdArray::from_dense(1, c);
+    let expression = Expr::polynomial_derivative(opts, &Expr::input(&c)).unwrap();
+    assert_eq!(expression.operation_id(), "polynomial.polyder");
+    assert_eq!(
+        nmath_core::gpu::validate(&expression).unwrap_err().code,
+        ErrorCode::GpuUnsupportedOperation
+    );
+    let mut env = JobEnv::new(
+        Device::Cpu,
+        MemoryBudget::new(Device::Cpu, 4096),
+        CancellationToken::new(),
+    );
+    env.freeze(&expression).unwrap();
+    let token = CancellationToken::new();
+    let guard = c.write_ticket().wait(&token).unwrap();
+    c.assign(
+        &guard,
+        &[Selector::Index(2)],
+        &dense(&[], Buffer::I32(vec![20])),
+        &token,
+    )
+    .unwrap();
+    let out = match env.eval(&expression).unwrap() {
+        nmath_core::Value::Dense(v) => v,
+        _ => panic!(),
+    };
+    assert_eq!(out.buffer, Buffer::F64(vec![6., 24.]));
+    let unchanged =
+        Expr::polynomial_derivative(derivative_options(false, 0, 0), &Expr::input(&c)).unwrap();
+    assert!(matches!(
+        unchanged.kind(),
+        nmath_core::expr::ExprKind::Input(_)
+    ));
+}
