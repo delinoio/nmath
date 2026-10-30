@@ -100,3 +100,37 @@ void [
 p.polyder(c.zeros([3] as const, "float32"), { scl: new Complex(1) });
 p.polyder(c.zeros([3] as const, "float32"), { m: 0, scl: new Complex(1) });
 p.polyder(c.zeros([3] as const, "float32"), { m: 5, scl: new Complex(1) });
+
+// Each possible coefficient length must keep its own empty/high-order rule.
+declare const unionLength: 0 | 3;
+const unionCoefficients = c.zeros([unionLength] as const, "float32");
+const unionAscending: Expr<"float32", [0 | 2]> = p.polyder(unionCoefficients);
+const unionDescending: Expr<"float64", [0 | 2]> = polyder(unionCoefficients);
+const unionHigherOrder: Expr<"float32", [0 | 1]> = p.polyder(
+  unionCoefficients,
+  { m: 4 },
+);
+const unionNonfirstAxis: Expr<"float32", [2, 0 | 2, 4]> = p.polyder(
+  c.zeros([2, unionLength, 4] as const, "float32"),
+  { axis: -2 },
+);
+const unionOrders: Expr<"float32", [0 | 1 | 2 | 3]> = p.polyder(
+  unionCoefficients,
+  { m: 0 as 0 | 1 | 4 },
+);
+const emptyUnionResult: DerivativeShape<[0 | 3], 1> = [0];
+const nonemptyUnionResult: DerivativeShape<[0 | 3], 1> = [2];
+const mixedDigitLengths: DerivativeShape<[0 | 3 | 1000000], 2> = [999998];
+// @ts-expect-error decimal subtraction must not invent an underflowed length
+const underflowedUnionResult: DerivativeShape<[0 | 3], 1> = [9];
+void [
+  unionAscending,
+  unionDescending,
+  unionHigherOrder,
+  unionNonfirstAxis,
+  unionOrders,
+  emptyUnionResult,
+  nonemptyUnionResult,
+  mixedDigitLengths,
+  underflowedUnionResult,
+];

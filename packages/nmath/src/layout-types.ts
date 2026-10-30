@@ -312,23 +312,27 @@ export type DerivativeOrder<M extends number> = number extends M
     : `${M}` extends `${bigint}`
       ? unknown
       : never;
+// Compare each dimension alternative before subtracting: an empty dimension
+// must take the high-order branch rather than underflow decimal subtraction.
 type DerivativeLength<
   N extends number,
   M extends number,
   Asc extends boolean,
-> = number extends N | M
-  ? number
-  : M extends 0
-    ? N
-    : LengthCompare<`${M}`, `${N}`> extends true
-      ? Asc extends true
-        ? N extends 0
-          ? 0
-          : 1
-        : 0
-      : Subtract<`${N}`, `${M}`> extends `${infer R extends number}`
-        ? R
-        : number;
+> = N extends N
+  ? number extends N | M
+    ? number
+    : M extends 0
+      ? N
+      : LengthCompare<`${M}`, `${N}`> extends true
+        ? Asc extends true
+          ? N extends 0
+            ? 0
+            : 1
+          : 0
+        : Subtract<`${N}`, `${M}`> extends `${infer R extends number}`
+          ? R
+          : number
+  : never;
 type DerivativeAxis<
   S extends Shape,
   M extends number,
