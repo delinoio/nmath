@@ -217,7 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                                     |
 | NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                                                      | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                                                 |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
-| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; ascending/descending polynomial evaluation                                                                     | full `linalg`/`fft` coverage, polynomial operations beyond power-series evaluation, masked arrays                                                                |
+| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; ascending/descending polynomial evaluation and derivatives                                                     | full `linalg`/`fft` coverage, polynomial operations beyond evaluation/derivatives, masked arrays                                                                 |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                            | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                             |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                       | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                                    |
 | pandas               | Numeric Series/DataFrame, basic labels, nullable filtering/sorting, single-key inner/left joins and grouped aggregates; CSV, records JSON, Parquet and Feather adapters | Full label alignment, nullable arithmetic, richer join/group options, pivots, windows, time series, string/categorical APIs and full file option/metadata parity |
@@ -486,3 +486,21 @@ descending.dispose();
 Coefficients occupy the first axis. Ascending evaluation defaults to `{ tensor: true }`: it evaluates every polynomial against every point and returns `coefficients.shape.slice(1)` followed by `points.shape`. Pass `{ tensor: false }` to broadcast those shapes instead. Descending evaluation always broadcasts. Both APIs accept arrays and lazy expressions from one context, run on CPU, and take fresh input snapshots at actual execution start.
 
 Ascending evaluation converts integer and boolean coefficients to float64. Descending evaluation preserves ordinary array promotion, including exact bigint transport and integer wrapping. Empty descending coefficients return zeros with the points' shape and dtype; empty ascending coefficients fail. Wrap scalar inputs as rank-zero context arrays; descending coefficients require at least one axis. Results use independent storage. GPU requests reject without fallback. Polynomial classes, fitting, roots, other bases and coefficient arithmetic remain planned support targets.
+
+## Differentiate polynomials
+
+```ts
+import { polynomial, polyder } from "@delinoio/nmath/numpy";
+
+const coefficients = ctx.array([1, 2, 3], { dtype: "float32" });
+const ascending = await polynomial.polynomial.polyder(coefficients).compute();
+// [2, 6]: derivative of 1 + 2*x + 3*x**2, dtype float32
+const descending = await polyder(coefficients).compute();
+// [2, 2]: derivative of x**2 + 2*x + 3, dtype float64
+ascending.dispose();
+descending.dispose();
+```
+
+Ascending derivatives accept `{ m, axis, scl }`, defaulting to order one, axis zero and scale one. Negative axes count from the end. Every derivative stage multiplies by `scl` before multiplying by the degree and preserves the coefficient precision. Boolean and integer coefficients convert to float64. Scalar coefficients become length-one arrays. Empty axes stay empty. Orders at least as large as a nonempty axis return one coefficient multiplied by zero, so an infinite constant produces NaN. Complex scaling requires complex coefficients for active differentiation.
+
+Descending `polyder(coefficients, m)` accepts rank-one coefficients. Positive orders promote against int64 degree factors, so float32 becomes float64 and complex64 becomes complex128. The result is empty when the order reaches the coefficient count. Order zero preserves the original shared storage; ascending order zero returns an independent copy. Both APIs require nonnegative safe integer orders, run lazily on CPU, and support cancellation and context memory limits. Unknown options and invalid axes fail. Derivative nodes reject GPU requests; the zero-order legacy identity retains the original expression and its device support. Array-valued scales, multidimensional legacy derivatives, integration and polynomial classes remain support targets.

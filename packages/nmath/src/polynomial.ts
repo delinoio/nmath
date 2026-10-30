@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Expr, type Lazy } from "./core.js";
+import { Complex, Expr, type Lazy } from "./core.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
 import type { NumericalDType } from "./fft.js";
 import type { Broadcast, Promote, Shape } from "./types.js";
+import type {
+  DerivativeActive,
+  DerivativeOrder,
+  DerivativeShape,
+} from "./layout-types.js";
+export type { DerivativeShape } from "./layout-types.js";
 
 type Tail<S extends Shape> = S extends readonly [
   number,
@@ -138,5 +144,129 @@ function seriesPolyval<
   return evaluate(coefficients, points, true, options.tensor ?? true);
 }
 
+export interface PolynomialDerivativeOptions {
+  m?: number;
+  axis?: number;
+  scl?: number | Complex;
+}
+type OptionValue<O, K extends PropertyKey, Default extends number> =
+  O extends Record<K, infer V extends number>
+    ? V
+    : K extends keyof O
+      ? Default | Extract<O[K], number>
+      : Default;
+type DerivativeCheck<
+  S extends Shape,
+  M extends number,
+  A extends number,
+  Asc extends boolean,
+> = [DerivativeShape<S, M, A, Asc>] extends [never] ? never : unknown;
+type ScaleCheck<D extends NumericalDType, S extends Shape, O> = O extends {
+  scl: Complex;
+}
+  ? D extends "complex64" | "complex128"
+    ? unknown
+    : [
+          DerivativeActive<
+            S,
+            OptionValue<O, "m", 1>,
+            OptionValue<O, "axis", 0>
+          >,
+        ] extends [true]
+      ? never
+      : unknown
+  : unknown;
+export type PolyderDType<
+  D extends NumericalDType,
+  M extends number = 1,
+> = M extends 0
+  ? D
+  : number extends M
+    ? D | Promote<D, "int64">
+    : Promote<D, "int64">;
+
+function derivative(
+  c: Lazy<any, any>,
+  ascending: boolean,
+  m: number,
+  axis: number,
+  scl: number | Complex,
+): Expr<any, any> {
+  if (!Number.isSafeInteger(m) || m < 0)
+    throw new TypeError("Derivative order must be a nonnegative safe integer.");
+  if (!Number.isSafeInteger(axis))
+    throw new TypeError("Derivative axis must be a safe integer.");
+  if (typeof scl !== "number" && !(scl instanceof Complex))
+    throw new TypeError("Derivative scale must be a number or Complex scalar.");
+  return new Expr(
+    native(() =>
+      binding.NativeExpr.polynomialDerivative(
+        c.nativeExpr(),
+        ascending,
+        m,
+        axis,
+        scl,
+      ),
+    ),
+    c.context,
+  );
+}
+
+/** Differentiate a descending rank-one coefficient array. */
+export function polyder<
+  D extends NumericalDType,
+  S extends Shape,
+  const M extends number = 1,
+>(
+  coefficients: Lazy<NoInfer<D>, S> & { readonly dtype: D } & DerivativeCheck<
+      S,
+      M,
+      0,
+      false
+    >,
+  m: M & DerivativeOrder<M> = 1 as M & DerivativeOrder<M>,
+): Expr<PolyderDType<D, NoInfer<M>>, DerivativeShape<S, NoInfer<M>, 0, false>> {
+  return derivative(coefficients, false, m, 0, 1);
+}
+
+/** Differentiate ascending coefficients along a selected axis. */
+function seriesPolyder<
+  D extends NumericalDType,
+  S extends Shape,
+  const O extends PolynomialDerivativeOptions = {},
+>(
+  coefficients: Lazy<NoInfer<D>, S> & { readonly dtype: D } & DerivativeCheck<
+      S,
+      OptionValue<O, "m", 1>,
+      OptionValue<O, "axis", 0>,
+      true
+    >,
+  options: O &
+    Record<Exclude<keyof O, keyof PolynomialDerivativeOptions>, never> &
+    ScaleCheck<D, S, O> = {} as O &
+    Record<Exclude<keyof O, keyof PolynomialDerivativeOptions>, never> &
+    ScaleCheck<D, S, O>,
+): Expr<
+  NumericFloat<D>,
+  DerivativeShape<S, OptionValue<O, "m", 1>, OptionValue<O, "axis", 0>>
+> {
+  if (
+    options === null ||
+    typeof options !== "object" ||
+    Array.isArray(options) ||
+    Object.keys(options).some((key) => !["m", "axis", "scl"].includes(key))
+  )
+    throw new TypeError("Unsupported derivative option. Use { m, axis, scl }.");
+  return derivative(
+    coefficients,
+    true,
+    options.m === undefined ? 1 : options.m,
+    options.axis === undefined ? 0 : options.axis,
+    options.scl === undefined ? 1 : options.scl,
+  );
+}
+
 /** NumPy's polynomial package and power-series namespace. */
-export const polynomial = { polynomial: { polyval: seriesPolyval } };
+export const polynomial = {
+  polynomial: { polyval: seriesPolyval, polyder: seriesPolyder },
+};

@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "9129f018360d217b8cd7040bac146da2e67df632"
+COUNTERPART_REVISION = "8bd03f1ed61605ca8651a15057c8ae7579a38364"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
@@ -197,6 +197,22 @@ for name, target, arguments in [
         ["packages/nmath/src/polynomial.ts", "packages/nmath/src/numpy.ts", "crates/nmath-core/src/polynomial.rs", "crates/nmath-core/src/kernels.rs", "crates/nmath-core/src/expr.rs"],
         ["packages/nmath/test/polynomial.test.mjs", "packages/nmath/test/types/polynomial.ts", "crates/nmath-core/tests/polynomial.rs"],
         ["crates/nmath-core/tests/fixtures/polynomial/oracle.json"])
+
+for name, arguments in [
+    ("numpy.polyder", ["coefficients: rank-one descending", "m: nonnegative safe integer, default 1"]),
+    ("numpy.polynomial.polynomial.polyder", ["coefficients: ascending", "options: m, axis, scl"]),
+]:
+    counterparts({name: name}, "polynomial", arguments, NUMERIC,
+        ["CPU-only lazy native differentiation with execution-start snapshots, cancellation and managed memory budgets.",
+         "Ascending integer/bool coefficients become float64; floating/complex precision is preserved with separate scale/degree rounding at each stage.",
+         "Ascending supports scalar coefficients and negative/multivariate axes; scalar scale is real or complex. Active complex scaling of real coefficients requires an explicit cast.",
+         "Ascending high orders retain the first coefficient slice multiplied by zero (including non-finite effects); empty axes stay empty. Ascending zero order copies.",
+         "Descending rank-one positive orders promote against int64 degree arrays, preserve integer wrapping and may return empty coefficients; zero order preserves input storage.",
+         "Fractional/string legacy order coercion, array-valued scales, multidimensional legacy coefficients, polynomial classes and integration remain pending.",
+         "Exact recorded floating bits with NaN equivalence are diagnostic fixture evidence, not all-platform numerical acceptance."],
+        ["packages/nmath/src/polynomial.ts", "packages/nmath/src/layout-types.ts", "packages/nmath/src/numpy.ts", "crates/nmath-node/src/lib.rs", "crates/nmath-core/src/polynomial.rs", "crates/nmath-core/src/kernels.rs", "crates/nmath-core/src/expr.rs"],
+        ["packages/nmath/test/polynomial-derivative.test.mjs", "packages/nmath/test/types/polynomial-derivative.ts", "crates/nmath-core/tests/polynomial.rs"],
+        ["crates/nmath-core/tests/fixtures/polynomial/derivative-oracle.json"])
 
 TABLE_LIMITS = [
     "CPU numeric/bool columns with explicit validity masks; no string/temporal/complex/nested columns at the inspected revision.",
