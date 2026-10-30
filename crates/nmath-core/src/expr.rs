@@ -34,6 +34,7 @@ pub enum ExprKind {
     Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
     Fft(crate::fft::FftOptions, Expr),
     Polynomial(crate::polynomial::PolynomialOptions, Expr, Expr),
+    PolynomialDerivative(crate::polynomial::DerivativeOptions, Expr),
     Index(Expr, Vec<Selector>),
     Cast(Expr, DType),
     Transpose(Expr, Vec<usize>),
@@ -267,6 +268,24 @@ impl Expr {
         ))
     }
 
+    pub fn polynomial_derivative(
+        options: crate::polynomial::DerivativeOptions,
+        coefficients: &Expr,
+    ) -> Result<Expr> {
+        let (shape, dtype, _) = options.infer(coefficients.shape(), coefficients.dtype())?;
+        // The legacy zero-order derivative aliases its input, whereas the
+        // ascending API always copies (and converts integer coefficients).
+        if options.order == crate::polynomial::PolynomialOrder::Descending && options.count == 0 {
+            return Ok(coefficients.clone());
+        }
+        Ok(Expr::node(
+            ExprKind::PolynomialDerivative(options, coefficients.clone()),
+            dtype,
+            shape,
+            coefficients.context_id(),
+        ))
+    }
+
     pub fn index(input: &Expr, selectors: Vec<Selector>) -> Result<Expr> {
         let shape = index_shape(input.shape(), &selectors)?;
         Ok(Expr::node(
@@ -373,6 +392,7 @@ impl Expr {
             ExprKind::Linalg(op, ..) => op.id(),
             ExprKind::Fft(options, ..) => options.op.id(),
             ExprKind::Polynomial(options, ..) => options.order.id(),
+            ExprKind::PolynomialDerivative(options, ..) => options.id(),
             ExprKind::Index(..) => "index",
             ExprKind::Cast(..) => "cast",
             ExprKind::Transpose(..) => "transpose",
@@ -385,7 +405,7 @@ impl Expr {
         match &self.0.kind {
             ExprKind::Input(_) | ExprKind::Scalar(_) | ExprKind::Random(..) => vec![],
             ExprKind::Linalg(_, a, b) => std::iter::once(a).chain(b.as_ref()).collect(),
-            ExprKind::Fft(_, e) => vec![e],
+            ExprKind::Fft(_, e) | ExprKind::PolynomialDerivative(_, e) => vec![e],
             ExprKind::Unary(_, e)
             | ExprKind::Reduce(_, e, _)
             | ExprKind::Index(e, _)
@@ -691,6 +711,10 @@ impl JobEnv {
                 let coefficients = self.eval_dense(coefficients)?;
                 let points = self.eval_dense(points)?;
                 crate::polynomial::execute(*options, &coefficients, &points, &budget, &token)
+            }
+            ExprKind::PolynomialDerivative(options, coefficients) => {
+                let coefficients = self.eval_dense(coefficients)?;
+                crate::polynomial::derivative(*options, &coefficients, &budget, &token)
             }
             ExprKind::Fft(options, input) => {
                 let input = self.eval_dense(input)?;
