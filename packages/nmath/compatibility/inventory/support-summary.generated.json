@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "9129f018360d217b8cd7040bac146da2e67df632",
+  "sourceRevision": "8bd03f1ed61605ca8651a15057c8ae7579a38364",
   "acceptanceStatus": "incomplete",
   "statuses": {
     "excluded": 676,
-    "partial-counterpart": 113,
-    "pending": 51972
+    "partial-counterpart": 115,
+    "pending": 51970
   },
   "partialFamilies": {
     "array-construction": 6,
@@ -16,7 +16,7 @@
     "linalg": 3,
     "matrix-product": 1,
     "numpy-io": 4,
-    "polynomial": 2,
+    "polynomial": 4,
     "random": 8,
     "reductions": 8,
     "shape-transform": 4,
