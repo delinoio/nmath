@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "a1f49c4fac30b40a1aae7fc0478620a5c7251a2b"
+COUNTERPART_REVISION = "7b041551a8134ac8d73bdcc1ab8020dd284e06a1"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
@@ -121,6 +121,24 @@ counterparts({"numpy.matmul":"numpy.matmul"}, "matrix-product", ["a", "b"], NUME
     CORE + ["crates/nmath-core/src/shape.rs", "crates/nmath-core/src/kernels.rs"],
     DTYPE_TESTS + ["packages/nmath/test/batched-matmul.test.mjs", "packages/nmath/test/types/batched-matmul.ts", "packages/nmath/test/compiler.test.mjs", "crates/nmath-core/tests/gpu.rs"],
     DTYPE_FIXTURES + ["packages/nmath/test/fixtures/batched-matmul.json"])
+counterparts({"numpy.reshape": "numpy.reshape", "numpy.ndarray.reshape": "core.Lazy.reshape"},
+    "shape-transform", ["array", "shape: dimension list with one optional -1", "options: order C, copy true/false/null"],
+    NUMERIC + ["str", "datetime64", "timedelta64"],
+    ["Lazy CPU C-order reshape; compatible signed strides share storage, copy true is independent and copy false rejects copy-required layouts.",
+     "Preserves dtype descriptors and context; copy-required execution uses actual-start snapshots.",
+     "F/A traversal, alternate scalar shapes and wider upstream signatures remain targets; GPU rejects before admission."],
+    CORE + ["packages/nmath/src/layout-types.ts", "crates/nmath-core/src/layout.rs", "crates/nmath-core/src/expr.rs", "crates/nmath-core/src/array.rs"],
+    ["packages/nmath/test/layout.test.mjs", "packages/nmath/test/types/layout.ts", "crates/nmath-core/tests/layout.rs", "packages/nmath/test/compiler.test.mjs"],
+    ["packages/nmath/test/fixtures/layout.json"])
+counterparts({"numpy.transpose": "numpy.transpose", "numpy.ndarray.transpose": "core.Lazy.transpose"},
+    "shape-transform", ["array", "axes: complete permutation or omitted"],
+    NUMERIC + ["str", "datetime64", "timedelta64"],
+    ["Lazy CPU transpose; omitted axes reverse all axes, negative axes normalize to a complete permutation.",
+     "Pure view chains share storage, preserving dtype descriptors, context, writes and lifetime; calculations read actual-start snapshots.",
+     "JS takes an axes list; upstream varargs signatures remain targets; GPU rejects before admission."],
+    CORE + ["packages/nmath/src/layout-types.ts", "crates/nmath-core/src/layout.rs", "crates/nmath-core/src/expr.rs", "crates/nmath-core/src/array.rs"],
+    ["packages/nmath/test/layout.test.mjs", "packages/nmath/test/types/layout.ts", "crates/nmath-core/tests/layout.rs", "packages/nmath/test/compiler.test.mjs"],
+    ["packages/nmath/test/fixtures/layout.json"])
 for op, target, args, limit in [
     ("__getitem__", "get", ["integer", "slice", "indices", "mask"], "Basic indexing shares storage; advanced selections copy. Full upstream mixed indexing remains pending."),
     ("__setitem__", "set", ["selectors", "value", "signal"], "Asynchronous atomic writes; complex-to-real writes require explicit casts; failed writes preserve storage."),

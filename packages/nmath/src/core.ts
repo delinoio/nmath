@@ -48,6 +48,17 @@ import type {
   WeakScalar,
 } from "./types.js";
 
+import type {
+  ReshapeShape,
+  ReshapeCheck,
+  TransposeShape,
+  TransposeCheck,
+} from "./layout-types.js";
+export interface ReshapeOptions {
+  order?: "C";
+  copy?: boolean | null;
+}
+
 /** A complex scalar with separate IEEE-754 real and imaginary components. */
 export class Complex {
   readonly #brand = true;
@@ -557,6 +568,58 @@ export abstract class Lazy<
           selectors.map(toNativeSelector),
         ),
       ),
+      this.context,
+    );
+  }
+
+  /** Lazy C-order reshape; compatible layouts share storage unless copy is true. */
+  reshape<const R extends Shape>(
+    shape: R & ReshapeCheck<S, R>,
+    options: ReshapeOptions = {},
+  ): Expr<D, ReshapeShape<S, R>> {
+    for (const key of Object.keys(options)) {
+      if (key !== "order" && key !== "copy")
+        throw new TypeError(`Unsupported reshape option: ${key}.`);
+    }
+    if (options.order !== undefined && options.order !== "C")
+      throw new TypeError("Reshape currently supports order 'C' only.");
+    if (
+      options.copy !== undefined &&
+      options.copy !== null &&
+      typeof options.copy !== "boolean"
+    )
+      throw new TypeError("Reshape copy must be boolean or null.");
+    const checked = shape.map((dim) => {
+      if (!Number.isSafeInteger(dim) || dim < -1 || dim > 0xffffffff) {
+        throw new NMathError(
+          "NMATH_SHAPE_MISMATCH",
+          "NMATH_SHAPE_MISMATCH: Reshape dimensions must be integers from 0 through 4294967295 or one -1.",
+        );
+      }
+      return dim;
+    });
+    return new Expr(
+      native(() =>
+        binding.NativeExpr.reshape(this.nativeExpr(), checked, options.copy),
+      ),
+      this.context,
+    );
+  }
+
+  /** Lazy axis permutation; omitted axes reverse their order. */
+  transpose<const A extends Shape | undefined = undefined>(
+    axes?: A & TransposeCheck<S, A>,
+  ): Expr<D, TransposeShape<S, A>> {
+    const checked = axes?.map((axis) => {
+      if (!Number.isSafeInteger(axis))
+        throw new NMathError(
+          "NMATH_SHAPE_MISMATCH",
+          "NMATH_SHAPE_MISMATCH: A transpose axis must be a safe integer.",
+        );
+      return axis;
+    });
+    return new Expr(
+      native(() => binding.NativeExpr.transpose(this.nativeExpr(), checked)),
       this.context,
     );
   }

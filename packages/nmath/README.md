@@ -442,3 +442,28 @@ result.dispose();
 ```
 
 Matrix products execute through the context scheduler. CPU supports all current numeric and boolean dtypes; GPU retains its float32/int32/uint32 and platform restrictions. An empty contraction yields zeros. Incompatible batch axes fail with `NMATH_SHAPE_BROADCAST`; scalars or incompatible contraction axes fail with `NMATH_SHAPE_MISMATCH`. Ufunc keyword options, including `out`, remain compatibility targets.
+
+### Reshape and transpose
+
+Shape transformations create lazy expressions and run through `compute()`:
+
+```ts
+import { reshape, transpose } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([1, 2, 3, 4, 5, 6], { dtype: "float64", shape: [2, 3] });
+const transposed = await transpose(a).compute(); // shape [3, 2], shared view
+const flat = await reshape(a, [-1]).compute(); // shape [6], shared view
+const copied = await a.transpose().reshape([6], { copy: true }).compute();
+// copied values: [1, 4, 2, 5, 3, 6]
+
+transposed.dispose();
+flat.dispose();
+copied.dispose();
+a.dispose();
+```
+
+`transpose(axes?)` reverses all axes by default. An explicit list must name each axis once; negative axes count from the end. `reshape(shape, {order?: "C", copy?: boolean | null})` preserves the logical C-order element sequence and supports one inferred `-1` dimension. C is the supported traversal order. Other orders and unknown options fail explicitly. The element count must match; `[0, -1]` is ambiguous and fails, while reshaping an empty input to `[-1]` produces `[0]`.
+
+With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
+
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.

@@ -213,3 +213,28 @@ await ctx.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test(".nts shape transforms compose with lazy arithmetic", async () => {
+  const dir = project({
+    "main.nts": `import { createContext } from "@delinoio/nmath";
+const ctx = createContext({maxConcurrentJobs: 1, maxQueueLength: 4, cpuMemoryBudget: 1048576n, gpuMemoryBudget: 0n});
+const a = ctx.array([1, 2, 3, 4, 5, 6], {dtype: "float64", shape: [2, 3] as const});
+const b = a.transpose().reshape([6] as const);
+const result = await (b + b).compute();
+console.log(JSON.stringify(result.toArray()));
+a.dispose(); result.dispose(); await ctx.close();
+`,
+  });
+  try {
+    const built = await build({ tsconfig: join(dir, "tsconfig.json") });
+    assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
+    const output = execFileSync(
+      process.execPath,
+      [join(dir, "out", "main.js")],
+      { cwd: dir, encoding: "utf8" },
+    );
+    assert.equal(output.trim(), "[2,8,4,10,6,12]");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
