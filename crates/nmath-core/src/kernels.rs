@@ -668,6 +668,184 @@ pub fn binary(
     DenseArray::new(shape, buffer, reservation)
 }
 
+/// Horner evaluation reuses the arithmetic loops' typed operations. In
+/// particular, integers never cross a floating-point scalar transport.
+pub(crate) fn polynomial(
+    options: crate::polynomial::PolynomialOptions,
+    coefficients: &DenseArray,
+    points: &DenseArray,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    use crate::polynomial::PolynomialOrder;
+    token.check()?;
+    let tail = coefficients.shape.get(1..).unwrap_or(&[]);
+    let empty = coefficients.shape.first() == Some(&0);
+    let rank = if empty {
+        points.shape.len()
+    } else if options.tensor {
+        tail.len()
+            .checked_add(points.shape.len())
+            .ok_or_else(crate::numerical::overflow)?
+    } else {
+        tail.len().max(points.shape.len())
+    };
+    // Charge shape discovery and the two broadcast-stride vectors before
+    // creating them. The output reservation retains its shape charge below.
+    let _metadata = budget.reserve(crate::numerical::bytes(
+        rank,
+        3 * std::mem::size_of::<usize>(),
+    )?)?;
+    let (shape, dtype) = options.infer(
+        &coefficients.shape,
+        coefficients.dtype(),
+        &points.shape,
+        points.dtype(),
+    )?;
+    let count = if shape.contains(&0) {
+        0
+    } else {
+        crate::numerical::size(&shape)?
+    };
+    let data_bytes = crate::buffer::checked_byte_len(count, dtype)?;
+    let shape_bytes = rank
+        .checked_mul(std::mem::size_of::<usize>())
+        .ok_or_else(crate::numerical::overflow)?;
+    let charge = budget.reserve(
+        u64::try_from(
+            data_bytes
+                .checked_add(shape_bytes)
+                .ok_or_else(crate::numerical::overflow)?,
+        )
+        .map_err(|_| crate::numerical::overflow())?,
+    )?;
+    if count == 0 || empty {
+        return DenseArray::new(
+            shape,
+            Buffer::filled(dtype, count, crate::Scalar::Int(0))?,
+            charge,
+        );
+    }
+    let (c, _c_charge) = cast_operand(&coefficients.buffer, dtype, budget, token)?;
+    let (x, _x_charge) = cast_operand(&points.buffer, dtype, budget, token)?;
+    // NumPy performs the initial zero multiplication in the points' dtype,
+    // before promotion with coefficients. For real non-finite points and
+    // complex coefficients, promoting first would corrupt the imaginary part.
+    let _zero_charge = reserve_for(budget, points.dtype(), 1)?;
+    let zero = DenseArray::new(
+        vec![],
+        Buffer::filled(points.dtype(), 1, crate::Scalar::Int(0))?,
+        crate::memory::Reservation::none(),
+    )?;
+    let initial = binary(BinaryOp::Mul, points, &zero, points.dtype(), budget, token)?;
+    let (z, _z_charge) = cast_operand(&initial.buffer, dtype, budget, token)?;
+    let degrees = coefficients.shape.first().copied().unwrap_or(1);
+    let stride = c.len() / degrees;
+    let c_strides = if options.tensor {
+        Vec::new()
+    } else {
+        broadcast_strides(tail, &shape)
+    };
+    let x_strides = if options.tensor {
+        Vec::new()
+    } else {
+        broadcast_strides(&points.shape, &shape)
+    };
+    let offset = |mut i: usize, strides: &[isize]| {
+        let mut out = 0;
+        for axis in (0..shape.len()).rev() {
+            out += i % shape[axis] * strides[axis] as usize;
+            i /= shape[axis];
+        }
+        out
+    };
+    let positions = |i: usize| {
+        if options.tensor {
+            (i / points.size(), i % points.size())
+        } else {
+            (offset(i, &c_strides), offset(i, &x_strides))
+        }
+    };
+    fn evaluate<T: Copy + Default>(
+        c: &[T],
+        x: &[T],
+        z: &[T],
+        count: usize,
+        degrees: usize,
+        stride: usize,
+        ascending: bool,
+        positions: impl Fn(usize) -> (usize, usize),
+        add: fn(T, T) -> T,
+        mul: fn(T, T) -> T,
+        token: &CancellationToken,
+    ) -> Result<Vec<T>> {
+        let mut out = Vec::with_capacity(count);
+        for i in 0..count {
+            if i % CHUNK == 0 {
+                token.check()?;
+            }
+            let (ci, xi) = positions(i);
+            let point = x[xi];
+            let mut value = if ascending {
+                add(c[(degrees - 1) * stride + ci], z[xi])
+            } else {
+                add(z[xi], c[ci])
+            };
+            for j in 1..degrees {
+                if j % CHUNK == 0 {
+                    token.check()?;
+                }
+                value = if ascending {
+                    add(c[(degrees - 1 - j) * stride + ci], mul(value, point))
+                } else {
+                    add(mul(value, point), c[j * stride + ci])
+                };
+            }
+            out.push(value);
+        }
+        token.check()?;
+        Ok(out)
+    }
+    macro_rules! run {
+        ($a:expr, $b:expr, $z:expr, $add:expr, $mul:expr) => {
+            evaluate(
+                $a,
+                $b,
+                $z,
+                count,
+                degrees,
+                stride,
+                options.order == PolynomialOrder::Ascending,
+                positions,
+                $add,
+                $mul,
+                token,
+            )?
+            .into()
+        };
+    }
+    let buffer = match (c.as_ref(), x.as_ref(), z.as_ref()) {
+        (Buffer::Bool(a), Buffer::Bool(b), Buffer::Bool(z)) => {
+            run!(a, b, z, |p, q| p | q, |p, q| p & q)
+        }
+        (Buffer::I8(a), Buffer::I8(b), Buffer::I8(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::I16(a), Buffer::I16(b), Buffer::I16(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::I32(a), Buffer::I32(b), Buffer::I32(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::I64(a), Buffer::I64(b), Buffer::I64(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::U8(a), Buffer::U8(b), Buffer::U8(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::U16(a), Buffer::U16(b), Buffer::U16(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::U32(a), Buffer::U32(b), Buffer::U32(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::U64(a), Buffer::U64(b), Buffer::U64(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::F16(a), Buffer::F16(b), Buffer::F16(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::F32(a), Buffer::F32(b), Buffer::F32(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::F64(a), Buffer::F64(b), Buffer::F64(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::C64(a), Buffer::C64(b), Buffer::C64(z)) => run!(a, b, z, Num::add, Num::mul),
+        (Buffer::C128(a), Buffer::C128(b), Buffer::C128(z)) => run!(a, b, z, Num::add, Num::mul),
+        _ => unreachable!("polynomial operands were cast to their inferred numeric dtype"),
+    };
+    DenseArray::new(shape, buffer, charge)
+}
+
 pub fn unary(
     op: UnaryOp,
     input: &DenseArray,

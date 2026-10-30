@@ -33,6 +33,7 @@ pub enum ExprKind {
     MatMul(Expr, Expr),
     Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
     Fft(crate::fft::FftOptions, Expr),
+    Polynomial(crate::polynomial::PolynomialOptions, Expr, Expr),
     Index(Expr, Vec<Selector>),
     Cast(Expr, DType),
     Transpose(Expr, Vec<usize>),
@@ -246,6 +247,26 @@ impl Expr {
         ))
     }
 
+    pub fn polynomial(
+        options: crate::polynomial::PolynomialOptions,
+        coefficients: &Expr,
+        points: &Expr,
+    ) -> Result<Expr> {
+        let context = join_context(coefficients.context_id(), points.context_id())?;
+        let (shape, dtype) = options.infer(
+            coefficients.shape(),
+            coefficients.dtype(),
+            points.shape(),
+            points.dtype(),
+        )?;
+        Ok(Expr::node(
+            ExprKind::Polynomial(options, coefficients.clone(), points.clone()),
+            dtype,
+            shape,
+            context,
+        ))
+    }
+
     pub fn index(input: &Expr, selectors: Vec<Selector>) -> Result<Expr> {
         let shape = index_shape(input.shape(), &selectors)?;
         Ok(Expr::node(
@@ -351,6 +372,7 @@ impl Expr {
             ExprKind::MatMul(..) => "matmul",
             ExprKind::Linalg(op, ..) => op.id(),
             ExprKind::Fft(options, ..) => options.op.id(),
+            ExprKind::Polynomial(options, ..) => options.order.id(),
             ExprKind::Index(..) => "index",
             ExprKind::Cast(..) => "cast",
             ExprKind::Transpose(..) => "transpose",
@@ -370,7 +392,9 @@ impl Expr {
             | ExprKind::Cast(e, _)
             | ExprKind::Transpose(e, _)
             | ExprKind::Reshape(e, _) => vec![e],
-            ExprKind::Binary { lhs, rhs, .. } | ExprKind::MatMul(lhs, rhs) => vec![lhs, rhs],
+            ExprKind::Binary { lhs, rhs, .. }
+            | ExprKind::MatMul(lhs, rhs)
+            | ExprKind::Polynomial(_, lhs, rhs) => vec![lhs, rhs],
         }
     }
 
@@ -662,6 +686,11 @@ impl JobEnv {
                 let a = self.eval_dense(a)?;
                 let b = b.as_ref().map(|v| self.eval_dense(v)).transpose()?;
                 crate::linalg::execute(*op, &a, b.as_ref(), &budget, &token)
+            }
+            ExprKind::Polynomial(options, coefficients, points) => {
+                let coefficients = self.eval_dense(coefficients)?;
+                let points = self.eval_dense(points)?;
+                crate::polynomial::execute(*options, &coefficients, &points, &budget, &token)
             }
             ExprKind::Fft(options, input) => {
                 let input = self.eval_dense(input)?;
