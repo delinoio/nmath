@@ -35,6 +35,8 @@ pub enum ExprKind {
     Fft(crate::fft::FftOptions, Expr),
     Index(Expr, Vec<Selector>),
     Cast(Expr, DType),
+    Transpose(Expr, Vec<usize>),
+    Reshape(Expr, crate::layout::CopyPolicy),
     /// `Generator.random(shape)` in float64.
     Random(Generator, Vec<usize>, RandomOperation),
 }
@@ -254,6 +256,80 @@ impl Expr {
         ))
     }
 
+    pub fn transpose(input: &Expr, axes: Option<&[i64]>) -> Result<Expr> {
+        let axes = crate::layout::permutation(input.shape().len(), axes)?;
+        let shape = axes.iter().map(|&axis| input.shape()[axis]).collect();
+        Ok(Expr::node(
+            ExprKind::Transpose(input.clone(), axes),
+            input.dtype(),
+            shape,
+            input.context_id(),
+        ))
+    }
+
+    pub fn reshape(input: &Expr, shape: &[i64], copy: crate::layout::CopyPolicy) -> Result<Expr> {
+        let size = crate::numerical::size(input.shape())?;
+        let shape = crate::layout::reshape_shape(size, shape)?;
+        if copy == crate::layout::CopyPolicy::Never
+            && crate::layout::reshape_strides(input.shape(), &input.layout_strides()?, &shape)
+                .is_none()
+        {
+            return Err(Error::new(
+                ErrorCode::ShapeMismatch,
+                "The requested C-order reshape requires a copy.",
+            ));
+        }
+        Ok(Expr::node(
+            ExprKind::Reshape(input.clone(), copy),
+            input.dtype(),
+            shape,
+            input.context_id(),
+        ))
+    }
+
+    // Infer layout without reading data. Arithmetic produces C-order storage;
+    // pure shape/index transforms retain the layout of their input. This lets
+    // copy:false reject incompatible views even over a computed expression.
+    fn layout_strides(&self) -> Result<Vec<isize>> {
+        match self.kind() {
+            ExprKind::Input(a) => Ok(a.strides().to_vec()),
+            ExprKind::Transpose(e, axes) => {
+                let strides = e.layout_strides()?;
+                Ok(axes.iter().map(|&axis| strides[axis]).collect())
+            }
+            ExprKind::Reshape(e, copy) if *copy != crate::layout::CopyPolicy::Always => Ok(
+                crate::layout::reshape_strides(e.shape(), &e.layout_strides()?, self.shape())
+                    .unwrap_or(crate::layout::checked_strides(self.shape())?),
+            ),
+            ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
+                let strides = e.layout_strides()?;
+                let mut out = Vec::new();
+                for (axis, (&len, &stride)) in e.shape().iter().zip(&strides).enumerate() {
+                    match selectors.get(axis) {
+                        Some(Selector::Index(_)) => {}
+                        Some(Selector::Slice { start, stop, step }) => {
+                            let (_, step, n) =
+                                crate::shape::resolve_slice(*start, *stop, *step, len)?;
+                            out.push(if n <= 1 {
+                                0
+                            } else {
+                                stride.checked_mul(step).ok_or_else(|| {
+                                    Error::new(
+                                        ErrorCode::ShapeMismatch,
+                                        "The slice strides are too large.",
+                                    )
+                                })?
+                            });
+                        }
+                        _ => out.push(stride),
+                    }
+                }
+                Ok(out)
+            }
+            _ => crate::layout::checked_strides(self.shape()),
+        }
+    }
+
     pub fn cast(input: &Expr, dtype: DType) -> Result<Expr> {
         dtype.ensure_computable()?;
         Ok(Expr::node(
@@ -277,6 +353,8 @@ impl Expr {
             ExprKind::Fft(options, ..) => options.op.id(),
             ExprKind::Index(..) => "index",
             ExprKind::Cast(..) => "cast",
+            ExprKind::Transpose(..) => "transpose",
+            ExprKind::Reshape(..) => "reshape",
             ExprKind::Random(..) => "random",
         }
     }
@@ -289,7 +367,9 @@ impl Expr {
             ExprKind::Unary(_, e)
             | ExprKind::Reduce(_, e, _)
             | ExprKind::Index(e, _)
-            | ExprKind::Cast(e, _) => vec![e],
+            | ExprKind::Cast(e, _)
+            | ExprKind::Transpose(e, _)
+            | ExprKind::Reshape(e, _) => vec![e],
             ExprKind::Binary { lhs, rhs, .. } | ExprKind::MatMul(lhs, rhs) => vec![lhs, rhs],
         }
     }
@@ -475,13 +555,68 @@ impl JobEnv {
             })
             .map(Value::Dense);
         }
-        if let ExprKind::Index(inner, selectors) = &expr.0.kind
-            && let ExprKind::Input(array) = &inner.0.kind
-            && selectors.iter().all(Selector::is_basic)
+        if !matches!(expr.kind(), ExprKind::Input(_))
+            && let Some(view) = Self::live_view(expr)
         {
-            return array.view(selectors).map(Value::View);
+            return Ok(Value::View(view));
+        }
+        if matches!(
+            expr.kind(),
+            ExprKind::Transpose(..) | ExprKind::Reshape(..) | ExprKind::Index(..)
+        ) {
+            return self.owned_layout(expr).map(Value::View);
         }
         self.eval_dense(expr).map(Value::Dense)
+    }
+
+    /// Resolve metadata-only chains without reading live data. Returned views
+    /// deliberately retain live storage; calculations below use frozen inputs.
+    fn live_view(expr: &Expr) -> Option<NdArray> {
+        match expr.kind() {
+            ExprKind::Input(a) => Some(a.clone()),
+            ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
+                Self::live_view(e)?.view(selectors).ok()
+            }
+            ExprKind::Transpose(e, axes) => Some(Self::live_view(e)?.transpose(axes)),
+            ExprKind::Reshape(e, copy) if *copy != crate::layout::CopyPolicy::Always => {
+                Self::live_view(e)?.reshape_view(expr.shape())
+            }
+            _ => None,
+        }
+    }
+
+    /// Build an owned result from snapshots, retaining strided layouts through
+    /// shape transforms over computed inputs. No live storage is read here.
+    fn owned_layout(&mut self, expr: &Expr) -> Result<NdArray> {
+        self.token.check()?;
+        match expr.kind() {
+            ExprKind::Transpose(e, axes) => Ok(self.owned_layout(e)?.transpose(axes)),
+            ExprKind::Reshape(e, copy) => {
+                let input = self.owned_layout(e)?;
+                let contiguous = input
+                    .shape()
+                    .iter()
+                    .zip(input.strides())
+                    .zip(crate::layout::checked_strides(input.shape())?)
+                    .all(|((&dim, &stride), expected)| dim <= 1 || stride == expected);
+                if (*copy != crate::layout::CopyPolicy::Always || contiguous)
+                    && let Some(view) = input.reshape_view(expr.shape())
+                {
+                    return Ok(view);
+                }
+                let mut dense = input.snapshot_cancellable(&self.budget, &self.token)?;
+                self.token.check()?;
+                dense.shape = expr.shape().to_vec();
+                Ok(NdArray::from_dense(expr.context_id().unwrap_or(0), dense))
+            }
+            ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
+                self.owned_layout(e)?.view(selectors)
+            }
+            _ => Ok(NdArray::from_dense(
+                expr.context_id().unwrap_or(0),
+                self.eval_dense(expr)?,
+            )),
+        }
     }
 
     /// Evaluates `expr` on the CPU into a new dense array, materializing
@@ -539,6 +674,12 @@ impl JobEnv {
                     DenseArray::new(v.shape.clone(), v.buffer.clone(), Reservation::none())?,
                 );
                 tmp.take(selectors, &budget)
+            }
+            ExprKind::Transpose(..) | ExprKind::Reshape(..) => {
+                let array = self.owned_layout(expr)?;
+                let dense = array.snapshot_cancellable(&budget, &token)?;
+                token.check()?;
+                Ok(dense)
             }
             ExprKind::Cast(e, dtype) => {
                 let v = self.eval_dense(e)?;
