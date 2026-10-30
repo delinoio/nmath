@@ -547,6 +547,39 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn polynomial_derivative(
+        coefficients: &NativeExpr,
+        ascending: bool,
+        count: i64,
+        axis: i64,
+        scale: Either<f64, NativeComplex>,
+    ) -> Result<Self> {
+        use nmath_core::polynomial::{DerivativeOptions, DerivativeScale, PolynomialOrder};
+        let count = u64::try_from(count).map_err(|_| {
+            to_napi(nmath_core::Error::new(
+                nmath_core::ErrorCode::IndexInvalid,
+                "Derivative order must be nonnegative. Use an integer order.",
+            ))
+        })?;
+        let options = DerivativeOptions {
+            order: if ascending {
+                PolynomialOrder::Ascending
+            } else {
+                PolynomialOrder::Descending
+            },
+            count,
+            axis,
+            scale: match scale {
+                Either::A(v) => DerivativeScale::Real(v),
+                Either::B(v) => DerivativeScale::Complex([v.real, v.imag]),
+            },
+        };
+        Ok(Self {
+            inner: Expr::polynomial_derivative(options, &coefficients.inner).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn fft(
         op: String,
         input: &NativeExpr,

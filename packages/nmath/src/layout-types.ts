@@ -303,3 +303,105 @@ export type TransposeCheck<S extends Shape, A extends Shape | undefined> = [
 ] extends [never]
   ? never
   : unknown;
+
+/** Nonnegative integer literals reject statically; dynamic values validate at runtime. */
+export type DerivativeOrder<M extends number> = number extends M
+  ? unknown
+  : `${M}` extends `-${string}`
+    ? never
+    : `${M}` extends `${bigint}`
+      ? unknown
+      : never;
+type DerivativeLength<
+  N extends number,
+  M extends number,
+  Asc extends boolean,
+> = number extends N | M
+  ? number
+  : M extends 0
+    ? N
+    : LengthCompare<`${M}`, `${N}`> extends true
+      ? Asc extends true
+        ? N extends 0
+          ? 0
+          : 1
+        : 0
+      : Subtract<`${N}`, `${M}`> extends `${infer R extends number}`
+        ? R
+        : number;
+type DerivativeAxis<
+  S extends Shape,
+  M extends number,
+  A extends number,
+  Asc extends boolean,
+  I extends 0[] = [],
+> = S extends readonly [infer H extends number, ...infer T extends Shape]
+  ? I["length"] extends A
+    ? [DerivativeLength<H, M, Asc>, ...T]
+    : DerivativeAxis<T, M, A, Asc, [...I, 0]> extends infer R extends Shape
+      ? [R] extends [never]
+        ? never
+        : [H, ...R]
+      : never
+  : never;
+type DerivativeKnownShape<
+  S extends Shape,
+  M extends number,
+  A extends number,
+  Asc extends boolean,
+> = number extends S["length"]
+  ? number[]
+  : number extends A
+    ? DynamicDims<S>
+    : NormalizeAxis<S, A> extends infer Axis extends number
+      ? [Axis] extends [never]
+        ? never
+        : DerivativeAxis<S, M, Axis, Asc>
+      : never;
+export type DerivativeShape<
+  S extends Shape,
+  M extends number = 1,
+  A extends number = 0,
+  Asc extends boolean = true,
+> = M extends M
+  ? A extends A
+    ? [DerivativeOrder<M>] extends [never]
+      ? never
+      : Asc extends true
+        ? DerivativeKnownShape<S extends readonly [] ? [1] : S, M, A, Asc>
+        : S extends readonly []
+          ? never
+          : number extends S["length"]
+            ? number[]
+            : S extends readonly [number]
+              ? DerivativeKnownShape<S, M, 0, Asc>
+              : never
+    : never
+  : never;
+
+type ActiveDerivative<
+  S extends Shape,
+  M extends number,
+  A extends number,
+> = M extends 0
+  ? false
+  : number extends S["length"] | M | A
+    ? boolean
+    : NormalizeAxis<S, A> extends infer Axis extends number
+      ? At<S, Axis> extends infer N extends number
+        ? number extends N
+          ? boolean
+          : LengthCompare<`${M}`, `${N}`> extends true
+            ? false
+            : true
+        : boolean
+      : boolean;
+export type DerivativeActive<
+  S extends Shape,
+  M extends number,
+  A extends number,
+> = M extends M
+  ? A extends A
+    ? ActiveDerivative<S extends readonly [] ? [1] : S, M, A>
+    : never
+  : never;

@@ -236,6 +236,22 @@ test("polynomial counterparts retain the bounded power-series scope", () => {
       ),
     );
   }
+  for (const name of ["numpy.polyder", "numpy.polynomial.polynomial.polyder"]) {
+    const row = rows.get(name);
+    assert.equal(row.status, "partial-counterpart");
+    assert.equal(row.counterpart, name);
+    assert.equal(row.supportedScope.family, "polynomial");
+    assert.ok(
+      row.supportedScope.fixtures.includes(
+        "crates/nmath-core/tests/fixtures/polynomial/derivative-oracle.json",
+      ),
+    );
+    assert.ok(
+      row.supportedScope.conditions.some((condition) =>
+        condition.includes("integration remain pending"),
+      ),
+    );
+  }
   for (const name of [
     "numpy.polynomial.polynomial.polyfit",
     "numpy.polynomial.polynomial.polyroots",
