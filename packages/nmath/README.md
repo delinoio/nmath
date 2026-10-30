@@ -217,7 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                                     |
 | NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                                                      | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                                                 |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
-| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion                                                                                                                 | full `linalg`/`fft` coverage, polynomials, masked arrays                                                                                                         |
+| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; ascending/descending polynomial evaluation                                                                     | full `linalg`/`fft` coverage, polynomial operations beyond power-series evaluation, masked arrays                                                                |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                            | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                             |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                       | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                                    |
 | pandas               | Numeric Series/DataFrame, basic labels, nullable filtering/sorting, single-key inner/left joins and grouped aggregates; CSV, records JSON, Parquet and Feather adapters | Full label alignment, nullable arithmetic, richer join/group options, pivots, windows, time series, string/categorical APIs and full file option/metadata parity |
@@ -467,3 +467,22 @@ a.dispose();
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
 Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
+
+## Evaluate polynomials
+
+```ts
+import { polynomial, polyval } from "@delinoio/nmath/numpy";
+
+const coefficients = ctx.array([1, 2, 3], { dtype: "float32" });
+const points = ctx.array([0, 1, 2], { dtype: "float32" });
+const ascending = await polynomial.polynomial.polyval(points, coefficients).compute();
+// [1, 6, 17]: 1 + 2*x + 3*x**2
+const descending = await polyval(coefficients, points).compute();
+// [3, 6, 11]: x**2 + 2*x + 3
+ascending.dispose();
+descending.dispose();
+```
+
+Coefficients occupy the first axis. Ascending evaluation defaults to `{ tensor: true }`: it evaluates every polynomial against every point and returns `coefficients.shape.slice(1)` followed by `points.shape`. Pass `{ tensor: false }` to broadcast those shapes instead. Descending evaluation always broadcasts. Both APIs accept arrays and lazy expressions from one context, run on CPU, and take fresh input snapshots at actual execution start.
+
+Ascending evaluation converts integer and boolean coefficients to float64. Descending evaluation preserves ordinary array promotion, including exact bigint transport and integer wrapping. Empty descending coefficients return zeros with the points' shape and dtype; empty ascending coefficients fail. Wrap scalar inputs as rank-zero context arrays; descending coefficients require at least one axis. Results use independent storage. GPU requests reject without fallback. Polynomial classes, fitting, roots, other bases and coefficient arithmetic remain planned support targets.

@@ -72,7 +72,7 @@ EXCLUSIONS = {
     "polars.DataFrame.write_database": "Remote storage, database connectors",
 }
 # Pin the inspected implementation, not the generator commit or execution host.
-COUNTERPART_REVISION = "6eb9879ad43f8b78cd3ec7fd45264c7e07987aaa"
+COUNTERPART_REVISION = "a825ab1071c425df244d641f82dea5b5ce0f7152"
 COUNTERPARTS = {}
 SCOPES = {}
 NUMERIC = "bool int8 uint8 int16 uint16 int32 uint32 int64 uint64 float16 float32 float64 complex64 complex128".split()
@@ -183,6 +183,20 @@ for family, ops in [("linalg", ["solve", "inv", "det"]), ("fft", ["fft", "ifft",
             ["packages/nmath/src/" + family + ".ts", "crates/nmath-core/src/numerical.rs"],
             ["packages/nmath/test/numerical.test.mjs", "crates/nmath-core/tests/numerical.rs"],
             ["crates/nmath-core/tests/fixtures/numerical/" + file for file in (["linalg.json"] if family == "linalg" else ["fft_adaptation.json", "fft_identity.json"])])
+
+for name, target, arguments in [
+    ("numpy.polyval", "numpy.polyval", ["coefficients: descending", "points"]),
+    ("numpy.polynomial.polynomial.polyval", "numpy.polynomial.polynomial.polyval", ["points", "coefficients: ascending", "options: tensor boolean, default true"]),
+]:
+    counterparts({name: target}, "polynomial", arguments, NUMERIC,
+        ["CPU-only lazy native Horner evaluation with explicit-context operands, actual-start snapshots and independent results.",
+         "Ascending integer/bool coefficients become float64; boolean points promote through int64. Descending coefficients retain array dtype promotion and integer wrapping.",
+         "Ascending tensor evaluation concatenates polynomial-batch and point shapes; tensor false and descending evaluation broadcast them.",
+         "Ascending empty coefficients reject; descending empty coefficients return zeros with the point dtype and shape. Scalar operands require context arrays; descending coefficients require an axis.",
+         "Exact recorded float bits with NaN equivalence are diagnostic, not general numerical acceptance. Other polynomial APIs/classes/bases and platform acceptance remain pending."],
+        ["packages/nmath/src/polynomial.ts", "packages/nmath/src/numpy.ts", "crates/nmath-core/src/polynomial.rs", "crates/nmath-core/src/kernels.rs", "crates/nmath-core/src/expr.rs"],
+        ["packages/nmath/test/polynomial.test.mjs", "packages/nmath/test/types/polynomial.ts", "crates/nmath-core/tests/polynomial.rs"],
+        ["crates/nmath-core/tests/fixtures/polynomial/oracle.json"])
 
 TABLE_LIMITS = [
     "CPU numeric/bool columns with explicit validity masks; no string/temporal/complex/nested columns at the inspected revision.",

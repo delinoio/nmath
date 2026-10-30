@@ -222,3 +222,25 @@ test("bounded implementations do not certify dtype classes, aliases or adjacent 
     "partial-counterpart",
   );
 });
+
+test("polynomial counterparts retain the bounded power-series scope", () => {
+  for (const name of ["numpy.polyval", "numpy.polynomial.polynomial.polyval"]) {
+    const row = rows.get(name);
+    assert.equal(row.status, "partial-counterpart");
+    assert.equal(row.counterpart, name);
+    assert.equal(row.supportedScope.family, "polynomial");
+    assert.ok(row.supportedScope.dtypes.includes("uint64"));
+    assert.ok(
+      row.supportedScope.fixtures.includes(
+        "crates/nmath-core/tests/fixtures/polynomial/oracle.json",
+      ),
+    );
+  }
+  for (const name of [
+    "numpy.polynomial.polynomial.polyfit",
+    "numpy.polynomial.polynomial.polyroots",
+    "numpy.poly1d",
+  ]) {
+    assert.equal(rows.get(name).status, "pending", name);
+  }
+});
