@@ -525,6 +525,28 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn polynomial(
+        coefficients: &NativeExpr,
+        points: &NativeExpr,
+        ascending: bool,
+        tensor: bool,
+    ) -> Result<Self> {
+        use nmath_core::polynomial::{PolynomialOptions, PolynomialOrder};
+        let options = PolynomialOptions {
+            order: if ascending {
+                PolynomialOrder::Ascending
+            } else {
+                PolynomialOrder::Descending
+            },
+            tensor,
+        };
+        Ok(Self {
+            inner: Expr::polynomial(options, &coefficients.inner, &points.inner)
+                .map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn fft(
         op: String,
         input: &NativeExpr,

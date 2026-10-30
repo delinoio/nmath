@@ -40,3 +40,5 @@ pub mod io_text;
 pub mod fft;
 pub mod linalg;
 mod numerical;
+
+pub mod polynomial;
