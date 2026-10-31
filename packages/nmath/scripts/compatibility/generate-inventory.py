@@ -108,6 +108,12 @@ for op in ["array", "zeros", "ones", "full", "ndarray"]:
         NUMERIC_LIMITS + ["No scalar-class constructor parity, structured/extended/string/temporal dtypes, order/like/subok or full copy-policy parity."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
 counterparts({"numpy.arange": "numpy.arange"}, "array-construction", ["context", "start", "stop", "step", "dtype"],
     ["int32", "uint32", "float32", "float64"], ["JS number start/stop/step; default dtype float64; no 64-bit integer or full upstream dtype support."], CORE, ["packages/nmath/test/frames.test.mjs"])
+for op, target in {"equal":"equal", "not_equal":"not_equal", "less":"less", "less_equal":"less_equal", "greater":"greater", "greater_equal":"greater_equal"}.items():
+    dtype = NUMERIC if op in {"equal", "not_equal"} else [d for d in NUMERIC if not d.startswith("complex")]
+    counterparts({"numpy." + op: "numpy." + op}, "elementwise", ["contextual operands", "broadcasting", "weak scalars"], dtype,
+        NUMERIC_LIMITS + ["Returns bool. Ordering rejects complex operands; equality compares both complex components. Strings and temporal dtypes are rejected. GPU rejects the bool result before admission."],
+        CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/comparisons.test.mjs", "packages/nmath/test/types/comparisons.ts", "crates/nmath-core/tests/comparisons.rs"],
+        ["crates/nmath-core/tests/fixtures/comparisons/oracle.json"])
 for op, target in {"add":"add", "subtract":"subtract", "multiply":"multiply", "divide":"divide", "true_divide":"trueDivide", "remainder":"remainder", "mod":"mod", "power":"power", "positive":"positive", "negative":"negative"}.items():
     dtypes = [d for d in NUMERIC if not (op in {"remainder", "mod"} and d.startswith("complex")) and not (op in {"subtract", "positive", "negative"} and d == "bool")]
     counterparts({"numpy." + op: "numpy." + target}, "elementwise", ["contextual operands", "broadcasting", "weak scalars"], dtypes,
