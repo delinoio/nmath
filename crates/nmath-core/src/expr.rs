@@ -197,7 +197,7 @@ impl Expr {
     }
 
     pub fn reduce(op: ReduceOp, input: &Expr, axes: Option<Vec<i64>>) -> Result<Expr> {
-        kernels::validate_special_reduce(op, input.dtype())?;
+        kernels::validate_special_reduce(op, input.dtype(), axes.as_deref())?;
         let reduced = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
         let shape = kernels::reduce_shape(input.shape(), &reduced);
         let dtype = op.result_dtype(input.dtype().ensure_computable()?);

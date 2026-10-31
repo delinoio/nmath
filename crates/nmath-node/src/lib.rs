@@ -466,6 +466,9 @@ impl NativeExpr {
             "mean" => ReduceOp::Mean,
             "min" => ReduceOp::Min,
             "max" => ReduceOp::Max,
+            "prod" => ReduceOp::Prod,
+            "argmin" => ReduceOp::ArgMin,
+            "argmax" => ReduceOp::ArgMax,
             other => {
                 return Err(core_err(
                     ErrorCode::IndexInvalid,
