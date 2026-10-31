@@ -98,6 +98,9 @@ pub enum ReduceOp {
     Mean,
     Min,
     Max,
+    Prod,
+    ArgMin,
+    ArgMax,
 }
 
 impl ReduceOp {
@@ -107,15 +110,23 @@ impl ReduceOp {
             ReduceOp::Mean => "mean",
             ReduceOp::Min => "min",
             ReduceOp::Max => "max",
+            ReduceOp::Prod => "prod",
+            ReduceOp::ArgMin => "argmin",
+            ReduceOp::ArgMax => "argmax",
         }
+    }
+
+    pub fn is_arg(self) -> bool {
+        matches!(self, ReduceOp::ArgMin | ReduceOp::ArgMax)
     }
 
     pub fn result_dtype(self, input: DType) -> DType {
         match self {
-            ReduceOp::Sum => input.sum_dtype(),
+            ReduceOp::Sum | ReduceOp::Prod => input.sum_dtype(),
             ReduceOp::Mean if input.temporal_unit().is_some() => input,
             ReduceOp::Mean => input.true_divide(),
             ReduceOp::Min | ReduceOp::Max => input,
+            ReduceOp::ArgMin | ReduceOp::ArgMax => DType::Int64,
         }
     }
 }
@@ -134,6 +145,8 @@ trait Num: Copy + PartialOrd + Send + Sync + Default {
         Ok(None)
     }
     fn mean(self, count: usize) -> Self;
+    /// Multiplicative identity, used by the product reduction.
+    fn one() -> Self;
 
     fn add(a: Self, b: Self) -> Self;
     fn sub(a: Self, b: Self) -> Self;
@@ -148,6 +161,7 @@ macro_rules! int_num {
     ($($t:ty),*) => {$(
         impl Num for $t {
             fn mean(self, count: usize) -> Self { self / count as $t }
+            fn one() -> Self { 1 }
             fn add(a: Self, b: Self) -> Self { a.wrapping_add(b) }
             fn sub(a: Self, b: Self) -> Self { a.wrapping_sub(b) }
             fn mul(a: Self, b: Self) -> Self { a.wrapping_mul(b) }
@@ -192,6 +206,7 @@ macro_rules! float_num {
         impl Num for $t {
             fn nan(self) -> bool { self.is_nan() }
             fn mean(self, count: usize) -> Self { self / count as $t }
+            fn one() -> Self { 1.0 }
             fn add(a: Self, b: Self) -> Self { a + b }
             fn sub(a: Self, b: Self) -> Self { a - b }
             fn mul(a: Self, b: Self) -> Self { a * b }
@@ -246,6 +261,10 @@ impl Num for f32 {
         self / count as f32
     }
 
+    fn one() -> Self {
+        1.0
+    }
+
     fn add(a: Self, b: Self) -> Self {
         a + b
     }
@@ -297,6 +316,10 @@ impl Num for Float16 {
 
     fn mean(self, count: usize) -> Self {
         Self::from_f32(self.to_f32() / count as f32)
+    }
+
+    fn one() -> Self {
+        Self::from_f32(1.0)
     }
 
     fn add(a: Self, b: Self) -> Self {
@@ -388,6 +411,7 @@ macro_rules! complex_num {
             }
             fn nan(self) -> bool { self[0].is_nan() || self[1].is_nan() }
             fn mean(self, count: usize) -> Self { Self::div(self, [count as $t, 0.0]) }
+            fn one() -> Self { [1.0, 0.0] }
             fn add(a: Self, b: Self) -> Self { [a[0] + b[0], a[1] + b[1]] }
             fn sub(a: Self, b: Self) -> Self { [a[0] - b[0], a[1] - b[1]] }
             fn mul(a: Self, b: Self) -> Self { [a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0]] }
@@ -457,6 +481,10 @@ complex_num!(f32, f64);
 impl Num for bool {
     fn mean(self, _: usize) -> Self {
         unreachable!()
+    }
+
+    fn one() -> Self {
+        true
     }
 
     fn add(a: Self, b: Self) -> Self {
@@ -1106,6 +1134,59 @@ pub fn reduce_shape(shape: &[usize], reduced: &[bool]) -> Vec<usize> {
     result
 }
 
+/// First-occurrence index selection. `axis` stores the reduced axis length and
+/// the stride of the trailing dimensions; `None` selects the flat C-order
+/// offset for a full reduction. NaNs are sticky and keep the first NaN index,
+/// and equal values keep the first index, matching NumPy.
+fn arg_reduce<T: Num>(
+    op: ReduceOp,
+    values: &[T],
+    slots: BroadcastPairs,
+    out_len: usize,
+    axis: Option<(usize, usize)>,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<Vec<i64>> {
+    let scratch = out_len
+        .checked_mul(std::mem::size_of::<T>() + 1)
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::MemoryBudgetExceeded,
+                "Reduction index scratch exceeds the supported vector capacity.",
+            )
+        })?;
+    let _scratch = budget.reserve(scratch)?;
+    let mut best = vec![T::default(); out_len];
+    let mut seen = vec![false; out_len];
+    let mut index = vec![0i64; out_len];
+    for (i, (slot, _)) in slots.enumerate() {
+        if i % CHUNK == 0 {
+            token.check()?;
+        }
+        let x = values[i];
+        let take = !seen[slot]
+            || (!best[slot].nan()
+                && (x.nan()
+                    || if op == ReduceOp::ArgMin {
+                        x < best[slot]
+                    } else {
+                        x > best[slot]
+                    }));
+        if take {
+            best[slot] = x;
+            index[slot] = match axis {
+                None => i64::try_from(i).map_err(|_| crate::numerical::overflow())?,
+                Some((length, inner)) => {
+                    i64::try_from((i / inner) % length).map_err(|_| crate::numerical::overflow())?
+                }
+            };
+            seen[slot] = true;
+        }
+    }
+    Ok(index)
+}
+
 pub fn reduce(
     op: ReduceOp,
     input: &DenseArray,
@@ -1113,7 +1194,7 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
-    validate_special_reduce(op, input.dtype())?;
+    validate_special_reduce(op, input.dtype(), axes)?;
     let rank = input.shape.len();
     let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
@@ -1123,13 +1204,21 @@ pub fn reduce(
         .iter()
         .zip(&reduced)
         .any(|(&len, &r)| r && len == 0);
-    if matches!(op, ReduceOp::Min | ReduceOp::Max) && empty_reduction {
+    if (matches!(op, ReduceOp::Min | ReduceOp::Max) || op.is_arg()) && empty_reduction {
         return Err(Error::new(
             ErrorCode::ShapeMismatch,
-            format!(
-                "The '{}' reduction has no identity over a zero-size axis.",
-                op.id()
-            ),
+            if op.is_arg() {
+                format!(
+                    "The '{}' reduction has no element over a zero-size axis. Use a nonempty \
+                     reduced axis.",
+                    op.id()
+                )
+            } else {
+                format!(
+                    "The '{}' reduction has no identity over a zero-size axis.",
+                    op.id()
+                )
+            },
         ));
     }
     // Reduced flags and the four rank-sized vectors in BroadcastPairs and
@@ -1177,6 +1266,40 @@ pub fn reduce(
     } else {
         input.size() / out_len
     };
+    if op.is_arg() {
+        // `validate_reduce` admits only a full reduction or one named axis, so
+        // the selected coordinate is either the flat C-order offset or the
+        // position inside the single reduced axis.
+        let axis = axes.as_ref().map(|list| {
+            let raw = list[0];
+            let position = if raw < 0 { raw + rank as i64 } else { raw } as usize;
+            let inner = input.shape[position + 1..]
+                .iter()
+                .try_fold(1usize, |n, &dimension| n.checked_mul(dimension))
+                .unwrap_or(0);
+            (input.shape[position], inner)
+        });
+        let out = match &input.buffer {
+            Buffer::Bool(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::I8(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::I16(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::I32(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::I64(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::U8(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::U16(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::U32(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::U64(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::F16(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::F32(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::F64(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::C64(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::C128(x) => arg_reduce(op, x, slots, out_len, axis, budget, token)?,
+            Buffer::Temporal { .. } | Buffer::Unicode { .. } => {
+                return Err(crate::dtype::unsupported());
+            }
+        };
+        return DenseArray::new(out_shape, Buffer::I64(out), reservation);
+    }
     if let Buffer::Temporal { dtype, ticks } = &input.buffer {
         let _seen = budget.reserve(out_len as u64)?;
         let mut seen = vec![false; out_len];
@@ -1207,6 +1330,14 @@ pub fn reduce(
                             } else {
                                 t
                             }
+                        }
+                        // Temporal products and index reductions are rejected
+                        // during expression construction.
+                        ReduceOp::Prod | ReduceOp::ArgMin | ReduceOp::ArgMax => {
+                            return Err(Error::new(
+                                ErrorCode::DTypeUnsupported,
+                                "This reduction is not supported for temporal arrays.",
+                            ));
                         }
                     }
                 };
@@ -1247,7 +1378,11 @@ pub fn reduce(
         contiguous: bool,
         token: &CancellationToken,
     ) -> Result<Vec<T>> {
-        let mut out = vec![T::default(); out_len];
+        let mut out = if op == ReduceOp::Prod {
+            vec![T::one(); out_len]
+        } else {
+            vec![T::default(); out_len]
+        };
         if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
             if T::pairwise_sum(&[], token)?.is_some() {
                 for (i, chunk) in values.chunks_exact(count).enumerate() {
@@ -1273,6 +1408,10 @@ pub fn reduce(
             let x = values[i];
             out[slot] = match op {
                 ReduceOp::Sum | ReduceOp::Mean => T::add(out[slot], x),
+                ReduceOp::Prod => T::mul(out[slot], x),
+                ReduceOp::ArgMin | ReduceOp::ArgMax => {
+                    unreachable!("argument reductions use the dedicated index loop")
+                }
                 _ => {
                     let old = out[slot];
                     let take = !seen[slot]
@@ -2509,11 +2648,22 @@ fn special_binary(
     )
 }
 
-pub fn validate_special_reduce(op: ReduceOp, dtype: DType) -> Result<()> {
+pub fn validate_special_reduce(op: ReduceOp, dtype: DType, axes: Option<&[i64]>) -> Result<()> {
+    let temporal = dtype.temporal_unit().is_some();
     if matches!(dtype, DType::Str(_))
         || (matches!(dtype, DType::Datetime64(_)) && matches!(op, ReduceOp::Sum | ReduceOp::Mean))
+        || (temporal && matches!(op, ReduceOp::Prod | ReduceOp::ArgMin | ReduceOp::ArgMax))
     {
         return Err(crate::dtype::unsupported());
+    }
+    if op.is_arg() && axes.is_some_and(|list| list.len() != 1) {
+        return Err(Error::new(
+            ErrorCode::IndexInvalid,
+            format!(
+                "The '{}' reduction selects at most one axis. Pass one integer axis or omit it.",
+                op.id()
+            ),
+        ));
     }
     Ok(())
 }

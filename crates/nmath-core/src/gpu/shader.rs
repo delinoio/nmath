@@ -166,9 +166,14 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
             } else {
                 red.join(" + ")
             };
+            // Validation admits only sum, mean, min and max before WGSL
+            // generation, so the remaining variants cannot reach this match.
             let init = match op {
                 ReduceOp::Min | ReduceOp::Max => "a[base]".into(),
-                _ => format!("{t}(0)"),
+                ReduceOp::Sum | ReduceOp::Mean => format!("{t}(0)"),
+                ReduceOp::Prod | ReduceOp::ArgMin | ReduceOp::ArgMax => {
+                    unreachable!("reduction rejected by GPU validation")
+                }
             };
             let update = match op {
                 ReduceOp::Sum | ReduceOp::Mean if expr.dtype() == DType::Float32 => {
@@ -191,6 +196,9 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
                         "max"
                     }
                 ),
+                ReduceOp::Prod | ReduceOp::ArgMin | ReduceOp::ArgMax => {
+                    unreachable!("reduction rejected by GPU validation")
+                }
             };
             let finish = if *op == ReduceOp::Mean {
                 format!(

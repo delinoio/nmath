@@ -27,6 +27,7 @@ import type {
   ReduceShape,
   ScalarOf,
   Shape,
+  TemporalDType,
   TypedArrayOf,
 } from "./types.js";
 
@@ -178,6 +179,39 @@ export function max<
 ): Expr<D, ReduceShape<S, A>>;
 export function max(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.max(axis);
+}
+export function prod<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<SumDType<D>, ReduceShape<S, A>>;
+export function prod(x: Lazy<any, any>, axis?: number): Expr<any, any> {
+  return x.prod(axis);
+}
+export function argmin<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<"int64", ReduceShape<S, A>>;
+export function argmin(x: Lazy<any, any>, axis?: number): Expr<any, any> {
+  return x.argmin(axis);
+}
+export function argmax<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<"int64", ReduceShape<S, A>>;
+export function argmax(x: Lazy<any, any>, axis?: number): Expr<any, any> {
+  return x.argmax(axis);
 }
 export function matmul<
   A extends NumericDType,
