@@ -175,6 +175,21 @@ impl VarianceOp {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ShiftOp {
+    FftShift,
+    IfftShift,
+}
+
+impl ShiftOp {
+    pub fn id(self) -> &'static str {
+        match self {
+            ShiftOp::FftShift => "fftshift",
+            ShiftOp::IfftShift => "ifftshift",
+        }
+    }
+}
+
 /// Elements processed between cancellation checks.
 const CHUNK: usize = 1 << 14;
 
@@ -1449,6 +1464,54 @@ pub fn validate_variance(dtype: DType) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Rolls one or more axes. Every dtype is a valid input because the kernel
+/// only reindexes existing values.
+pub fn shift(
+    op: ShiftOp,
+    input: &DenseArray,
+    axes: &[usize],
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    let count = input.size();
+    let reservation = reserve_for(budget, input.dtype(), count)?;
+    let mut out = Buffer::filled(input.dtype(), count, crate::buffer::Scalar::Int(0))?;
+    if count == 0 {
+        return DenseArray::new(input.shape.clone(), out, reservation);
+    }
+    let mut source_strides = vec![1isize; input.shape.len()];
+    for axis in (0..input.shape.len().saturating_sub(1)).rev() {
+        source_strides[axis] = source_strides[axis + 1] * input.shape[axis + 1] as isize;
+    }
+    for index in 0..count {
+        if index % CHUNK == 0 {
+            token.check()?;
+        }
+        let mut remaining = index;
+        let mut source = 0isize;
+        for axis in 0..input.shape.len() {
+            let stride: usize = input.shape[axis + 1..].iter().product();
+            let coordinate = remaining / stride;
+            remaining %= stride;
+            let length = input.shape[axis];
+            let shifted = axes.contains(&axis);
+            let rolled = if length == 0 || !shifted {
+                coordinate
+            } else {
+                match op {
+                    // fftshift rolls elements forward; ifftshift is its inverse.
+                    ShiftOp::FftShift => (coordinate + length - length / 2) % length,
+                    ShiftOp::IfftShift => (coordinate + length / 2) % length,
+                }
+            };
+            source += rolled as isize * source_strides[axis];
+        }
+        out.set_from(index, &input.buffer, source as usize);
+    }
+    token.check()?;
+    DenseArray::new(input.shape.clone(), out, reservation)
 }
 
 fn scan_loop<T: Num>(
