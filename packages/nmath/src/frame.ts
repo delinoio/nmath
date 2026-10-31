@@ -80,10 +80,22 @@ interface NativeTable {
     dropNulls: boolean,
     pandas: boolean,
   ): NativeTable;
+  pivot(
+    rowKey: number,
+    columnKey: number,
+    value: number,
+    mode: string,
+    pandas: boolean,
+  ): NativeTable;
   compute(
     context: NativeContext,
     signal: NativeCancellation,
-  ): Promise<{ values: NativeArray[]; valid: NativeArray[]; rows: number }>;
+  ): Promise<{
+    values: NativeArray[];
+    valid: NativeArray[];
+    rows: number;
+    pivotNames: string[] | null;
+  }>;
 }
 const tables = binding as unknown as {
   NativeTable: {
@@ -124,6 +136,7 @@ export class TablePlan {
     readonly names: readonly string[],
     readonly context: NMathContext,
     readonly nullable: ReadonlySet<string> = new Set(),
+    readonly pivotRow?: string,
   ) {}
   static source(
     columns: ReadonlyMap<string, Column>,
@@ -262,6 +275,31 @@ export class TablePlan {
       ]),
     );
   }
+  pivot(
+    rowKey: string,
+    columnKey: string,
+    value: string,
+    mode: "unique" | "sum" | "mean" | "min" | "max" | "count",
+    pandas: boolean,
+  ): TablePlan {
+    if (rowKey === columnKey || rowKey === value || columnKey === value)
+      throw tableError();
+    return new TablePlan(
+      native(() =>
+        this.plan.pivot(
+          this.position(rowKey),
+          this.position(columnKey),
+          this.position(value),
+          mode,
+          pandas,
+        ),
+      ),
+      [rowKey],
+      this.context,
+      new Set(),
+      rowKey,
+    );
+  }
   async compute(options: ComputeOptions = {}): Promise<{
     columns: Map<string, NMathArray<ComputableDType, Shape>>;
     validity: Map<string, Column>;
@@ -279,19 +317,32 @@ export class TablePlan {
       const result = await nativeAsync(() =>
         this.plan.compute(this.context.nativeContext, cancel),
       );
+      const names = result.pivotNames
+        ? [this.pivotRow!, ...result.pivotNames]
+        : this.names;
+      const nullable = result.pivotNames
+        ? new Set(names.slice(1))
+        : this.nullable;
+      if (new Set(names).size !== names.length) {
+        result.values.forEach((value) => value.dispose());
+        result.valid.forEach((mask) => mask.dispose());
+        throw tableError(
+          "Pivot column names must be unique. Rename the source values.",
+        );
+      }
       result.valid.forEach((mask, i) => {
-        if (!this.nullable.has(this.names[i])) mask.dispose();
+        if (!nullable.has(names[i])) mask.dispose();
       });
       return {
         columns: new Map(
-          this.names.map((n, i) => [
+          names.map((n, i) => [
             n,
             new NMathArray(result.values[i], this.context),
           ]),
         ),
         validity: new Map(
-          this.names.flatMap((n, i) =>
-            this.nullable.has(n)
+          names.flatMap((n, i) =>
+            nullable.has(n)
               ? [[n, new NMathArray(result.valid[i], this.context)] as const]
               : [],
           ),

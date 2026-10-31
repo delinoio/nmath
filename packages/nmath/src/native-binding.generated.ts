@@ -101,6 +101,7 @@ export declare class NativeTable {
   sort(position: number, descending: boolean, nullsLast: boolean): NativeTable
   join(other: NativeTable, leftKey: number, rightKey: number, left: boolean, nullsEqual: boolean): NativeTable
   group(key: number, value: number, operation: string, dropNulls: boolean, pandas: boolean): NativeTable
+  pivot(rowKey: number, columnKey: number, value: number, mode: string, pandas: boolean): NativeTable
   compute(context: NativeContext, signal?: NativeCancellation | undefined | null): Promise<NativeTableResult>
 }
 
@@ -173,6 +174,8 @@ export interface NativeTableResult {
   values: Array<NativeArray>
   valid: Array<NativeArray>
   rows: number
+  /** Generated value-column names for a pivot plan; null for other plans. */
+  pivotNames?: Array<string>
 }
 
 export interface NativeTemporal {

@@ -226,6 +226,14 @@ export class DataFrame {
       validity: this.validity,
     });
   }
+  pivot(
+    on: string,
+    index: string,
+    values: string,
+    aggregate?: Aggregate,
+  ): LazyFrame {
+    return this.lazy().pivot(on, index, values, aggregate);
+  }
   lazy(): LazyFrame {
     return new LazyFrame(this.#columns, [], this.validity);
   }
@@ -347,6 +355,16 @@ export class LazyFrame {
   }
   groupBy(key: string, value: string, op: Aggregate): LazyFrame {
     return this.#next(this.#native().group(key, value, op));
+  }
+  pivot(
+    on: string,
+    index: string,
+    values: string,
+    aggregate?: Aggregate,
+  ): LazyFrame {
+    return this.#next(
+      this.#native().pivot(index, on, values, aggregate ?? "unique", false),
+    );
   }
   async collect(options: ComputeOptions = {}): Promise<DataFrame> {
     if (!this.#source.size && !this.#table) return new DataFrame(new Map());

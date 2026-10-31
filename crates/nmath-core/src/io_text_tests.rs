@@ -322,6 +322,7 @@ fn every_real_dtype_and_float_extremes_roundtrip() {
         let names = vec!["value".to_owned()];
         let table = Table {
             rows: 2,
+            pivot_columns: None,
             columns: vec![MaterializedColumn {
                 values: DenseArray::new(vec![2], buffer.clone(), Reservation::none()).unwrap(),
                 valid: DenseArray::new(
