@@ -337,7 +337,8 @@ function pickContext(
 }
 
 export type BinaryOperator = "add" | "sub" | "mul" | "div" | "mod" | "pow";
-export type ReduceOperator = "sum" | "mean" | "min" | "max";
+export type ReduceOperator =
+  "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
 
 /** Type-only brand that identifies NMath values regardless of dtype and shape. */
 export declare const lazyBrand: unique symbol;
@@ -539,6 +540,42 @@ export abstract class Lazy<
     axis?: A,
   ): Expr<D, ReduceShape<S, A>> {
     return this.reduceOp("max", axis);
+  }
+
+  /** Product over all axes or one axis. Empty reductions use the multiplicative identity. */
+  prod<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+  ): Expr<SumDType<D>, ReduceShape<S, A>> {
+    return this.reduceOp("prod", axis);
+  }
+
+  /** First index of the minimum value. The result uses dtype `int64`. */
+  argmin<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+  ): Expr<"int64", ReduceShape<S, A>> {
+    return this.reduceOp("argmin", axis);
+  }
+
+  /** First index of the maximum value. The result uses dtype `int64`. */
+  argmax<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+  ): Expr<"int64", ReduceShape<S, A>> {
+    return this.reduceOp("argmax", axis);
   }
 
   matmul<D2 extends NumericDType, S2 extends Shape>(

@@ -215,7 +215,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                       | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                                    |
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                                     |
-| NumPy reductions     | `sum`, `mean`, `min`, `max` (all axes or one axis)                                                                                                                      | `prod`, `std`, `var`, `argmin`, `argmax`, `cumsum`, multi-axis lists, `keepdims`                                                                                 |
+| NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod`, `argmin`, `argmax` (all axes or one axis)                                                                                          | `std`, `var`, `cumsum`, `cumprod`, multi-axis lists, `keepdims`                                                                                                  |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                         | several advanced selectors combined, `newaxis`, ellipsis                                                                                                         |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; ascending/descending polynomial evaluation and derivatives                                                     | full `linalg`/`fft` coverage, polynomial operations beyond evaluation/derivatives, masked arrays                                                                 |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                            | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                             |
@@ -394,6 +394,25 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
 
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
+
+### Product and index reductions
+
+`prod` multiplies over all axes or one axis and widens small integers like `sum`. `argmin` and `argmax` return `int64` positions: a flat C-order position without an axis, or a position inside the selected axis. Rank-0 index results are `bigint`.
+
+```ts
+const a = ctx.array(
+  [
+    [3, 1],
+    [2, 4],
+  ],
+  { dtype: "float64" },
+);
+console.log(await a.prod().compute()); // 24
+console.log((await a.argmin(0).compute()).toArray()); // [1n, 0n]
+console.log((await a.argmax(1).compute()).toArray()); // [0n, 1n]
+```
+
+Equal values keep their first position, and NaNs are sticky: the first NaN position wins. Complex values compare by real component, then imaginary component. A zero-length reduced axis fails with `NMATH_SHAPE_MISMATCH`, except for `prod`, which returns the multiplicative identity. String and temporal arrays reject products and index reductions at expression construction. GPU execution rejects these reductions before admission. `std`, `var`, cumulative scans and multi-axis lists remain targets.
 
 ### Linear algebra and FFT
 
