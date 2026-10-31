@@ -11,7 +11,7 @@ use crate::{
     buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
-    kernels::{self, BinaryOp, ReduceOp, ScanOp, UnaryOp, VarianceOp},
+    kernels::{self, BinaryOp, ReduceOp, ScanOp, ShiftOp, UnaryOp, VarianceOp},
     memory::{Device, MemoryBudget, Reservation},
     random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
@@ -32,6 +32,7 @@ pub enum ExprKind {
     Reduce(ReduceOp, Expr, Option<Vec<i64>>),
     Scan(ScanOp, Expr, Option<i64>),
     Variance(VarianceOp, Expr, Option<i64>, f64),
+    Shift(ShiftOp, Expr, Vec<usize>),
     MatMul(Expr, Expr),
     Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
     Fft(crate::fft::FftOptions, Expr),
@@ -207,6 +208,35 @@ impl Expr {
             ExprKind::Reduce(op, input.clone(), axes),
             dtype,
             shape,
+            input.context_id(),
+        ))
+    }
+
+    pub fn shift(op: ShiftOp, input: &Expr, axes: Option<Vec<i64>>) -> Result<Expr> {
+        let rank = input.shape().len() as i64;
+        let mut normalized =
+            Vec::with_capacity(axes.as_ref().map_or(input.shape().len(), Vec::len));
+        for raw in axes.unwrap_or_else(|| (0..rank).collect()) {
+            let axis = if raw < 0 { raw + rank } else { raw };
+            if axis < 0 || axis >= rank {
+                return Err(Error::new(
+                    ErrorCode::IndexOutOfBounds,
+                    format!("Axis {raw} is out of bounds for an array of dimension {rank}."),
+                ));
+            }
+            let axis = axis as usize;
+            if normalized.contains(&axis) {
+                return Err(Error::new(
+                    ErrorCode::IndexInvalid,
+                    format!("Axis {raw} is repeated."),
+                ));
+            }
+            normalized.push(axis);
+        }
+        Ok(Expr::node(
+            ExprKind::Shift(op, input.clone(), normalized),
+            input.dtype(),
+            input.shape().to_vec(),
             input.context_id(),
         ))
     }
@@ -454,6 +484,7 @@ impl Expr {
             ExprKind::Reduce(op, _, _) => op.id(),
             ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::Variance(op, ..) => op.id(),
+            ExprKind::Shift(op, ..) => op.id(),
             ExprKind::MatMul(..) => "matmul",
             ExprKind::Linalg(op, ..) => op.id(),
             ExprKind::Fft(options, ..) => options.op.id(),
@@ -476,6 +507,7 @@ impl Expr {
             | ExprKind::Reduce(_, e, _)
             | ExprKind::Scan(_, e, _)
             | ExprKind::Variance(_, e, _, _)
+            | ExprKind::Shift(_, e, _)
             | ExprKind::Index(e, _)
             | ExprKind::Cast(e, _)
             | ExprKind::Transpose(e, _)
@@ -772,6 +804,10 @@ impl JobEnv {
             ExprKind::Variance(op, e, axis, ddof) => {
                 let v = self.eval_dense(e)?;
                 kernels::variance(*op, &v, *axis, *ddof, &budget, &token)
+            }
+            ExprKind::Shift(op, e, axes) => {
+                let v = self.eval_dense(e)?;
+                kernels::shift(*op, &v, axes, &budget, &token)
             }
             ExprKind::MatMul(l, r) => {
                 let a = self.eval_dense(l)?;

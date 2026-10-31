@@ -8,7 +8,7 @@ use napi_derive::napi;
 use nmath_core::{
     BinaryOp, Buffer as CoreBuffer, CancellationToken, Context, ContextOptions, DType, Device,
     Error as CoreError, ErrorCode, Expr, Generator, NdArray, ReduceOp, Scalar, ScanOp, Selector,
-    UnaryOp, Value, VarianceOp, context::JobOutput, io::WriteMode,
+    ShiftOp, UnaryOp, Value, VarianceOp, context::JobOutput, io::WriteMode,
 };
 
 static LOGGING: Once = Once::new();
@@ -478,6 +478,23 @@ impl NativeExpr {
         };
         Ok(Self {
             inner: Expr::reduce(op, &input.inner, axes).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn shift(op: String, input: &NativeExpr, axes: Option<Vec<i64>>) -> Result<Self> {
+        let op = match op.as_str() {
+            "fftshift" => ShiftOp::FftShift,
+            "ifftshift" => ShiftOp::IfftShift,
+            other => {
+                return Err(core_err(
+                    ErrorCode::IndexInvalid,
+                    format!("Unknown shift operation '{other}'."),
+                ));
+            }
+        };
+        Ok(Self {
+            inner: Expr::shift(op, &input.inner, axes).map_err(to_napi)?,
         })
     }
 

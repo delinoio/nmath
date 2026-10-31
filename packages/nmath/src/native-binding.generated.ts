@@ -72,6 +72,7 @@ export declare class NativeExpr {
   static binary(op: string, lhs: NativeExpr, rhs: NativeExpr): NativeExpr
   static unary(op: string, input: NativeExpr): NativeExpr
   static reduce(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
+  static shift(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static variance(op: string, input: NativeExpr, axis: number | undefined | null, ddof: number): NativeExpr
   static scan(op: string, input: NativeExpr, axis?: number | undefined | null): NativeExpr
   static transpose(input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
