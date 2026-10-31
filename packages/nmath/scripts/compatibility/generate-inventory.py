@@ -116,6 +116,13 @@ for op in ["sum", "mean", "min", "max"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
         NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+for op in ["cumsum", "cumprod"]:
+    counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
+        "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
+        NUMERIC_LIMITS + ["Without an axis the result flattens to one dimension. Result dtype uses the sum promotion. Strings and temporal dtypes are rejected. The first element of each run is copied without an identity. GPU rejects scans before admission."],
+        CORE + ["crates/nmath-core/src/kernels.rs"],
+        DTYPE_TESTS + ["packages/nmath/test/scans.test.mjs", "packages/nmath/test/types/scans.ts", "crates/nmath-core/tests/scans.rs"],
+        DTYPE_FIXTURES + ["crates/nmath-core/tests/fixtures/scans/oracle.json"])
 for op in ["prod", "argmin", "argmax"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,

@@ -414,6 +414,24 @@ console.log((await a.argmax(1).compute()).toArray()); // [0n, 1n]
 
 Equal values keep their first position, and NaNs are sticky: the first NaN position wins. Complex values compare by real component, then imaginary component. A zero-length reduced axis fails with `NMATH_SHAPE_MISMATCH`, except for `prod`, which returns the multiplicative identity. String and temporal arrays reject products and index reductions at expression construction. GPU execution rejects these reductions before admission. `std`, `var`, cumulative scans and multi-axis lists remain targets.
 
+### Cumulative scans
+
+`cumsum` and `cumprod` accumulate over the flattened input or one axis. Without an axis the result is one-dimensional; with an axis it keeps the input shape. Small integers widen like `sum`.
+
+```ts
+const a = ctx.array(
+  [
+    [1, 2, 3],
+    [4, 5, 6],
+  ],
+  { dtype: "int16" },
+);
+console.log((await a.cumsum().compute()).toArray()); // [1n, 3n, 6n, 10n, 15n, 21n]
+console.log((await a.cumprod(1).compute()).toArray()); // [[1n, 2n, 6n], [4n, 20n, 120n]]
+```
+
+Empty inputs produce empty results. The first element of each run is copied without an identity, so signed zeros and NaNs keep their behavior. String and temporal arrays reject scans at expression construction. GPU execution rejects scans before admission.
+
 ### Linear algebra and FFT
 
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
