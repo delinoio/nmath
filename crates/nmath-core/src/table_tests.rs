@@ -586,3 +586,168 @@ fn hash_index_budget_rejection_is_atomic() {
     drop(column);
     assert_eq!(budget.usage().used, 0);
 }
+
+fn pivot_column(env: &Context, values: Buffer, valid: Option<Vec<bool>>) -> Column {
+    let values = c_array(env, values);
+    let valid = valid.map(|mask| c_array(env, Buffer::Bool(mask)));
+    Column {
+        values: Expr::input(&values),
+        valid: valid.as_ref().map(Expr::input),
+    }
+}
+
+fn c_array(env: &Context, values: Buffer) -> crate::NdArray {
+    let len = values.len();
+    env.array(vec![len], values).unwrap()
+}
+
+fn pivot_plan(
+    env: &Context,
+    row: Buffer,
+    column: Buffer,
+    value: Buffer,
+    mode: PivotMode,
+    flavor: Flavor,
+) -> Plan {
+    Plan::Pivot(
+        Box::new(Plan::Source(vec![
+            pivot_column(env, row, None),
+            pivot_column(env, column, None),
+            pivot_column(env, value, None),
+        ])),
+        0,
+        1,
+        2,
+        mode,
+        flavor,
+    )
+}
+
+#[test]
+fn pivot_unique_and_aggregates() {
+    let ctx = context(1 << 20);
+    let unique = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![1, 1, 2]),
+        Buffer::I64(vec![10, 20, 10]),
+        Buffer::I64(vec![5, 6, 7]),
+        PivotMode::Unique,
+        Flavor::Pandas,
+    );
+    let table = run(&ctx, unique).unwrap();
+    assert_eq!(table.rows, 2);
+    assert_eq!(
+        table.pivot_columns.as_deref(),
+        Some(&["10".to_string(), "20".to_string()][..])
+    );
+    assert_eq!(table.columns[0].values.buffer, Buffer::I64(vec![1, 2]));
+    assert_eq!(table.columns[1].values.buffer, Buffer::I64(vec![5, 7]));
+    assert_eq!(
+        table.columns[1].valid.buffer,
+        Buffer::Bool(vec![true, true])
+    );
+    assert_eq!(table.columns[2].values.buffer, Buffer::I64(vec![6, 0]));
+    assert_eq!(
+        table.columns[2].valid.buffer,
+        Buffer::Bool(vec![true, false])
+    );
+
+    let duplicate = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![1, 1]),
+        Buffer::I64(vec![10, 10]),
+        Buffer::I64(vec![1, 2]),
+        PivotMode::Unique,
+        Flavor::Pandas,
+    );
+    assert_eq!(
+        run(&ctx, duplicate).err().unwrap().code,
+        ErrorCode::IndexInvalid
+    );
+
+    let summed = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![1, 1, 2, 2]),
+        Buffer::I64(vec![10, 10, 10, 20]),
+        Buffer::I64(vec![1, 2, 3, 4]),
+        PivotMode::Sum,
+        Flavor::Pandas,
+    );
+    let table = run(&ctx, summed).unwrap();
+    assert_eq!(table.columns[1].values.buffer, Buffer::I64(vec![3, 3]));
+    assert_eq!(table.columns[2].values.buffer, Buffer::I64(vec![0, 4]));
+    assert_eq!(
+        table.columns[2].valid.buffer,
+        Buffer::Bool(vec![false, true])
+    );
+
+    let mean = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![1, 1]),
+        Buffer::I64(vec![10, 10]),
+        Buffer::I64(vec![2, 4]),
+        PivotMode::Mean,
+        Flavor::Polars,
+    );
+    let table = run(&ctx, mean).unwrap();
+    assert_eq!(table.columns[1].values.buffer, Buffer::F64(vec![3.0]));
+
+    let count = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![1, 1]),
+        Buffer::I64(vec![10, 10]),
+        Buffer::I64(vec![2, 4]),
+        PivotMode::Count,
+        Flavor::Polars,
+    );
+    let table = run(&ctx, count).unwrap();
+    assert_eq!(table.columns[1].values.buffer, Buffer::U32(vec![2]));
+}
+
+#[test]
+fn pivot_keys_nulls_and_validation() {
+    let ctx = context(1 << 20);
+    let source = Plan::Source(vec![
+        pivot_column(
+            &ctx,
+            Buffer::I64(vec![1, 2, 3]),
+            Some(vec![true, false, true]),
+        ),
+        pivot_column(&ctx, Buffer::I64(vec![10, 10, 20]), None),
+        pivot_column(&ctx, Buffer::I64(vec![1, 2, 3]), None),
+    ]);
+    let plan = Plan::Pivot(Box::new(source), 0, 1, 2, PivotMode::Sum, Flavor::Polars);
+    let table = run(&ctx, plan).unwrap();
+    assert_eq!(table.rows, 2);
+    assert_eq!(table.columns[0].values.buffer, Buffer::I64(vec![1, 3]));
+
+    let bad_value = Plan::Pivot(
+        Box::new(Plan::Source(vec![
+            pivot_column(&ctx, Buffer::I64(vec![1]), None),
+            pivot_column(&ctx, Buffer::I64(vec![10]), None),
+            pivot_column(&ctx, Buffer::C64(vec![[1.0, 0.0]]), None),
+        ])),
+        0,
+        1,
+        2,
+        PivotMode::Sum,
+        Flavor::Pandas,
+    );
+    assert_eq!(
+        run(&ctx, bad_value).err().unwrap().code,
+        ErrorCode::DTypeUnsupported
+    );
+
+    let empty = pivot_plan(
+        &ctx,
+        Buffer::I64(vec![]),
+        Buffer::I64(vec![]),
+        Buffer::I64(vec![]),
+        PivotMode::Unique,
+        Flavor::Polars,
+    );
+    let table = run(&ctx, empty).unwrap();
+    assert_eq!(table.rows, 0);
+    assert_eq!(table.columns.len(), 1);
+    assert_eq!(table.pivot_columns.as_deref(), Some(&[][..]));
+}

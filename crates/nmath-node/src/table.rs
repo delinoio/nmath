@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use nmath_core::table::{self, Aggregate, Column, Flavor, Plan};
+use nmath_core::table::{self, Aggregate, Column, Flavor, PivotMode, Plan};
 
 use super::*;
 
@@ -12,6 +12,8 @@ pub struct NativeTableResult {
     pub values: Vec<NativeArray>,
     pub valid: Vec<NativeArray>,
     pub rows: u32,
+    /// Generated value-column names for a pivot plan; null for other plans.
+    pub pivot_names: Option<Vec<String>>,
 }
 fn invalid_table() -> napi::Error {
     core_err(
@@ -133,6 +135,40 @@ impl NativeTable {
         })
     }
 
+    #[napi]
+    pub fn pivot(
+        &self,
+        row_key: u32,
+        column_key: u32,
+        value: u32,
+        mode: String,
+        pandas: bool,
+    ) -> Result<Self> {
+        let mode = match mode.as_str() {
+            "unique" => PivotMode::Unique,
+            "sum" => PivotMode::Sum,
+            "mean" => PivotMode::Mean,
+            "min" => PivotMode::Min,
+            "max" => PivotMode::Max,
+            "count" => PivotMode::Count,
+            _ => return Err(invalid_table()),
+        };
+        Ok(Self {
+            plan: Plan::Pivot(
+                Box::new(self.plan.clone()),
+                row_key as usize,
+                column_key as usize,
+                value as usize,
+                mode,
+                if pandas {
+                    Flavor::Pandas
+                } else {
+                    Flavor::Polars
+                },
+            ),
+        })
+    }
+
     #[napi(ts_return_type = "Promise<NativeTableResult>")]
     pub fn compute<'env>(
         &self,
@@ -166,6 +202,7 @@ impl NativeTable {
                         values,
                         valid,
                         rows: u32::try_from(t.rows).map_err(|_| invalid_table())?,
+                        pivot_names: t.pivot_columns,
                     })
                 })),
             }

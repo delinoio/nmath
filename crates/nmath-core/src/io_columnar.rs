@@ -443,7 +443,11 @@ fn collect(
     }
     Ok(FileTable {
         schema,
-        table: Table { columns, rows },
+        table: Table {
+            columns,
+            rows,
+            pivot_columns: None,
+        },
         _metadata: metadata,
     })
 }
@@ -753,6 +757,7 @@ pub fn schedule_write(
             &Table {
                 columns: data,
                 rows,
+                pivot_columns: None,
             },
             mode,
             &env.budget,
