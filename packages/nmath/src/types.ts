@@ -419,6 +419,13 @@ type DropAt<
     : DropAt<R, I, [...Acc, H]>
   : Acc;
 
+/** The same shape with mutable tuple members. */
+export type MutableShape<S extends Shape> = S extends readonly [
+  ...infer D extends number[],
+]
+  ? D
+  : S;
+
 /** Shape after reducing over one non-negative literal axis. */
 export type ReduceShape<S extends Shape, A extends number | undefined> = [
   A,

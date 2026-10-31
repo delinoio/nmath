@@ -11,7 +11,7 @@ use crate::{
     buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
-    kernels::{self, BinaryOp, ReduceOp, UnaryOp},
+    kernels::{self, BinaryOp, ReduceOp, ScanOp, UnaryOp},
     memory::{Device, MemoryBudget, Reservation},
     random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
@@ -30,6 +30,7 @@ pub enum ExprKind {
         compute_dtype: DType,
     },
     Reduce(ReduceOp, Expr, Option<Vec<i64>>),
+    Scan(ScanOp, Expr, Option<i64>),
     MatMul(Expr, Expr),
     Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
     Fft(crate::fft::FftOptions, Expr),
@@ -203,6 +204,35 @@ impl Expr {
         let dtype = op.result_dtype(input.dtype().ensure_computable()?);
         Ok(Expr::node(
             ExprKind::Reduce(op, input.clone(), axes),
+            dtype,
+            shape,
+            input.context_id(),
+        ))
+    }
+
+    pub fn scan(op: ScanOp, input: &Expr, axis: Option<i64>) -> Result<Expr> {
+        kernels::validate_scan(input.dtype().ensure_computable()?)?;
+        let rank = input.shape().len();
+        let axis = match axis {
+            None => None,
+            Some(raw) => {
+                let normalized = if raw < 0 { raw + rank as i64 } else { raw };
+                if normalized < 0 || normalized >= rank as i64 {
+                    return Err(Error::new(
+                        ErrorCode::IndexOutOfBounds,
+                        format!("Axis {raw} is out of bounds for an array of dimension {rank}."),
+                    ));
+                }
+                Some(normalized)
+            }
+        };
+        let shape = match axis {
+            None => vec![crate::numerical::size(input.shape())?],
+            Some(_) => input.shape().to_vec(),
+        };
+        let dtype = op.result_dtype(input.dtype().ensure_computable()?);
+        Ok(Expr::node(
+            ExprKind::Scan(op, input.clone(), axis),
             dtype,
             shape,
             input.context_id(),
@@ -388,6 +418,7 @@ impl Expr {
             ExprKind::Unary(op, _) => op.id(),
             ExprKind::Binary { op, .. } => op.id(),
             ExprKind::Reduce(op, _, _) => op.id(),
+            ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::MatMul(..) => "matmul",
             ExprKind::Linalg(op, ..) => op.id(),
             ExprKind::Fft(options, ..) => options.op.id(),
@@ -408,6 +439,7 @@ impl Expr {
             ExprKind::Fft(_, e) | ExprKind::PolynomialDerivative(_, e) => vec![e],
             ExprKind::Unary(_, e)
             | ExprKind::Reduce(_, e, _)
+            | ExprKind::Scan(_, e, _)
             | ExprKind::Index(e, _)
             | ExprKind::Cast(e, _)
             | ExprKind::Transpose(e, _)
@@ -696,6 +728,10 @@ impl JobEnv {
             ExprKind::Reduce(op, e, axes) => {
                 let v = self.eval_dense(e)?;
                 kernels::reduce(*op, &v, axes.as_deref(), &budget, &token)
+            }
+            ExprKind::Scan(op, e, axis) => {
+                let v = self.eval_dense(e)?;
+                kernels::scan(*op, &v, *axis, &budget, &token)
             }
             ExprKind::MatMul(l, r) => {
                 let a = self.eval_dense(l)?;

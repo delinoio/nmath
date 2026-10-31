@@ -22,6 +22,7 @@ import type {
   Promote,
   MatMulShape,
   MatMulCheck,
+  MutableShape,
   SumDType,
   TrueDivide,
   ReduceShape,
@@ -212,6 +213,28 @@ export function argmax<
 ): Expr<"int64", ReduceShape<S, A>>;
 export function argmax(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.argmax(axis);
+}
+export function cumsum<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<SumDType<D>, [A] extends [undefined] ? [number] : MutableShape<S>>;
+export function cumsum(x: Lazy<any, any>, axis?: number): Expr<any, any> {
+  return x.cumsum(axis);
+}
+export function cumprod<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+): Expr<SumDType<D>, [A] extends [undefined] ? [number] : MutableShape<S>>;
+export function cumprod(x: Lazy<any, any>, axis?: number): Expr<any, any> {
+  return x.cumprod(axis);
 }
 export function matmul<
   A extends NumericDType,

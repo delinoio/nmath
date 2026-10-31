@@ -26,7 +26,7 @@ pub use context::{Context, ContextOptions, ExecutionStatus, JobOutput, Metrics, 
 pub use dtype::DType;
 pub use error::{Error, ErrorCode, Result};
 pub use expr::{Expr, Value};
-pub use kernels::{BinaryOp, ReduceOp, UnaryOp};
+pub use kernels::{BinaryOp, ReduceOp, ScanOp, UnaryOp};
 pub use memory::Device;
 pub use random::Generator;
 pub use shape::Selector;
