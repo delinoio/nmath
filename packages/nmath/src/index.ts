@@ -17,6 +17,8 @@ import type {
   Broadcast,
   BroadcastCheck,
   ComputableDType,
+  NumericDType,
+  OrderedDType,
   Promote,
   PromoteWeak,
   Shape,
@@ -115,6 +117,59 @@ export const mod: RemainderFunction = (a: Operand, b: Operand) =>
   binary("mod", a, b);
 export const pow: PowerFunction = (a: Operand, b: Operand) =>
   binary("pow", a, b);
+
+export interface ComparisonFunction {
+  <
+    A extends NumericDType,
+    AS extends Shape,
+    B extends NumericDType,
+    BS extends Shape,
+  >(
+    a: Lazy<NoInfer<A>, AS> & { readonly dtype: A },
+    b: Lazy<NoInfer<B>, BS> & { readonly dtype: B } & BroadcastCheck<AS, BS>,
+  ): Expr<"bool", Broadcast<AS, BS>>;
+  <
+    A extends NumericDType,
+    AS extends Shape,
+    W extends number | bigint | boolean | Complex,
+  >(
+    a: Lazy<NoInfer<A>, AS> & { readonly dtype: A },
+    b: W,
+  ): Expr<"bool", AS>;
+}
+export interface OrderedComparisonFunction {
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    B extends OrderedDType,
+    BS extends Shape,
+  >(
+    a: Lazy<NoInfer<A>, AS> & { readonly dtype: A },
+    b: Lazy<NoInfer<B>, BS> & { readonly dtype: B } & BroadcastCheck<AS, BS>,
+  ): Expr<"bool", Broadcast<AS, BS>>;
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    W extends number | bigint | boolean,
+  >(
+    a: Lazy<NoInfer<A>, AS> & { readonly dtype: A },
+    b: W,
+  ): Expr<"bool", AS>;
+}
+export const equal: ComparisonFunction = (a: Operand, b: Operand) =>
+  binary("eq", a, b);
+export const not_equal: ComparisonFunction = (a: Operand, b: Operand) =>
+  binary("ne", a, b);
+export const less: OrderedComparisonFunction = (a: Operand, b: Operand) =>
+  binary("lt", a, b);
+export const less_equal: OrderedComparisonFunction = (a: Operand, b: Operand) =>
+  binary("le", a, b);
+export const greater: OrderedComparisonFunction = (a: Operand, b: Operand) =>
+  binary("gt", a, b);
+export const greater_equal: OrderedComparisonFunction = (
+  a: Operand,
+  b: Operand,
+) => binary("ge", a, b);
 
 function binary(op: BinaryOperator, a: Operand, b: Operand): Expr<any, any> {
   if (a instanceof Lazy) {

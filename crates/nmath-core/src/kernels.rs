@@ -19,6 +19,12 @@ pub enum BinaryOp {
     Div,
     Mod,
     Pow,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 impl BinaryOp {
@@ -30,7 +36,20 @@ impl BinaryOp {
             BinaryOp::Div => "div",
             BinaryOp::Mod => "mod",
             BinaryOp::Pow => "pow",
+            BinaryOp::Eq => "eq",
+            BinaryOp::Ne => "ne",
+            BinaryOp::Lt => "lt",
+            BinaryOp::Le => "le",
+            BinaryOp::Gt => "gt",
+            BinaryOp::Ge => "ge",
         }
+    }
+
+    pub fn is_comparison(self) -> bool {
+        matches!(
+            self,
+            BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        )
     }
 
     pub fn from_id(id: &str) -> Result<Self> {
@@ -41,6 +60,12 @@ impl BinaryOp {
             BinaryOp::Div,
             BinaryOp::Mod,
             BinaryOp::Pow,
+            BinaryOp::Eq,
+            BinaryOp::Ne,
+            BinaryOp::Lt,
+            BinaryOp::Le,
+            BinaryOp::Gt,
+            BinaryOp::Ge,
         ]
         .into_iter()
         .find(|op| op.id() == id)
@@ -54,6 +79,17 @@ impl BinaryOp {
 
     /// Result dtype given the promoted operand dtype.
     pub fn result_dtype(self, promoted: DType) -> Result<DType> {
+        if self.is_comparison() {
+            if promoted.kind() == DTypeKind::Complex && !matches!(self, BinaryOp::Eq | BinaryOp::Ne)
+            {
+                return Err(Error::new(
+                    ErrorCode::DTypeUnsupported,
+                    "Ordering comparisons are not defined for complex operands. Use equal or \
+                     notEqual, or compare real components.",
+                ));
+            }
+            return Ok(DType::Bool);
+        }
         if promoted.kind() == DTypeKind::Complex && self == BinaryOp::Mod {
             return Err(Error::new(
                 ErrorCode::DTypeUnsupported,
@@ -582,7 +618,36 @@ fn apply<T: Num>(op: BinaryOp, a: T, b: T) -> Result<T> {
         BinaryOp::Div => T::div(a, b),
         BinaryOp::Mod => T::rem(a, b),
         BinaryOp::Pow => T::pow(a, b)?,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            unreachable!("comparisons use the comparison loop")
+        }
     })
+}
+
+fn compare_loop<T: PartialOrd>(
+    op: BinaryOp,
+    a: &[T],
+    b: &[T],
+    pairs: BroadcastPairs,
+    token: &CancellationToken,
+) -> Result<Vec<bool>> {
+    let mut out = Vec::with_capacity(pairs.remaining);
+    for (n, (i, j)) in pairs.enumerate() {
+        if n % CHUNK == 0 {
+            token.check()?;
+        }
+        let (x, y) = (&a[i], &b[j]);
+        out.push(match op {
+            BinaryOp::Eq => x == y,
+            BinaryOp::Ne => x != y,
+            BinaryOp::Lt => x < y,
+            BinaryOp::Le => x <= y,
+            BinaryOp::Gt => x > y,
+            BinaryOp::Ge => x >= y,
+            _ => unreachable!("only comparisons reach the comparison loop"),
+        });
+    }
+    Ok(out)
 }
 
 fn binary_loop<T: Num>(
@@ -720,6 +785,31 @@ pub fn binary(
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
     );
+    if op.is_comparison() {
+        macro_rules! compare {
+            ($x:expr, $y:expr) => {
+                compare_loop(op, $x, $y, pairs, token)?.into()
+            };
+        }
+        let buffer = match (a.as_ref(), b.as_ref()) {
+            (Buffer::Bool(x), Buffer::Bool(y)) => compare!(x, y),
+            (Buffer::I8(x), Buffer::I8(y)) => compare!(x, y),
+            (Buffer::I16(x), Buffer::I16(y)) => compare!(x, y),
+            (Buffer::I32(x), Buffer::I32(y)) => compare!(x, y),
+            (Buffer::I64(x), Buffer::I64(y)) => compare!(x, y),
+            (Buffer::U8(x), Buffer::U8(y)) => compare!(x, y),
+            (Buffer::U16(x), Buffer::U16(y)) => compare!(x, y),
+            (Buffer::U32(x), Buffer::U32(y)) => compare!(x, y),
+            (Buffer::U64(x), Buffer::U64(y)) => compare!(x, y),
+            (Buffer::F16(x), Buffer::F16(y)) => compare!(x, y),
+            (Buffer::F32(x), Buffer::F32(y)) => compare!(x, y),
+            (Buffer::F64(x), Buffer::F64(y)) => compare!(x, y),
+            (Buffer::C64(x), Buffer::C64(y)) => compare!(x, y),
+            (Buffer::C128(x), Buffer::C128(y)) => compare!(x, y),
+            _ => unreachable!("operands were cast to one dtype"),
+        };
+        return DenseArray::new(shape, buffer, reservation);
+    }
     let buffer = match (a.as_ref(), b.as_ref()) {
         (Buffer::Bool(x), Buffer::Bool(y)) => {
             let f: fn(bool, bool) -> bool = match op {

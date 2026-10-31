@@ -419,6 +419,9 @@ type DropAt<
     : DropAt<R, I, [...Acc, H]>
   : Acc;
 
+/** Numeric dtypes that allow ordering comparisons. */
+export type OrderedDType = Exclude<NumericDType, ComplexDType>;
+
 /** NumPy variance result dtype: float16 stays, float32/complex64 become float32. */
 export type VarianceDType<D extends ComputableDType> = D extends "float16"
   ? "float16"

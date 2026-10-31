@@ -76,6 +76,12 @@ fn native_gpu_operations() {
             BinaryOp::Div => vec![2.0, 1.0, 4.0, 2.0],
             BinaryOp::Mod => vec![0.0, 0.0, 0.0, 0.0],
             BinaryOp::Pow => vec![2.0, 4.0, 4.0, 16.0],
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge => unreachable!("the loop admits only arithmetic operators"),
         };
         assert_eq!(
             execute(&expr).unwrap().buffer,
