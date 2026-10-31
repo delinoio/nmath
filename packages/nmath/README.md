@@ -432,6 +432,25 @@ console.log((await a.cumprod(1).compute()).toArray()); // [[1n, 2n, 6n], [4n, 20
 
 Empty inputs produce empty results. The first element of each run is copied without an identity, so signed zeros and NaNs keep their behavior. String and temporal arrays reject scans at expression construction. GPU execution rejects scans before admission.
 
+### Variance and standard deviation
+
+`var` and `std` compute over all axes or one axis with an optional `ddof`. Integer and boolean arrays return `float64`; float16 stays float16; float32 and complex64 return `float32`; float64 and complex128 return `float64`. Complex variance uses the squared magnitude and returns a real dtype.
+
+```ts
+const a = ctx.array(
+  [
+    [1, 3, 1, 3],
+    [1, 3, 1, 3],
+  ],
+  { dtype: "int16" },
+);
+console.log(await a.var().compute()); // 1
+console.log((await a.std(1).compute()).toArray()); // [1, 1]
+console.log(await a.var(undefined, 1).compute()); // 1.1428571428571428
+```
+
+`ddof` defaults to zero. NumPy clamps the divisor at zero, so a zero divisor returns `NaN` for a zero numerator and infinity otherwise. Empty reductions return NaN. String and temporal arrays reject variance at expression construction. GPU execution rejects these operations before admission.
+
 ### Linear algebra and FFT
 
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.

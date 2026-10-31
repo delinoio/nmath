@@ -116,6 +116,13 @@ for op in ["sum", "mean", "min", "max"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
         NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+for op in ["var", "std"]:
+    counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
+        "reductions", ["array", "axis: one integer or omitted", "ddof: finite number"], NUMERIC,
+        NUMERIC_LIMITS + ["Two-pass mean and squared deviations. Result dtype keeps float16, maps float32/complex64 to float32 and other dtypes to float64; complex variance is real. The divisor clamps at zero, so zero divisors return NaN or infinity. Strings and temporal dtypes are rejected. GPU rejects variance before admission."],
+        CORE + ["crates/nmath-core/src/kernels.rs"],
+        DTYPE_TESTS + ["packages/nmath/test/variance.test.mjs", "packages/nmath/test/types/variance.ts", "crates/nmath-core/tests/variance.rs"],
+        DTYPE_FIXTURES + ["crates/nmath-core/tests/fixtures/variance/oracle.json"])
 for op in ["cumsum", "cumprod"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,

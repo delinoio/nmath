@@ -150,6 +150,31 @@ impl ScanOp {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VarianceOp {
+    Var,
+    Std,
+}
+
+impl VarianceOp {
+    pub fn id(self) -> &'static str {
+        match self {
+            VarianceOp::Var => "var",
+            VarianceOp::Std => "std",
+        }
+    }
+
+    /// NumPy computes integer and boolean variance in float64, keeps float16,
+    /// and uses the real component width of a complex input.
+    pub fn result_dtype(self, input: DType) -> DType {
+        match input {
+            DType::Float16 => DType::Float16,
+            DType::Float32 | DType::Complex64 => DType::Float32,
+            _ => DType::Float64,
+        }
+    }
+}
+
 /// Elements processed between cancellation checks.
 const CHUNK: usize = 1 << 14;
 
@@ -1204,6 +1229,226 @@ fn arg_reduce<T: Num>(
         }
     }
     Ok(index)
+}
+
+trait VarianceSample: Copy {
+    fn parts(self) -> [f64; 2];
+
+    fn distance(self, mean: [f64; 2]) -> f64 {
+        let parts = self.parts();
+        let real = parts[0] - mean[0];
+        let imag = parts[1] - mean[1];
+        real * real + imag * imag
+    }
+}
+
+macro_rules! real_sample {
+    ($($t:ty),*) => {$(
+        impl VarianceSample for $t {
+            fn parts(self) -> [f64; 2] { [self as f64, 0.0] }
+        }
+    )*};
+}
+real_sample!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+
+impl VarianceSample for Float16 {
+    fn parts(self) -> [f64; 2] {
+        [self.to_f32() as f64, 0.0]
+    }
+}
+
+impl VarianceSample for bool {
+    fn parts(self) -> [f64; 2] {
+        [if self { 1.0 } else { 0.0 }, 0.0]
+    }
+}
+
+impl VarianceSample for [f32; 2] {
+    fn parts(self) -> [f64; 2] {
+        [self[0] as f64, self[1] as f64]
+    }
+}
+
+impl VarianceSample for [f64; 2] {
+    fn parts(self) -> [f64; 2] {
+        self
+    }
+}
+
+fn variance_loop<T: VarianceSample>(
+    op: VarianceOp,
+    values: &[T],
+    shape: &[usize],
+    out_strides: &[isize],
+    out_len: usize,
+    ddof: f64,
+    token: &CancellationToken,
+) -> Result<Vec<f64>> {
+    let mut mean = vec![[0.0f64; 2]; out_len];
+    let mut counts = vec![0usize; out_len];
+    for (i, (slot, _)) in
+        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    {
+        if i % CHUNK == 0 {
+            token.check()?;
+        }
+        let parts = values[i].parts();
+        mean[slot][0] += parts[0];
+        mean[slot][1] += parts[1];
+        counts[slot] += 1;
+    }
+    for (slot, count) in counts.iter().enumerate() {
+        if *count != 0 {
+            mean[slot][0] /= *count as f64;
+            mean[slot][1] /= *count as f64;
+        }
+    }
+    let mut squares = vec![0.0f64; out_len];
+    for (i, (slot, _)) in
+        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    {
+        if i % CHUNK == 0 {
+            token.check()?;
+        }
+        squares[slot] += values[i].distance(mean[slot]);
+    }
+    Ok(squares
+        .into_iter()
+        .zip(counts)
+        .map(|(squares, count)| {
+            // NumPy clamps the degrees of freedom at zero before division, so a
+            // nonpositive divisor yields NaN for a zero numerator and infinity
+            // for a positive numerator.
+            let variance = squares / (count as f64 - ddof).max(0.0);
+            if op == VarianceOp::Std {
+                variance.sqrt()
+            } else {
+                variance
+            }
+        })
+        .collect())
+}
+
+/// Variance or standard deviation over the flattened input or one axis.
+pub fn variance(
+    op: VarianceOp,
+    input: &DenseArray,
+    axis: Option<i64>,
+    ddof: f64,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    validate_variance(input.dtype())?;
+    if !ddof.is_finite() {
+        return Err(Error::new(
+            ErrorCode::IndexInvalid,
+            "ddof must be a finite number.",
+        ));
+    }
+    let rank = input.shape.len();
+    let axes = match axis {
+        None => None,
+        Some(raw) => {
+            let normalized = if raw < 0 { raw + rank as i64 } else { raw };
+            if normalized < 0 || normalized >= rank as i64 {
+                return Err(Error::new(
+                    ErrorCode::IndexOutOfBounds,
+                    format!("Axis {raw} is out of bounds for an array of dimension {rank}."),
+                ));
+            }
+            Some(vec![normalized])
+        }
+    };
+    let reduced = reduce_axes_cancellable(rank, axes.as_deref(), token)?;
+    let out_shape = reduce_shape(&input.shape, &reduced);
+    let out_len: usize = out_shape.iter().try_fold(1usize, |product, &dimension| {
+        product
+            .checked_mul(dimension)
+            .ok_or_else(|| crate::numerical::overflow())
+    })?;
+    let metadata = checked_reduction_bytes(rank, 1 + 4 * std::mem::size_of::<usize>())?;
+    let _metadata = budget.reserve(metadata)?;
+    let scratch = checked_reduction_bytes(out_len, 5 * std::mem::size_of::<f64>())?;
+    let _scratch = budget.reserve(scratch)?;
+    let dtype = op.result_dtype(input.dtype());
+    let shape_bytes = checked_reduction_bytes(out_shape.len(), std::mem::size_of::<usize>())?;
+    let data_bytes = checked_reduction_bytes(out_len, dtype.item_size())?;
+    let reservation = budget.reserve(
+        shape_bytes
+            .checked_add(data_bytes)
+            .ok_or_else(|| crate::numerical::overflow())?,
+    )?;
+    let mut out_strides = vec![0isize; rank];
+    let mut stride = 1isize;
+    for axis in (0..rank).rev() {
+        if !reduced[axis] {
+            out_strides[axis] = stride;
+            stride *= input.shape[axis] as isize;
+        }
+    }
+    token.check()?;
+    macro_rules! run {
+        ($values:expr) => {
+            variance_loop(
+                op,
+                $values,
+                &input.shape,
+                &out_strides,
+                out_len,
+                ddof,
+                token,
+            )?
+        };
+    }
+    let values = match &input.buffer {
+        Buffer::Bool(x) => run!(x),
+        Buffer::I8(x) => run!(x),
+        Buffer::I16(x) => run!(x),
+        Buffer::I32(x) => run!(x),
+        Buffer::I64(x) => run!(x),
+        Buffer::U8(x) => run!(x),
+        Buffer::U16(x) => run!(x),
+        Buffer::U32(x) => run!(x),
+        Buffer::U64(x) => run!(x),
+        Buffer::F16(x) => run!(x),
+        Buffer::F32(x) => run!(x),
+        Buffer::F64(x) => run!(x),
+        Buffer::C64(x) => run!(x),
+        Buffer::C128(x) => run!(x),
+        Buffer::Temporal { .. } | Buffer::Unicode { .. } => {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Variance requires a numeric or boolean dtype. Cast explicitly.",
+            ));
+        }
+    };
+    let buffer = match dtype {
+        DType::Float16 => Buffer::F16(
+            values
+                .into_iter()
+                .map(|v| Float16::from_f32(v as f32))
+                .collect(),
+        ),
+        DType::Float32 => Buffer::F32(values.into_iter().map(|v| v as f32).collect()),
+        DType::Float64 => Buffer::F64(values),
+        _ => {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Variance result dtype is not floating point.",
+            ));
+        }
+    };
+    DenseArray::new(out_shape, buffer, reservation)
+}
+
+pub fn validate_variance(dtype: DType) -> Result<()> {
+    if matches!(dtype, DType::Str(_)) || dtype.temporal_unit().is_some() {
+        return Err(Error::new(
+            ErrorCode::DTypeUnsupported,
+            "Variance does not support string or temporal arrays.",
+        ));
+    }
+    Ok(())
 }
 
 fn scan_loop<T: Num>(
