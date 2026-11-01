@@ -360,7 +360,15 @@ export type BinaryOperator =
   | "lt"
   | "le"
   | "gt"
-  | "ge";
+  | "ge"
+  | "bitwise_and"
+  | "bitwise_or"
+  | "bitwise_xor"
+  | "left_shift"
+  | "right_shift"
+  | "logical_and"
+  | "logical_or"
+  | "logical_xor";
 export type ReduceOperator =
   "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
 export type ScanOperator = "cumsum" | "cumprod";

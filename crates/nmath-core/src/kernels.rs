@@ -25,6 +25,14 @@ pub enum BinaryOp {
     Le,
     Gt,
     Ge,
+    BitAnd,
+    BitOr,
+    BitXor,
+    LeftShift,
+    RightShift,
+    LogicalAnd,
+    LogicalOr,
+    LogicalXor,
 }
 
 impl BinaryOp {
@@ -42,7 +50,47 @@ impl BinaryOp {
             BinaryOp::Le => "le",
             BinaryOp::Gt => "gt",
             BinaryOp::Ge => "ge",
+            BinaryOp::BitAnd => "bitwise_and",
+            BinaryOp::BitOr => "bitwise_or",
+            BinaryOp::BitXor => "bitwise_xor",
+            BinaryOp::LeftShift => "left_shift",
+            BinaryOp::RightShift => "right_shift",
+            BinaryOp::LogicalAnd => "logical_and",
+            BinaryOp::LogicalOr => "logical_or",
+            BinaryOp::LogicalXor => "logical_xor",
         }
+    }
+
+    /// Operators in the GPU arithmetic subset.
+    pub fn is_arithmetic(self) -> bool {
+        matches!(
+            self,
+            BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::Pow
+        )
+    }
+
+    /// Bitwise and shift operators, defined for bool and integer operands.
+    pub fn is_bitwise(self) -> bool {
+        matches!(
+            self,
+            BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::LeftShift
+                | BinaryOp::RightShift
+        )
+    }
+
+    pub fn is_logical(self) -> bool {
+        matches!(
+            self,
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::LogicalXor
+        )
     }
 
     pub fn is_comparison(self) -> bool {
@@ -66,6 +114,14 @@ impl BinaryOp {
             BinaryOp::Le,
             BinaryOp::Gt,
             BinaryOp::Ge,
+            BinaryOp::BitAnd,
+            BinaryOp::BitOr,
+            BinaryOp::BitXor,
+            BinaryOp::LeftShift,
+            BinaryOp::RightShift,
+            BinaryOp::LogicalAnd,
+            BinaryOp::LogicalOr,
+            BinaryOp::LogicalXor,
         ]
         .into_iter()
         .find(|op| op.id() == id)
@@ -79,6 +135,30 @@ impl BinaryOp {
 
     /// Result dtype given the promoted operand dtype.
     pub fn result_dtype(self, promoted: DType) -> Result<DType> {
+        if self.is_logical() {
+            return Ok(DType::Bool);
+        }
+        if self.is_bitwise() {
+            if !matches!(promoted.kind(), DTypeKind::Bool | DTypeKind::Int) {
+                return Err(Error::new(
+                    ErrorCode::DTypeUnsupported,
+                    format!(
+                        "{} requires bool or integer operands of a common integer dtype. Use \
+                         bigint scalars and avoid mixing int64 with uint64.",
+                        self.id()
+                    ),
+                ));
+            }
+            return Ok(
+                if promoted == DType::Bool
+                    && matches!(self, BinaryOp::LeftShift | BinaryOp::RightShift)
+                {
+                    DType::Int8
+                } else {
+                    promoted
+                },
+            );
+        }
         if self.is_comparison() {
             if promoted.kind() == DTypeKind::Complex && !matches!(self, BinaryOp::Eq | BinaryOp::Ne)
             {
@@ -618,10 +698,99 @@ fn apply<T: Num>(op: BinaryOp, a: T, b: T) -> Result<T> {
         BinaryOp::Div => T::div(a, b),
         BinaryOp::Mod => T::rem(a, b),
         BinaryOp::Pow => T::pow(a, b)?,
-        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-            unreachable!("comparisons use the comparison loop")
-        }
+        _ => unreachable!("comparison, bitwise and logical operators use dedicated loops"),
     })
+}
+
+/// Integer bit operations with NumPy shift semantics: a shift by a negative
+/// count or by at least the bit width yields zero, or -1 for a right shift of
+/// a negative value.
+trait Bits: Copy {
+    fn and(self, other: Self) -> Self;
+    fn or(self, other: Self) -> Self;
+    fn xor(self, other: Self) -> Self;
+    fn shl(self, count: Self) -> Self;
+    fn shr(self, count: Self) -> Self;
+}
+
+impl Bits for bool {
+    fn and(self, other: Self) -> Self {
+        self & other
+    }
+
+    fn or(self, other: Self) -> Self {
+        self | other
+    }
+
+    fn xor(self, other: Self) -> Self {
+        self ^ other
+    }
+
+    fn shl(self, _: Self) -> Self {
+        unreachable!("bool shifts use the int8 loop")
+    }
+
+    fn shr(self, _: Self) -> Self {
+        unreachable!("bool shifts use the int8 loop")
+    }
+}
+
+macro_rules! int_bits {
+    ($($t:ty),*) => {$(
+        impl Bits for $t {
+            fn and(self, other: Self) -> Self {
+                self & other
+            }
+            fn or(self, other: Self) -> Self {
+                self | other
+            }
+            fn xor(self, other: Self) -> Self {
+                self ^ other
+            }
+            #[allow(unused_comparisons)]
+            fn shl(self, count: Self) -> Self {
+                if count < 0 || count as u64 >= <$t>::BITS as u64 {
+                    0
+                } else {
+                    self << count
+                }
+            }
+            #[allow(unused_comparisons)]
+            fn shr(self, count: Self) -> Self {
+                if count < 0 || count as u64 >= <$t>::BITS as u64 {
+                    if self < 0 { !0 } else { 0 }
+                } else {
+                    self >> count
+                }
+            }
+        }
+    )*};
+}
+int_bits!(i8, i16, i32, i64, u8, u16, u32, u64);
+
+fn bitwise_loop<T: Bits>(
+    op: BinaryOp,
+    a: &[T],
+    b: &[T],
+    pairs: BroadcastPairs,
+    token: &CancellationToken,
+) -> Result<Vec<T>> {
+    let mut out = Vec::with_capacity(pairs.remaining);
+    for (n, (i, j)) in pairs.enumerate() {
+        if n % CHUNK == 0 {
+            token.check()?;
+        }
+        let (x, y) = (a[i], b[j]);
+        out.push(match op {
+            BinaryOp::BitAnd => x.and(y),
+            BinaryOp::BitOr => x.or(y),
+            BinaryOp::BitXor => x.xor(y),
+            BinaryOp::LeftShift => x.shl(y),
+            BinaryOp::RightShift => x.shr(y),
+            _ => unreachable!("only bitwise operators reach the bitwise loop"),
+        });
+    }
+    Ok(out)
 }
 
 fn compare_loop<T: PartialOrd>(
@@ -770,7 +939,10 @@ pub fn binary(
     }
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;
-    let work_dtype = if op == BinaryOp::Div
+    let work_dtype = if op.is_logical() {
+        DType::Bool
+    } else if op == BinaryOp::Div
+        || op.is_bitwise()
         || compute_dtype == DType::Bool && matches!(op, BinaryOp::Mod | BinaryOp::Pow)
     {
         result_dtype
@@ -785,6 +957,43 @@ pub fn binary(
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
     );
+    if op.is_logical() {
+        let (Buffer::Bool(x), Buffer::Bool(y)) = (a.as_ref(), b.as_ref()) else {
+            unreachable!("logical operands were cast to bool")
+        };
+        let mut out = Vec::with_capacity(pairs.remaining);
+        for (n, (i, j)) in pairs.enumerate() {
+            if n % CHUNK == 0 {
+                token.check()?;
+            }
+            out.push(match op {
+                BinaryOp::LogicalAnd => x[i] && y[j],
+                BinaryOp::LogicalOr => x[i] || y[j],
+                _ => x[i] != y[j],
+            });
+        }
+        return DenseArray::new(shape, out.into(), reservation);
+    }
+    if op.is_bitwise() {
+        macro_rules! bits {
+            ($x:expr, $y:expr) => {
+                bitwise_loop(op, $x, $y, pairs, token)?.into()
+            };
+        }
+        let buffer = match (a.as_ref(), b.as_ref()) {
+            (Buffer::Bool(x), Buffer::Bool(y)) => bits!(x, y),
+            (Buffer::I8(x), Buffer::I8(y)) => bits!(x, y),
+            (Buffer::I16(x), Buffer::I16(y)) => bits!(x, y),
+            (Buffer::I32(x), Buffer::I32(y)) => bits!(x, y),
+            (Buffer::I64(x), Buffer::I64(y)) => bits!(x, y),
+            (Buffer::U8(x), Buffer::U8(y)) => bits!(x, y),
+            (Buffer::U16(x), Buffer::U16(y)) => bits!(x, y),
+            (Buffer::U32(x), Buffer::U32(y)) => bits!(x, y),
+            (Buffer::U64(x), Buffer::U64(y)) => bits!(x, y),
+            _ => unreachable!("bitwise operands were cast to one integer dtype"),
+        };
+        return DenseArray::new(shape, buffer, reservation);
+    }
     if op.is_comparison() {
         macro_rules! compare {
             ($x:expr, $y:expr) => {

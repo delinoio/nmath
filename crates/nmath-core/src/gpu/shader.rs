@@ -69,11 +69,9 @@ fn binary(op: BinaryOp, dtype: DType) -> String {
                 ""
             }
         ),
-        // Comparison results are bool, which GPU admission rejects before
-        // shader generation.
-        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-            unreachable!("comparison rejected by GPU validation")
-        }
+        // GPU admission rejects comparison, bitwise and logical operators
+        // before shader generation.
+        _ => unreachable!("GPU validation admits only arithmetic operators"),
     };
     format!("fn operation(x: {t}, y: {t}) -> {t} {{ {body} }}")
 }

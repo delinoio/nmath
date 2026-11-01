@@ -51,6 +51,7 @@ pub enum MathOp {
     Ceil,
     Trunc,
     Conjugate,
+    Invert,
     Isnan,
     Isinf,
     Isfinite,
@@ -69,7 +70,7 @@ enum Family {
 }
 
 impl MathOp {
-    pub const ALL: [MathOp; 39] = [
+    pub const ALL: [MathOp; 40] = [
         MathOp::Sqrt,
         MathOp::Cbrt,
         MathOp::Exp,
@@ -104,6 +105,7 @@ impl MathOp {
         MathOp::Ceil,
         MathOp::Trunc,
         MathOp::Conjugate,
+        MathOp::Invert,
         MathOp::Isnan,
         MathOp::Isinf,
         MathOp::Isfinite,
@@ -148,6 +150,7 @@ impl MathOp {
             MathOp::Ceil => "ceil",
             MathOp::Trunc => "trunc",
             MathOp::Conjugate => "conjugate",
+            MathOp::Invert => "invert",
             MathOp::Isnan => "isnan",
             MathOp::Isinf => "isinf",
             MathOp::Isfinite => "isfinite",
@@ -177,7 +180,8 @@ impl MathOp {
             | MathOp::Floor
             | MathOp::Ceil
             | MathOp::Trunc
-            | MathOp::Conjugate => Family::Exact,
+            | MathOp::Conjugate
+            | MathOp::Invert => Family::Exact,
             MathOp::Isnan
             | MathOp::Isinf
             | MathOp::Isfinite
@@ -213,6 +217,10 @@ impl MathOp {
                 "signbit is not defined for complex arrays.".to_string(),
             )),
             MathOp::Signbit => Ok(DType::Bool),
+            MathOp::Invert if matches!(kind, DTypeKind::Bool | DTypeKind::Int) => Ok(input),
+            MathOp::Invert => Err(unsupported(
+                "invert requires a bool or integer array.".to_string(),
+            )),
             MathOp::Conjugate if input == DType::Bool => Ok(DType::Int8),
             MathOp::Conjugate => Ok(input),
             MathOp::Floor | MathOp::Ceil | MathOp::Trunc if complex => Err(unsupported(format!(
@@ -461,6 +469,11 @@ fn exact_family(
             Buffer::I64(v) => map_elements(v, token, i64::signum)?.into(),
             other => each_int!(other, v => map_elements(v, token, |x| x.min(1))?.into(),
                 else unreachable!("bool sign is rejected")),
+        },
+        MathOp::Invert => match &input {
+            Buffer::Bool(v) => map_elements(v, token, |x| !x)?.into(),
+            other => each_int!(other, v => map_elements(v, token, |x| !x)?.into(),
+                else unreachable!("invert accepts only bool and integer arrays")),
         },
         MathOp::Conjugate => match &input {
             Buffer::C64(v) => map_elements(v, token, |[re, im]| [re, -im])?.into(),

@@ -87,11 +87,16 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
         }
         ExprKind::Unary(_, a) => validate_node(a, None),
         ExprKind::Binary {
+            op,
             lhs,
             rhs,
             compute_dtype,
-            ..
         } => {
+            if !op.is_arithmetic() {
+                return Err(unsupported(
+                    "The operator is outside the GPU arithmetic subset. Compute it on the CPU.",
+                ));
+            }
             if !supported_dtype(*compute_dtype) {
                 return Err(unsupported(
                     "Binary promotion requires an unsupported GPU dtype.",

@@ -61,6 +61,7 @@ EXACT = [
     "ceil",
     "trunc",
     "conjugate",
+    "invert",
     "isnan",
     "isinf",
     "isfinite",
@@ -165,6 +166,8 @@ with warnings.catch_warnings():
             if name == "sign" and dtype == "bool":
                 continue
             if name == "reciprocal" and not dtype.startswith("float"):
+                continue
+            if name == "invert" and dtype.startswith("float"):
                 continue
             x = complex_inputs(dtype) if dtype.startswith("complex") else inputs(dtype)
             expected = ufunc(x)
