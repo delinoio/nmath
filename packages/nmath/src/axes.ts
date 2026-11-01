@@ -105,38 +105,49 @@ type DropAxes<
       : never
   : [];
 
-/** `np.squeeze` result shape; selecting a literal non-1 dimension is rejected. */
+/**
+ * `np.squeeze` result shape; selecting a literal non-1 dimension is rejected.
+ * An axis type that admits `undefined` yields both the omitted-axis and the
+ * explicit-axis alternatives.
+ */
 export type SqueezeShape<
   S extends Shape,
   A extends number | readonly number[] | undefined = undefined,
 > = number extends S["length"]
   ? number[]
-  : [A] extends [undefined]
-    ? number extends S[number]
-      ? number[]
-      : DropOnes<S>
-    : S extends readonly []
-      ? // NumPy accepts the integer axes 0 and -1 for zero-dimensional input.
-        A extends number
-        ? number extends A
-          ? []
-          : A extends 0 | -1
-            ? []
-            : never
-        : AxisList<[], ListOf<A>> extends infer L extends number[]
-          ? [L] extends [never]
-            ? never
-            : []
-          : never
-      : AxisList<RankOf<S>, ListOf<A>> extends infer L extends number[]
-        ? [L] extends [never]
+  : undefined extends A
+    ? [A] extends [undefined]
+      ? SqueezeAllShape<S>
+      : SqueezeAllShape<S> | SqueezeAxesShape<S, Exclude<A, undefined>>
+    : SqueezeAxesShape<S, A>;
+type SqueezeAllShape<S extends Shape> = number extends S[number]
+  ? number[]
+  : DropOnes<S>;
+type SqueezeAxesShape<
+  S extends Shape,
+  A extends number | readonly number[] | undefined,
+> = S extends readonly []
+  ? // NumPy accepts the integer axes 0 and -1 for zero-dimensional input.
+    A extends number
+    ? number extends A
+      ? []
+      : A extends 0 | -1
+        ? []
+        : never
+    : AxisList<[], ListOf<A>> extends infer L extends number[]
+      ? [L] extends [never]
+        ? never
+        : []
+      : never
+  : AxisList<RankOf<S>, ListOf<A>> extends infer L extends number[]
+    ? [L] extends [never]
+      ? never
+      : IsDynamic<L> extends true
+        ? number[]
+        : HasRepeat<L> extends true
           ? never
-          : IsDynamic<L> extends true
-            ? number[]
-            : HasRepeat<L> extends true
-              ? never
-              : DropAxes<S, L[number]>
-        : never;
+          : DropAxes<S, L[number]>
+    : never;
 
 type InsertOnes<
   S extends Shape,
@@ -385,14 +396,20 @@ function shapeError(message: string): NMathError {
  * `np.squeeze(a, axis)`: removes length-1 axes, or only the selected ones.
  * Selecting an axis whose length is not 1 fails with `NMATH_SHAPE_MISMATCH`.
  */
+export function squeeze<D extends ComputableDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, SqueezeShape<S>>;
+// A required `axis` keeps `undefined` in `A` when the argument may be
+// undefined; an optional parameter would strip it during inference.
 export function squeeze<
   D extends ComputableDType,
   S extends Shape,
-  const A extends Axes | undefined = undefined,
+  const A extends Axes | undefined,
 >(
   a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A & Valid<SqueezeShape<S, A>>,
-): Expr<D, SqueezeShape<S, A>> {
+  axis: A & Valid<SqueezeShape<S, A>>,
+): Expr<D, SqueezeShape<S, A>>;
+export function squeeze(a: Lazy<any, any>, axis?: Axes): Expr<any, any> {
   const source = layout(a);
   const shape = source.shape;
   const rank = shape.length;

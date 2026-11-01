@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-import { createContext, type Expr } from "../../src/index.js";
+import {
+  createContext,
+  type ComputeResult,
+  type Expr,
+} from "../../src/index.js";
 import {
   expand_dims,
   flip,
@@ -9,7 +13,14 @@ import {
   ravel,
   squeeze,
   swapaxes,
+  type SqueezeShape,
 } from "../../src/numpy.js";
+
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
+declare function exact<T extends true>(): void;
 
 const c = createContext({
   maxConcurrentJobs: 1,
@@ -35,6 +46,17 @@ const squeezedScalar: Expr<"bool", []> = squeeze(s, -1);
 const squeezedDynamic: Expr<"float64", number[]> = squeeze(dynamic);
 const squeezedDynamicAxis: Expr<"complex64", number[]> = squeeze(a, axes);
 const squeezedUnknownLength: Expr<"float64", [3]> = squeeze(dynamic, 0);
+declare const maybeAxis: 0 | undefined;
+const squeezedMaybe = squeeze(a, maybeAxis);
+exact<Equal<typeof squeezedMaybe, Expr<"complex64", [3, 4] | [3, 1, 4]>>>();
+exact<Equal<SqueezeShape<[1, 1], 0 | undefined>, [] | [1]>>();
+exact<Equal<SqueezeShape<[1, 1], [0] | undefined>, [] | [1]>>();
+// The scalar alternative must survive into the computed result type.
+exact<
+  boolean extends ComputeResult<"bool", SqueezeShape<[1, 1], 0 | undefined>>
+    ? true
+    : false
+>();
 
 const expanded: Expr<"int64", [1, 2, 3, 4]> = expand_dims(b, 0);
 const expandedEnd: Expr<"int64", [2, 3, 4, 1]> = expand_dims(b, -1);
