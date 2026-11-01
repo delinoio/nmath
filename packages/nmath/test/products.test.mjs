@@ -209,6 +209,35 @@ test("diff, diagonal and trace keep temporal and string semantics", async () => 
   }
 });
 
+test("diff evaluates each difference input once", async () => {
+  const ctx = context();
+  try {
+    // Both slices must read one draw, and the generator advances once.
+    const draw = await ctx.generator(5).random([6]).compute();
+    const values = Array.from(draw.toTypedArray());
+    const rng = ctx.generator(5);
+    const result = await diff(rng.random([6])).compute();
+    assert.deepEqual(
+      Array.from(result.toTypedArray()),
+      values.slice(1).map((v, i) => v - values[i]),
+    );
+    const next = await rng.random([6]).compute();
+    const reference = ctx.generator(5);
+    await reference.random([6]).compute();
+    const expected = await reference.random([6]).compute();
+    assert.deepEqual(
+      Array.from(next.toTypedArray()),
+      Array.from(expected.toTypedArray()),
+    );
+    // A high order reuses each difference instead of doubling the work.
+    const deep = await diff(ctx.zeros([64], "float64"), 60).compute();
+    assert.deepEqual(deep.toArray(), [0, 0, 0, 0]);
+    for (const array of [draw, result, next, expected, deep]) array.dispose();
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("products are lazy and snapshot inputs at execution start", async () => {
   const ctx = context();
   try {

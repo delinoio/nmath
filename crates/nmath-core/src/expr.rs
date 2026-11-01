@@ -682,6 +682,10 @@ pub struct JobEnv {
     pub token: CancellationToken,
     snapshots: HashMap<*const NdArray, DenseArray>,
     rng: Vec<(Generator, Pcg64)>,
+    /// Incoming edge counts of the expression being evaluated.
+    uses: HashMap<*const Node, usize>,
+    /// Results of nodes with several incoming edges and their unread uses.
+    shared: HashMap<*const Node, (DenseArray, usize)>,
 }
 
 // SAFETY: the raw pointer keys are only compared for identity, never
@@ -698,6 +702,8 @@ impl JobEnv {
             token,
             snapshots: HashMap::new(),
             rng: Vec::new(),
+            uses: HashMap::new(),
+            shared: HashMap::new(),
         }
     }
 
@@ -767,13 +773,42 @@ impl JobEnv {
         {
             return Ok(Value::View(view));
         }
-        if matches!(
+        self.begin(expr);
+        let result = if matches!(
             expr.kind(),
             ExprKind::Transpose(..) | ExprKind::Reshape(..) | ExprKind::Index(..)
         ) {
-            return self.owned_layout(expr).map(Value::View);
-        }
-        self.eval_dense(expr).map(Value::Dense)
+            self.owned_layout(expr).map(Value::View)
+        } else {
+            self.eval_node(expr).map(Value::Dense)
+        };
+        self.end();
+        result
+    }
+
+    /// Counts the incoming edges of every node under `root`. A node reached
+    /// through several edges is then evaluated once per evaluation, so a
+    /// random node draws once and repeated subexpressions do no extra work.
+    fn begin(&mut self, root: &Expr) {
+        self.shared.clear();
+        let mut uses = HashMap::new();
+        root.visit(&mut |e| {
+            for child in e.children() {
+                *uses.entry(Arc::as_ptr(&child.0)).or_insert(0usize) += 1;
+            }
+        });
+        self.uses = uses;
+    }
+
+    fn end(&mut self) {
+        self.uses.clear();
+        self.shared.clear();
+    }
+
+    fn is_shared(&self, expr: &Expr) -> bool {
+        self.uses
+            .get(&Arc::as_ptr(&expr.0))
+            .is_some_and(|&uses| uses > 1)
     }
 
     /// Resolve metadata-only chains without reading live data. Returned views
@@ -795,6 +830,16 @@ impl JobEnv {
     /// Build an owned result from snapshots, retaining strided layouts through
     /// shape transforms over computed inputs. No live storage is read here.
     fn owned_layout(&mut self, expr: &Expr) -> Result<NdArray> {
+        if self.is_shared(expr) {
+            return Ok(NdArray::from_dense(
+                expr.context_id().unwrap_or(0),
+                self.eval_node(expr)?,
+            ));
+        }
+        self.owned_layout_unshared(expr)
+    }
+
+    fn owned_layout_unshared(&mut self, expr: &Expr) -> Result<NdArray> {
         self.token.check()?;
         match expr.kind() {
             ExprKind::Transpose(e, axes) => Ok(self.owned_layout(e)?.transpose(axes)),
@@ -821,7 +866,7 @@ impl JobEnv {
             }
             _ => Ok(NdArray::from_dense(
                 expr.context_id().unwrap_or(0),
-                self.eval_dense(expr)?,
+                self.eval_node(expr)?,
             )),
         }
     }
@@ -829,6 +874,33 @@ impl JobEnv {
     /// Evaluates `expr` on the CPU into a new dense array, materializing
     /// views.
     pub(crate) fn eval_dense(&mut self, expr: &Expr) -> Result<DenseArray> {
+        self.begin(expr);
+        let result = self.eval_node(expr);
+        self.end();
+        result
+    }
+
+    /// Evaluates a node of the current expression, reusing the result of a
+    /// shared node. The last reader takes the cached array; earlier readers
+    /// receive budgeted copies.
+    fn eval_node(&mut self, expr: &Expr) -> Result<DenseArray> {
+        if !self.is_shared(expr) {
+            return self.compute_dense(expr);
+        }
+        let key = Arc::as_ptr(&expr.0);
+        if !self.shared.contains_key(&key) {
+            let value = self.compute_dense(expr)?;
+            self.shared.insert(key, (value, self.uses[&key]));
+        }
+        let unread = &mut self.shared.get_mut(&key).expect("cached above").1;
+        *unread -= 1;
+        if *unread == 0 {
+            return Ok(self.shared.remove(&key).expect("cached above").0);
+        }
+        self.copy_dense(&self.shared[&key].0)
+    }
+
+    fn compute_dense(&mut self, expr: &Expr) -> Result<DenseArray> {
         self.token.check()?;
         let budget = self.budget.clone();
         let token = self.token.clone();
@@ -843,7 +915,7 @@ impl JobEnv {
                 DenseArray::new(vec![], Buffer::filled(dtype, 1, s.clone())?, reservation)
             }
             ExprKind::Unary(op, e) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 kernels::unary(*op, &v, &budget, &token)
             }
             ExprKind::Binary {
@@ -852,61 +924,61 @@ impl JobEnv {
                 rhs,
                 compute_dtype,
             } => {
-                let a = self.eval_dense(lhs)?;
-                let b = self.eval_dense(rhs)?;
+                let a = self.eval_node(lhs)?;
+                let b = self.eval_node(rhs)?;
                 kernels::binary(*op, &a, &b, *compute_dtype, &budget, &token)
             }
             ExprKind::Where(c, x, y) => {
-                let c = self.eval_dense(c)?;
-                let x = self.eval_dense(x)?;
-                let y = self.eval_dense(y)?;
+                let c = self.eval_node(c)?;
+                let x = self.eval_node(x)?;
+                let y = self.eval_node(y)?;
                 kernels::select(&c, &x, &y, expr.dtype(), &budget, &token)
             }
             ExprKind::Math(op, e) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 crate::ufunc::execute(*op, &v, &budget, &token)
             }
             ExprKind::Reduce(op, e, axes) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 kernels::reduce(*op, &v, axes.as_deref(), &budget, &token)
             }
             ExprKind::Scan(op, e, axis) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 kernels::scan(*op, &v, *axis, &budget, &token)
             }
             ExprKind::Variance(op, e, axis, ddof) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 kernels::variance(*op, &v, *axis, *ddof, &budget, &token)
             }
             ExprKind::Shift(op, e, axes) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 kernels::shift(*op, &v, axes, &budget, &token)
             }
             ExprKind::MatMul(l, r) => {
-                let a = self.eval_dense(l)?;
-                let b = self.eval_dense(r)?;
+                let a = self.eval_node(l)?;
+                let b = self.eval_node(r)?;
                 kernels::matmul(&a, &b, expr.dtype(), &budget, &token)
             }
             ExprKind::Linalg(op, a, b) => {
-                let a = self.eval_dense(a)?;
-                let b = b.as_ref().map(|v| self.eval_dense(v)).transpose()?;
+                let a = self.eval_node(a)?;
+                let b = b.as_ref().map(|v| self.eval_node(v)).transpose()?;
                 crate::linalg::execute(*op, &a, b.as_ref(), &budget, &token)
             }
             ExprKind::Polynomial(options, coefficients, points) => {
-                let coefficients = self.eval_dense(coefficients)?;
-                let points = self.eval_dense(points)?;
+                let coefficients = self.eval_node(coefficients)?;
+                let points = self.eval_node(points)?;
                 crate::polynomial::execute(*options, &coefficients, &points, &budget, &token)
             }
             ExprKind::PolynomialDerivative(options, coefficients) => {
-                let coefficients = self.eval_dense(coefficients)?;
+                let coefficients = self.eval_node(coefficients)?;
                 crate::polynomial::derivative(*options, &coefficients, &budget, &token)
             }
             ExprKind::Fft(options, input) => {
-                let input = self.eval_dense(input)?;
+                let input = self.eval_node(input)?;
                 crate::fft::execute(*options, &input, &budget, &token)
             }
             ExprKind::Index(e, selectors) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 let tmp = NdArray::from_dense(
                     0,
                     DenseArray::new(v.shape.clone(), v.buffer.clone(), Reservation::none())?,
@@ -914,13 +986,13 @@ impl JobEnv {
                 tmp.take(selectors, &budget)
             }
             ExprKind::Transpose(..) | ExprKind::Reshape(..) => {
-                let array = self.owned_layout(expr)?;
+                let array = self.owned_layout_unshared(expr)?;
                 let dense = array.snapshot_cancellable(&budget, &token)?;
                 token.check()?;
                 Ok(dense)
             }
             ExprKind::Cast(e, dtype) => {
-                let v = self.eval_dense(e)?;
+                let v = self.eval_node(e)?;
                 let reservation = budget.reserve(checked_byte_len(v.size(), *dtype)? as u64)?;
                 DenseArray::new(
                     v.shape.clone(),
@@ -990,6 +1062,37 @@ mod tests {
         );
         env.freeze(&expr).unwrap();
         assert!(env.snapshots.is_empty());
+    }
+
+    #[test]
+    fn shared_nodes_evaluate_once() {
+        let mut expr = Expr::scalar(Scalar::Int(1));
+        for _ in 0..40 {
+            expr = Expr::binary(BinaryOp::Add, &expr, &expr).unwrap();
+        }
+        assert_eq!(eval(&expr).buffer, Buffer::I64(vec![1 << 40]));
+
+        // Both slices of one random node read the same draw.
+        let generator = Generator::new(7);
+        let random = Expr::random(1, &generator, vec![5]);
+        let slice = |start, stop| Selector::Slice {
+            start,
+            stop,
+            step: None,
+        };
+        let later = Expr::index(&random, vec![slice(Some(1), None)]).unwrap();
+        let earlier = Expr::index(&random, vec![slice(None, Some(-1))]).unwrap();
+        let diff = Expr::binary(BinaryOp::Sub, &later, &earlier).unwrap();
+        let Buffer::F64(draw) = eval(&random).buffer else {
+            panic!("random returns float64");
+        };
+        let expected: Vec<f64> = draw.windows(2).map(|w| w[1] - w[0]).collect();
+        assert_eq!(eval(&diff).buffer, Buffer::F64(expected));
+        let same = Expr::binary(BinaryOp::Sub, &random, &random).unwrap();
+        assert_eq!(eval(&same).buffer, Buffer::F64(vec![0.0; 5]));
+        let moved = Expr::transpose(&random, Some(&[0])).unwrap();
+        let both = Expr::binary(BinaryOp::Sub, &moved, &random).unwrap();
+        assert_eq!(eval(&both).buffer, Buffer::F64(vec![0.0; 5]));
     }
 
     #[test]
