@@ -560,6 +560,15 @@ type HasEllipsis<Sel extends readonly unknown[]> = true extends {
 }[number]
   ? true
   : false;
+type ArrayCount<
+  Sel extends readonly unknown[],
+  Acc extends unknown[] = [],
+> = Sel extends readonly [infer H, ...infer R]
+  ? ArrayCount<
+      R,
+      H extends { readonly kind: "indices" | "mask" } ? [...Acc, H] : Acc
+    >
+  : Acc["length"];
 type HasNewAxisWithArray<Sel extends readonly unknown[]> =
   null extends Sel[number]
     ? Extract<Sel[number], { readonly kind: "indices" | "mask" }> extends never
@@ -569,8 +578,9 @@ type HasNewAxisWithArray<Sel extends readonly unknown[]> =
 
 /**
  * Indexing result shape. `newaxis` (`null`) inserts a length-1 axis. An
- * ellipsis, or `newaxis` combined with an array selector, whose advanced-block
- * placement depends on adjacency, produces a dynamic shape.
+ * ellipsis, `newaxis` combined with an array selector, or several array
+ * selectors, whose advanced-block placement depends on adjacency, produce a
+ * dynamic shape.
  */
 export type IndexShape<
   S extends Shape,
@@ -581,7 +591,9 @@ export type IndexShape<
     ? number[]
     : HasNewAxisWithArray<Sel> extends true
       ? number[]
-      : BasicIndexShape<S, Sel>;
+      : ArrayCount<Sel> extends 0 | 1
+        ? BasicIndexShape<S, Sel>
+        : number[];
 type BasicIndexShape<
   S extends Shape,
   Sel extends readonly unknown[],

@@ -216,7 +216,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                              | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions; binary math functions | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                            | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
-| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                                | several advanced selectors combined, `newaxis` in writes                                                                                                 |
+| NumPy indexing       | integers, slices, integer-array and mask selectors that broadcast together, `newaxis`, ellipsis, views for basic indexing, atomic assignment                                                                   | multidimensional index arrays, `newaxis` in writes                                                                                                       |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                                   | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                                                              | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                            |
@@ -482,7 +482,9 @@ console.log(a.get(newaxis, ellipsis, 0).shape); // [1, 2, 3]
 console.log(a.get(ellipsis, newaxis).shape); // [2, 3, 4, 1]
 ```
 
-In `.nts`, write `a[[newaxis, ellipsis, 0]]`. Writes accept `ellipsis` but not `newaxis`. Combining several integer-array or mask selectors remains a target.
+In `.nts`, write `a[[newaxis, ellipsis, 0]]`. Writes accept `ellipsis` but not `newaxis`.
+
+Several `indices` and `mask` selectors broadcast together into one dimension, as in NumPy: `a.get(indices([0, 2]), indices([1, 3]))` selects `a[0, 1]` and `a[2, 3]`. Index lists of different lengths broadcast only when one has length 1. Reads and writes both accept them. Multidimensional index arrays remain a target.
 
 ### Binary math functions
 

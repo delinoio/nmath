@@ -211,14 +211,58 @@ fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
     (last - first + 1 != advanced.len()).then_some(array_axis)
 }
 
-/// Output shape of indexing `shape` with `selectors`. Supports any number of
-/// basic selectors and at most one integer-array or mask selector.
+/// Output shape of indexing `shape` with `selectors`. Integer-array and mask
+/// selectors broadcast together into one advanced dimension.
+/// Length of the advanced block: the broadcast length of every integer-array
+/// and mask selector, with masks counting their true entries. All selectors
+/// are one-dimensional, so the block is one output dimension.
+fn advanced_length(selectors: &[Selector]) -> Result<Option<usize>> {
+    let mut block: Option<usize> = None;
+    for selector in selectors {
+        let len = match selector {
+            Selector::Indices(ix) => ix.len(),
+            Selector::Mask(m) => m.iter().filter(|&&b| b).count(),
+            _ => continue,
+        };
+        block = Some(match block {
+            None => len,
+            Some(b) if b == len || len == 1 => b,
+            Some(1) => len,
+            Some(b) => {
+                return Err(Error::new(
+                    ErrorCode::IndexInvalid,
+                    format!(
+                        "Indexing arrays of lengths {b} and {len} cannot be broadcast together."
+                    ),
+                ));
+            }
+        });
+    }
+    Ok(block)
+}
+
 pub fn index_shape(shape: &[usize], selectors: &[Selector]) -> Result<Vec<usize>> {
     validate_selectors(shape, selectors)?;
     let separated = separated_advanced_axis(selectors);
+    let block = advanced_length(selectors)?;
+    let first_array = selectors.iter().position(|s| !s.is_basic());
     let mut out = Vec::new();
     for (axis, &len) in shape.iter().enumerate() {
         match selectors.get(axis) {
+            Some(Selector::Indices(ix)) if first_array != Some(axis) => {
+                for &i in ix {
+                    normalize_index(i, len, axis)?;
+                }
+                continue;
+            }
+            Some(Selector::Mask(_)) if first_array != Some(axis) => continue,
+            Some(Selector::Indices(ix)) => {
+                for &i in ix {
+                    normalize_index(i, len, axis)?;
+                }
+                out.push(block.expect("an array selector is present"));
+            }
+            Some(Selector::Mask(_)) => out.push(block.expect("an array selector is present")),
             None => out.push(len),
             Some(Selector::Index(i)) => {
                 normalize_index(*i, len, axis)?;
@@ -226,13 +270,6 @@ pub fn index_shape(shape: &[usize], selectors: &[Selector]) -> Result<Vec<usize>
             Some(Selector::Slice { start, stop, step }) => {
                 out.push(resolve_slice(*start, *stop, *step, len)?.2);
             }
-            Some(Selector::Indices(ix)) => {
-                for &i in ix {
-                    normalize_index(i, len, axis)?;
-                }
-                out.push(ix.len());
-            }
-            Some(Selector::Mask(m)) => out.push(m.iter().filter(|&&b| b).count()),
         }
         if separated == Some(axis) {
             let len = out.pop().expect("the advanced selector pushed a dimension");
@@ -251,17 +288,6 @@ pub fn validate_selectors(shape: &[usize], selectors: &[Selector]) -> Result<()>
                 shape.len(),
                 selectors.len()
             ),
-        ));
-    }
-    let advanced = selectors.iter().filter(|s| !s.is_basic()).count();
-    if advanced > 1 {
-        // Gap: NumPy combines several advanced selectors by broadcasting them
-        // together. This build supports one advanced selector per
-        // indexing operation.
-        return Err(Error::new(
-            ErrorCode::IndexInvalid,
-            "This build supports at most one integer-array or mask selector per indexing \
-             operation.",
         ));
     }
     for (axis, sel) in selectors.iter().enumerate() {
@@ -293,6 +319,9 @@ pub fn index_offsets(
     // Per axis, the source positions it contributes; a dropped integer axis
     // contributes exactly one.
     let separated = separated_advanced_axis(selectors);
+    let first_array = selectors.iter().position(|s| !s.is_basic());
+    let mut arrays: Vec<(Vec<isize>, isize)> = Vec::new();
+    let mut block_slot = None;
     let mut axes: Vec<(Vec<isize>, isize)> = Vec::with_capacity(shape.len());
     for (axis, &len) in shape.iter().enumerate() {
         let positions: Vec<isize> = match selectors.get(axis) {
@@ -313,13 +342,39 @@ pub fn index_offsets(
                 .map(|(i, _)| i as isize)
                 .collect(),
         };
-        let entry = (positions, strides[axis]);
-        // Traverse in output order: a separated advanced dimension comes first.
-        if separated == Some(axis) {
-            axes.insert(0, entry);
-        } else {
-            axes.push(entry);
+        if matches!(
+            selectors.get(axis),
+            Some(Selector::Indices(_) | Selector::Mask(_))
+        ) {
+            arrays.push((positions, strides[axis]));
+            if first_array != Some(axis) {
+                continue;
+            }
+            // Placeholder for the combined advanced block, filled below.
+            let entry = (Vec::new(), 1);
+            if separated == Some(axis) {
+                axes.insert(0, entry);
+                block_slot = Some(0);
+            } else {
+                block_slot = Some(axes.len());
+                axes.push(entry);
+            }
+            continue;
         }
+        axes.push((positions, strides[axis]));
+    }
+    if let Some(slot) = block_slot {
+        // Broadcast the array selectors together: each block entry is the sum
+        // of the selected offsets on every advanced axis.
+        let len = advanced_length(selectors)?.expect("an array selector is present");
+        axes[slot].0 = (0..len)
+            .map(|k| {
+                arrays
+                    .iter()
+                    .map(|(p, s)| p[if p.len() == 1 { 0 } else { k }] * s)
+                    .sum()
+            })
+            .collect();
     }
     let mut out = Vec::new();
     let mut cursor = vec![0usize; axes.len()];
@@ -389,6 +444,39 @@ mod tests {
             (2, i64::MIN as isize, 1)
         );
         assert!(resolve_slice(None, None, Some(0), 5).is_err());
+    }
+
+    #[test]
+    fn several_array_selectors_broadcast_into_one_block() {
+        let shape = [3, 4];
+        let strides = contiguous_strides(&shape);
+        let both = vec![Selector::Indices(vec![0, 2]), Selector::Indices(vec![1, 3])];
+        assert_eq!(index_shape(&shape, &both).unwrap(), vec![2]);
+        assert_eq!(
+            index_offsets(&shape, &strides, 0, &both).unwrap(),
+            vec![1, 11]
+        );
+        let broadcast = vec![
+            Selector::Indices(vec![2]),
+            Selector::Mask(vec![true, false, true, true]),
+        ];
+        assert_eq!(
+            index_offsets(&shape, &strides, 0, &broadcast).unwrap(),
+            vec![8, 10, 11]
+        );
+        let mismatch = vec![
+            Selector::Indices(vec![0, 1]),
+            Selector::Indices(vec![0, 1, 2]),
+        ];
+        assert_eq!(
+            index_shape(&shape, &mismatch).unwrap_err().code,
+            ErrorCode::IndexInvalid
+        );
+        let empty = vec![
+            Selector::Mask(vec![false, false, false]),
+            Selector::Indices(vec![1]),
+        ];
+        assert_eq!(index_shape(&shape, &empty).unwrap(), vec![0]);
     }
 
     #[test]
