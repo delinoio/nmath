@@ -405,3 +405,176 @@ pub fn slogdet(a: &[C], n: usize, token: &CancellationToken) -> Result<(C, f64)>
     }
     Ok((sign, log))
 }
+
+/// Eigenvalues and right eigenvectors of a general matrix `a` (n×n) through
+/// Householder Hessenberg reduction and shifted complex QR iterations to
+/// Schur form. Eigenvectors come from back substitution on the triangular
+/// factor and have unit Euclidean norm. Eigenvalue order follows the Schur
+/// deflation and is not sorted, as in LAPACK.
+pub fn eig(a: &[C], n: usize, token: &CancellationToken) -> Result<(Vec<C>, Vec<C>)> {
+    let mut h = a.to_vec();
+    if h.iter().any(|z| !z.re.is_finite() || !z.im.is_finite()) {
+        return Err(no_convergence());
+    }
+    let mut z = vec![ZERO; n * n];
+    for i in 0..n {
+        z[i * n + i] = ONE;
+    }
+    // Hessenberg reduction: H <- P H P with P = I - 2 v v^H.
+    let mut v = vec![ZERO; n];
+    for k in 0..n.saturating_sub(2) {
+        token.check()?;
+        let norm = (k + 1..n)
+            .map(|i| h[i * n + k].norm_sqr())
+            .sum::<f64>()
+            .sqrt();
+        if norm == 0.0 {
+            continue;
+        }
+        let x0 = h[(k + 1) * n + k];
+        let phase = if x0 == ZERO { ONE } else { x0 / x0.norm() };
+        for i in k + 1..n {
+            v[i] = h[i * n + k];
+        }
+        v[k + 1] += phase * norm;
+        let vnorm = (k + 1..n).map(|i| v[i].norm_sqr()).sum::<f64>().sqrt();
+        for i in k + 1..n {
+            v[i] /= vnorm;
+        }
+        for j in 0..n {
+            let dot: C = (k + 1..n).map(|i| v[i].conj() * h[i * n + j]).sum();
+            for i in k + 1..n {
+                h[i * n + j] -= v[i] * dot * 2.0;
+            }
+        }
+        for i in 0..n {
+            let dot: C = (k + 1..n).map(|j| h[i * n + j] * v[j]).sum();
+            for j in k + 1..n {
+                h[i * n + j] -= dot * v[j].conj() * 2.0;
+            }
+            let dot: C = (k + 1..n).map(|j| z[i * n + j] * v[j]).sum();
+            for j in k + 1..n {
+                z[i * n + j] -= dot * v[j].conj() * 2.0;
+            }
+        }
+        for i in k + 2..n {
+            h[i * n + k] = ZERO;
+        }
+    }
+    // Shifted QR iterations with Wilkinson shifts and deflation.
+    let mut hi = n.saturating_sub(1);
+    let mut iterations = 0;
+    let mut since = 0;
+    let limit = 30 * n.max(1);
+    let mut rotations: Vec<(C, C)> = Vec::with_capacity(n);
+    while hi > 0 {
+        token.check()?;
+        let mut l = hi;
+        while l > 0 {
+            let s = h[(l - 1) * n + l - 1].norm() + h[l * n + l].norm();
+            if h[l * n + l - 1].norm() <= f64::EPSILON * s {
+                h[l * n + l - 1] = ZERO;
+                break;
+            }
+            l -= 1;
+        }
+        if l == hi {
+            hi -= 1;
+            since = 0;
+            continue;
+        }
+        iterations += 1;
+        since += 1;
+        if iterations > limit {
+            return Err(no_convergence());
+        }
+        let shift = if since % 10 == 0 {
+            // Exceptional shift breaks rare cycles.
+            h[hi * n + hi] + C::new(h[hi * n + hi - 1].norm(), 0.0)
+        } else {
+            let (a, b, c, d) = (
+                h[(hi - 1) * n + hi - 1],
+                h[(hi - 1) * n + hi],
+                h[hi * n + hi - 1],
+                h[hi * n + hi],
+            );
+            let tr = (a + d) * 0.5;
+            let disc = ((a - d) * 0.5 * ((a - d) * 0.5) + b * c).sqrt();
+            let (e1, e2) = (tr + disc, tr - disc);
+            if (e1 - d).norm() <= (e2 - d).norm() {
+                e1
+            } else {
+                e2
+            }
+        };
+        for i in l..=hi {
+            h[i * n + i] -= shift;
+        }
+        rotations.clear();
+        for k in l..hi {
+            let (x, y) = (h[k * n + k], h[(k + 1) * n + k]);
+            let r = (x.norm_sqr() + y.norm_sqr()).sqrt();
+            let (c, s) = if r == 0.0 {
+                (ONE, ZERO)
+            } else {
+                (x / r, y / r)
+            };
+            for j in k..n {
+                let (p, q) = (h[k * n + j], h[(k + 1) * n + j]);
+                h[k * n + j] = c.conj() * p + s.conj() * q;
+                h[(k + 1) * n + j] = -s * p + c * q;
+            }
+            rotations.push((c, s));
+        }
+        for (offset, &(c, s)) in rotations.iter().enumerate() {
+            let k = l + offset;
+            for i in 0..=(k + 2).min(hi) {
+                let (p, q) = (h[i * n + k], h[i * n + k + 1]);
+                h[i * n + k] = p * c + q * s;
+                h[i * n + k + 1] = -p * s.conj() + q * c.conj();
+            }
+            for i in 0..n {
+                let (p, q) = (z[i * n + k], z[i * n + k + 1]);
+                z[i * n + k] = p * c + q * s;
+                z[i * n + k + 1] = -p * s.conj() + q * c.conj();
+            }
+        }
+        for i in l..=hi {
+            h[i * n + i] += shift;
+        }
+    }
+    let values: Vec<C> = (0..n).map(|i| h[i * n + i]).collect();
+    let scale = h
+        .iter()
+        .map(|z| z.norm())
+        .fold(0.0, f64::max)
+        .max(f64::MIN_POSITIVE);
+    let small = f64::EPSILON * scale;
+    let mut vectors = vec![ZERO; n * n];
+    let mut y = vec![ZERO; n];
+    for k in 0..n {
+        token.check()?;
+        y.fill(ZERO);
+        y[k] = ONE;
+        for i in (0..k).rev() {
+            let sum: C = (i + 1..=k).map(|j| h[i * n + j] * y[j]).sum();
+            let mut d = h[i * n + i] - values[k];
+            if d.norm() < small {
+                // LAPACK perturbs zero pivots of repeated eigenvalues.
+                d = C::new(small, 0.0);
+            }
+            y[i] = -sum / d;
+        }
+        let mut norm = 0.0;
+        for i in 0..n {
+            let x: C = (0..=k).map(|j| z[i * n + j] * y[j]).sum();
+            vectors[i * n + k] = x;
+            norm += x.norm_sqr();
+        }
+        let norm = norm.sqrt();
+        for i in 0..n {
+            vectors[i * n + k] /= norm;
+        }
+    }
+    Ok((values, vectors))
+}

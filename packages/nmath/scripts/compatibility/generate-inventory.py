@@ -259,6 +259,16 @@ for op, args in {"cholesky": ["a", "upper"], "qr": ["a", "mode: reduced/complete
         ["packages/nmath/src/linalg.ts", "crates/nmath-core/src/linalg.rs", "crates/nmath-core/src/decomp.rs"],
         ["packages/nmath/test/decompositions.test.mjs", "packages/nmath/test/types/decompositions.ts", "crates/nmath-core/tests/decompositions.rs"],
         ["crates/nmath-core/tests/fixtures/decompositions/oracle.json"])
+for op in ["eig", "eigvals"]:
+    counterparts({"numpy.linalg." + op: "numpy.linalg." + op}, "linalg", ["a"], LINALG_DTYPES,
+        ["CPU only; lazy scheduled results; batch axes on the final two matrix axes.",
+         "Results are always complex: NumPy's real result for real input with all-real eigenvalues is data-dependent and cannot be a static lazy dtype. This adaptation awaits explicit approval.",
+         "Eigenvalue order and eigenvector phases are unspecified, as in LAPACK.",
+         "Validated with NumPy test_linalg criteria: eigenvalues as a multiset at decimal 6/12 and A v = v w with rtol 1e-5/1e-11.",
+         "Non-finite input fails with NMATH_LINALG_NO_CONVERGENCE. Cross-platform acceptance remains pending."],
+        ["packages/nmath/src/linalg.ts", "crates/nmath-core/src/linalg.rs", "crates/nmath-core/src/decomp.rs"],
+        ["packages/nmath/test/eig.test.mjs", "packages/nmath/test/types/eig.ts", "crates/nmath-core/tests/eig.rs"],
+        ["crates/nmath-core/tests/fixtures/eig/oracle.json"])
 for op, args, limit in [
     ("norm", ["x", "ord", "axis", "keepdims"], "All NumPy vector and matrix orders; float16 is rejected; inf/-inf orders over an empty axis fail at construction."),
     ("matrix_rank", ["A", "tol", "rtol", "hermitian (accepted)"], "Inputs need at least two dimensions; the one-dimensional nonzero test remains a target."),

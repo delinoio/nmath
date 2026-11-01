@@ -1,0 +1,648 @@
+{
+ "numpy": "2.5.4",
+ "environment": {
+  "python": "3.13.15",
+  "system": "Darwin",
+  "machine": "arm64"
+ },
+ "criterion": "NumPy 2.5.4 test_linalg: eigenvalues assert_almost_equal (decimal 6 for single, 12 otherwise) as a multiset; A v allclose to v w with rtol 1e-5 or 1e-11 and atol 0.",
+ "cases": [
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "5092a13f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     1
+    ],
+    "hex": "5092a13f00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "e354b83fb25485bfd5b48cbf38b02e3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "ac910c4000000000856597bd00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "6f4b9ebf9738ad3f394b693ff3f8acbf6cdc82bf1e178cbff8fb5c3f7a2656bf6ef561bf4f43413ffe8190bf3587a93fb972aebfbf6aad3faec405bf37b17c3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     4
+    ],
+    "hex": "2ab0833f00000000c4efb6bf533dac3fc4efb6bf533dacbf22b924bf00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     6,
+     6
+    ],
+    "hex": "28a7723f640e6bbf841834bff527afbf33ba69bf7bed5e3fdae792bf3619bb3f642f35bf23ff333f0553a73f38b4ad3f0d3b17bfeb6da2bfc7c4bcbf1e718e3fd029143f9c648c3f157ba1bffaef7fbf97db373ff9ff0bbf6c7e903f039358bfb39055bfb81fbbbfe632703f9f8d543f079235bff6e7a83f5065883f093e583f27de843ff2143cbfd93101bf1482b0bf"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     6
+    ],
+    "hex": "8e900a4088bf573f8e900a4088bf57bf81d458c0000000000c30bdbf7d220d3f0c30bdbf7d220dbf418fa03e00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "df0d1a3f403a91bfc6a6b23fc74d5d3fc9c385bf842301bfd699bf3f762f59bf9ef6a03f26bcbabf0147b83f6f86a43fc819b2bffb80043f37f3763fe16f7fbf1a1b81bf963684bf"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "2a1446bfd7d3133f2a1446bfd7d313bff726174000000000cd2246bfa494e53fcd2246bfa494e5bfc53ddabe00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "00000000000080bf0000803f00000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000803f00000000000080bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "00004040000000000000000000000000000080bf00000000000000000000000000000040"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     3
+    ],
+    "hex": "0000404000000000000080bf000000000000004000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "0000803f0000803f000000000000803f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "0000803f000000000000803f00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "000000400000803f0000000000000000000000400000803f000000000000000000004040"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     3
+    ],
+    "hex": "000000400000000000000040000000000000404000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "827fb6f3cb88f4bf"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     1
+    ],
+    "hex": "827fb6f3cb88f4bf0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "53cbc8eb7f3de6bf552e4b2cb274e43f52eda4a9ede2f0bffa0f146822a5f73f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "0035c70a8175d4bf00000000000000009177e1b4c2a3f13f0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "18923fa0798ef3bff5c73bdad79ee83f0fc9afae6332f3bf28632e677394f33f4fda01d55dd2e4bf151cd3d1b835e23fb575aa180742e6bf1ac655330931f73f3f5b9d088f10e83fbe8f77722576eebfd0499365fa5ef1bf22e001dfeb1ae43f793b05a19393ef3f2284375330f5f53f22e3a33abe70f63fa0a58f7168e4f63f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     4
+    ],
+    "hex": "d9ce3ec092840540000000000000000028482998c5a0dcbff06670719469da3f28482998c5a0dcbff06670719469dabfeb50e1ef78d300c00000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     6,
+     6
+    ],
+    "hex": "f0bc1a163540f0bf655433696245ed3fb0f9b3b772f2f5bfcd1724572aa1e1bf4c29bea40ef1ef3f108d6f257f4ff4bfbeea4c5e3ebbf1bf7af725cc0457f43f5b154d86c1c9e13f849db8656639f0bfd0e7b4ce44f9f63fdb9e7dfde631e13fd4fc97f6587ef0bf334e548c9698eebf39911d90b2c5f1bfc2fd6a7f9167f4bf592b127651eee03f61f7b258db42f4bff07547323c97e53fa2650a57ce03f03fc9b34dfadaebe93fe6e2722367cdf6bf181c53f405a5f3bf89c26c89912bf13fee0afd20d124f63f8fea24d0e89cf33f55ad1fbdbd16eebfa0059da47a82e23f53a75581e333e2bfbd419b305ee4e4bfcd2dc6f61668e1bf4dbc6007cb6de13f7b3643b9632be83fd22f8afc3a43eebfde2ee0a25befe1bfcece968da164e83f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     6
+    ],
+    "hex": "43512b751bf7fbbff5d82da8c963f53f43512b751bf7fbbff5d82da8c963f5bfb8668e50262bfc3f000000000000000080ceff9290b7a2bf82328f155e8cea3f80ceff9290b7a2bf82328f155e8ceabfcfb4b15185d5d1bf0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "260bb48a8c28f13f579dc86233fde13f57ea1c6e6689f33f5ec50e989230f0bfee9706ffc500f4bfb871a4b65264f7bf45f8d3f3c650e93f16aada176598e83f6c07be091708e03f855722696299e7bf9bf14650d84ae53fa252e92fb8a5f0bf977a17bb002be6bf67fa6c18731ee63f3a9e6c1e8f21f7bfd0b91d7fae74e9bfaf89752574d1ecbf3166cc9b3f02ea3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "549a9d2af23df33f0000000000000000d04622344024dcbff295d6ddb9aed93fd04622344024dcbff295d6ddb9aed9bf94a13a837bcaefbf0000000000000000560bea02a801cebf0000000000000000be1686e71ae9ff3f0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "0000000000000000000000000000f0bf000000000000f03f0000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "0000000000000000000000000000f03f0000000000000000000000000000f0bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "0000000000000840000000000000000000000000000000000000000000000000000000000000f0bf0000000000000000000000000000000000000000000000000000000000000040"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     3
+    ],
+    "hex": "00000000000008400000000000000000000000000000f0bf000000000000000000000000000000400000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "000000000000f03f000000000000f03f0000000000000000000000000000f03f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000f03f0000000000000000000000000000f03f0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "0000000000000040000000000000f03f000000000000000000000000000000000000000000000040000000000000f03f000000000000000000000000000000000000000000000840"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     3
+    ],
+    "hex": "000000000000004000000000000000000000000000000040000000000000000000000000000008400000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "8e45b9bfcf290c3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     1
+    ],
+    "hex": "8e45b9bfcf290c3f"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "f686be3fe4e27ebf9c114fbf77f71e3fc01688bf1dc31abfd873a33f842c6bbf"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "97172040a7c684bf842e873e1a8260bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "2a34693f3170bdbfaf3a573f933eb9bf8d1dbf3ff047a93f624d17bf7d5454bfa2a7b7bf6868af3f751e0d3f1dc7473fa27e673ff70b123fca025f3f19dca0bf3e18bc3f0d9894bf0d5b463f17dd96bfae233e3f180946bf2b17b3bf8745abbff4c141bfb02bbc3f24d11f3f21ab78bf388b773f24403c3f798f953f7c4219bf"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     4
+    ],
+    "hex": "61638140271591bf7bbcc43eef24cabf1836b6bf394445bf5010bd3ec6a9b43f"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     6,
+     6
+    ],
+    "hex": "ed04adbf8836b43fcafe11bf710829bf9b464c3f4befbfbf43ef473f569e7f3f13ca8f3f4811bb3f111fb6bfbd89b23fe67d003f858eabbf7c5d173fb5ba983f32237ebf44aa9fbf661b92bfcbc935bf7f519bbfb80a903f68d29f3f54acb0bf01b4463f6ac41e3f18714f3f84042f3fb311963f43d5243f314573bf31b08dbfc3837ebf03deb8bfa1622d3f98fcb83faf6a203fa1e1b7bf5504a53ff3f135bfedd59bbf122972bfc524823f28ce20bf390e693f1577383f03ed63bfe843943ff195bd3f6aa8923fd02f87bfc8053dbf863952bf5e656e3fb31e90bfa66f993f147104bfa48c80bf2676abbf310b463f6fee17bf0d5091bfd422973f0313493f4ed5733ff6bf253f3b53bbbff835a3bf436916bf15a1863fb7a1873f68705b3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     6
+    ],
+    "hex": "cf108f406a96c53f2ae70e40348fd9bf86ce25c0def2cfbea9d499bf95fb62bf81fa663eb5ebf23fb73595bff9530140"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "6a53073f0fa055bf970ca03febc201bf4775b23f406d893f2894423f88cb463f8954643f0934b33fa6cf63bfaab1183fed6511bfb84fb3bf4a4774bf1ce1ae3f317c9cbf07cca7bf650053bfd0f12f3f1ed31c3f6a2f1b3f4871553f2962963f61d64c3f6a368bbf7f61a7bf86298b3f35512f3f157292bf001cb6bf662c8b3f61a9213f3e36a2bf0313aabfd66a8d3f"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "2e52923fb98bd5bf0825f3bf0cb5e93d4655743fc6104f3fe89df5bf510b31404eb699bf4448403ff781aebe015b23bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "0000000000000000000080bf000000000000803f000000000000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000803f00000024000080bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "0000404000000000000000000000000000000000000000000000000000000000000080bf000000000000000000000000000000000000000000000000000000000000004000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     3
+    ],
+    "hex": "0000404000000000000080bf000000000000004000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "0000803f000000000000803f0000000000000000000000000000803f00000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "0000803f000000000000803f00000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "00000040000000000000803f000000000000000000000000000000000000000000000040000000000000803f00000000000000000000000000000000000000000000404000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex64",
+    "shape": [
+     3
+    ],
+    "hex": "000000400000000000000040000000000000404000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "06fbb8f1e41bf73f0ecd40f69983f13f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     1
+    ],
+    "hex": "06fbb8f1e41bf73f0ecd40f69983f13f"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "5d2bde65630aeabff61ed05e92bce93f70c3174eb5eceb3fede1427b5cbcef3fbcb2b936ba86f73f91acaadec1e3e2bfe64b6641c57ce13f393a6ccadbdaf43f"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "48f76e645d1efbbfd28169962e94e43f8e0733528ed7f63fc9889fae0d6ff73f"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "8b0cb71f3aa4ed3fa778c3dadb5feabf5762d2df1864e1bfa968ffce4316f7bfd1599bd46ff0f43f503c58ee670ce13f6706509a6f77e23faa819df32b25f7bf51b41df6bc0fecbf59459e99fc2bf4bfd64e005998e1f5bf583c2b1f301ef13fb0134447557df3bf90d28684dd1ff5bfe5cf1a29d5d5f5bf349318bcca7af63f1f10af114b81efbfa8d352b8b447f0bfcd138890b2baea3fe37828b8fb01e23f048fa9eb9e75f43f82368609a5c1f2bfb42e945dc7d7f53f83c090b78f17ecbf1aed5da3912ce5bf5494cf1b957bf2bf72f460d314aeebbfb4e8d422c575f0bf7c2cd172abd5efbf6fc458734a6febbf389ad52e0e7feb3fa8b5766a0c84ecbf"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     4
+    ],
+    "hex": "a8d993e1813af1bf0ed0b72fd772fe3fdf6ac7e9c220f53f49461455955306c092094eed93b9b5bf66573d0a6de7e6bfede290f0029bf83fb548456bf86acbbf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     6,
+     6
+    ],
+    "hex": "1b3c242eafd2f73f6bbbd32572a0f03fdf21e7e178f3eb3f2a81bb64f757eb3fa9dc42607036e83f548f565ef834f43ff2fc6625bb2cee3f2568cf1ef1dff1bfaa994def27c0e83f7052fd99ac61e9bf988faf5e3019f7bfca55a4767602e73fc290b2d50ffce63f9c175ad1a9d7ecbfcdd37d1a1217f3bf14ced07d1b03f1bf7ea7df350a38f2bf431b80dbd762f6bfe5b55f863724e8bf5971eaf2eb72e2bff617163cc756ee3fa79a1e168b3be83f84b7c5e92307f63f687743b3cd02f1bf4cecc98ad30ae2bf3d157307f974e83fb0510514e3c2e5bf958c7eb17b1ee83f5a8494b7cb8cf3bfdbf4efa16a95e1bfd95ba9092ea2ef3f46f69cb33b3fe73f6c1da0dffcb5f1bfa68e35d3c28df13fd7f5b5af90f3e03f1f5191123adaefbfe2dde4bfde5df53fb402a6a2b9f5eabfa588cc729120eb3f0400d2528256edbf2d2c0553e9b0f53fab2dfc2ac74df23f9dbcf0c56e71f73f3bbf7242710aeebf9685561f6671f73f71154b447edce63f1a9d631e1fd3ecbfab6eff5648dfe3bf4a07393381caf0bfd24505af98ffe5bf5a9ed345438af33f9b7baccfe252e33fe37d89a91382eabf6418bae79285f53fa8b1e5c369eceebf0d13ff23813aecbf52257634a58ae83f4411a76f9425f53fda42a25edf66eebf8a88715b4262e83fca7aa45c274bf33f60dc6c106378e6bfefbe306262b3f1bf2845a6f5ece4f63ff858cfea4072e53f40ddf3684096e5bf46eaafe10050f6bf50e26bbc9186f7bf30e4e84f6f76f4bffe23a81c3926f73f9cb2bdbca442f2bfefecc3c6655cebbf"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     6
+    ],
+    "hex": "8c527b91ad6804c08399e472389304c0c4ece6116ebd03404598f187ae4d01c0a3f8ef00fcd9f63f729057e4fdcf04401db023ebb6ca00c0e3b795910fefa2bf30749e6b02c2c73f8ad67f5f4151f33fbbca180d3d79e73f8680f33dc732b5bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "e24d9ebfec9de73f6880704f38a3f73f2ca4532745ddf23f89e8ed5995c8f03ff870750e12a2eb3f3cd24734b794f33fe6ca4f08f476f23f06043c6fcd68f5bf6d6089b8c03fe7bfc346e2f61c35e6bf5de9ac2d4649ea3f9a22bd3b9900f2bf04d10021325ae73f68fff268607df2bf52d8a4287e52f63f8647937484c7ec3fc0eba011c1d8f0bfc0d24d5e9da1e7bf93c7fb1b2f91e23f98c3ce497ce1e43feaf70979f0a9e43f65f4afa038d3e8bf147415ba7c9aed3fb3b6b5de6675f7bfdf08e4a43515f63fe5aff4eaa4a0e53fcf9f2b0f9f6be53fb81bd909ec89e43f8b802d587c66ed3f02af9045a104f1bf67a9eac16067e8bf7e40135303fcf2bf4017cbb478d0f03fd8286030d9caf3bf9d0b1c6e1dbae8bff273187471c4f7bf"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "181950395be202408a596039f57bd23f69673feca047e9bff61102d5508ac1bfbd794b8548e504c08f07f6ed805dbbbf30438f700911e2bf7bbd964bae3df93f79df82e85c20f03f8ea0c1bcbbf7a33f20004ec90530a13fc04ec17329ecfcbf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "00000000000000000000000000000000000000000000f0bf0000000000000000000000000000f03f000000000000000000000000000000000000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "0000000000000000fdffffffffffef3f000000000000803c000000000000f0bf"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "00000000000008400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f0bf000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     3
+    ],
+    "hex": "00000000000008400000000000000000000000000000f0bf000000000000000000000000000000400000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "000000000000f03f0000000000000000000000000000f03f000000000000000000000000000000000000000000000000000000000000f03f0000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000f03f0000000000000000000000000000f03f0000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "00000000000000400000000000000000000000000000f03f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000f03f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008400000000000000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     3
+    ],
+    "hex": "000000000000004000000000000000000000000000000040000000000000000000000000000008400000000000000000"
+   }
+  },
+  {
+   "input": {
+    "dtype": "int32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "04000000010000000200000003000000"
+   },
+   "eigenvalues": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "0000000000001440000000000000000000000000000000400000000000000000"
+   }
+  }
+ ]
+}
