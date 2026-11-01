@@ -41,6 +41,7 @@ import type {
   Promote,
   VarianceDType,
   PromoteWeak,
+  ReduceOptions,
   ReduceShape,
   ScalarOf,
   Shape,
@@ -249,6 +250,39 @@ function checkFinite(value: number, what: string): number {
     );
   }
   return value;
+}
+
+/**
+ * Reshapes a reduction result so reduced axes keep length 1. The native
+ * reduction has already validated the axes.
+ */
+function keepDims(
+  result: Expr<any, any>,
+  input: Shape,
+  axes: readonly number[] | undefined,
+  options: ReduceOptions,
+): Expr<any, any> {
+  const keep = options.keepdims;
+  if (keep !== undefined && typeof keep !== "boolean") {
+    throw new NMathError(
+      "NMATH_INDEX_INVALID",
+      "NMATH_INDEX_INVALID: keepdims must be a boolean.",
+    );
+  }
+  if (!keep) {
+    return result;
+  }
+  const rank = input.length;
+  const reduced = new Set(
+    (axes ?? input.map((_, i) => i)).map((a) => (a < 0 ? a + rank : a)),
+  );
+  const shape = input.map((n, i) => (reduced.has(i) ? 1 : n));
+  return new Expr(
+    native(() =>
+      binding.NativeExpr.reshape(result.nativeExpr(), shape, undefined),
+    ),
+    result.context,
+  );
 }
 
 function toNativeSelector(selector: Selector): NativeSelector {
@@ -535,87 +569,111 @@ export abstract class Lazy<
   }
 
   /** @internal */
-  reduceOp(op: ReduceOperator, axis: number | undefined): Expr<any, any> {
-    return new Expr(
-      native(() =>
-        binding.NativeExpr.reduce(
-          op,
-          this.nativeExpr(),
-          axis === undefined
-            ? undefined
-            : [checkInt(axis, "An axis") as number],
-        ),
-      ),
+  reduceOp(
+    op: ReduceOperator,
+    axis: number | readonly number[] | undefined,
+    options: ReduceOptions = {},
+  ): Expr<any, any> {
+    const axes =
+      axis === undefined
+        ? undefined
+        : (typeof axis === "number" ? [axis] : [...axis]).map(
+            (value) => checkInt(value, "An axis") as number,
+          );
+    const reduced = new Expr(
+      native(() => binding.NativeExpr.reduce(op, this.nativeExpr(), axes)),
       this.context,
     );
+    return keepDims(reduced, this.shape, axes, options);
   }
 
-  sum<A extends number | undefined = undefined>(
+  sum<
+    const A extends number | readonly number[] | undefined = undefined,
+    K extends boolean = false,
+  >(
     this: [D] extends ["str" | "datetime64"]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<SumDType<D>, ReduceShape<S, A>> {
-    return this.reduceOp("sum", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<SumDType<D>, ReduceShape<S, A, K>> {
+    return this.reduceOp("sum", axis, options);
   }
 
-  mean<A extends number | undefined = undefined>(
+  mean<
+    const A extends number | readonly number[] | undefined = undefined,
+    K extends boolean = false,
+  >(
     this: [D] extends ["str" | "datetime64"]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A>> {
-    return this.reduceOp("mean", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>> {
+    return this.reduceOp("mean", axis, options);
   }
 
-  min<A extends number | undefined = undefined>(
+  min<
+    const A extends number | readonly number[] | undefined = undefined,
+    K extends boolean = false,
+  >(
     this: [D] extends ["str"]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<D, ReduceShape<S, A>> {
-    return this.reduceOp("min", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, A, K>> {
+    return this.reduceOp("min", axis, options);
   }
 
-  max<A extends number | undefined = undefined>(
+  max<
+    const A extends number | readonly number[] | undefined = undefined,
+    K extends boolean = false,
+  >(
     this: [D] extends ["str"]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<D, ReduceShape<S, A>> {
-    return this.reduceOp("max", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, A, K>> {
+    return this.reduceOp("max", axis, options);
   }
 
   /** Product over all axes or one axis. Empty reductions use the multiplicative identity. */
-  prod<A extends number | undefined = undefined>(
+  prod<
+    const A extends number | readonly number[] | undefined = undefined,
+    K extends boolean = false,
+  >(
     this: [D] extends ["str" | TemporalDType]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<SumDType<D>, ReduceShape<S, A>> {
-    return this.reduceOp("prod", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<SumDType<D>, ReduceShape<S, A, K>> {
+    return this.reduceOp("prod", axis, options);
   }
 
   /** First index of the minimum value. The result uses dtype `int64`. */
-  argmin<A extends number | undefined = undefined>(
+  argmin<A extends number | undefined = undefined, K extends boolean = false>(
     this: [D] extends ["str" | TemporalDType]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<"int64", ReduceShape<S, A>> {
-    return this.reduceOp("argmin", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<"int64", ReduceShape<S, A, K>> {
+    return this.reduceOp("argmin", axis, options);
   }
 
   /** @internal */
@@ -656,7 +714,7 @@ export abstract class Lazy<
   }
 
   /** Variance over the flattened input or one axis. */
-  var<A extends number | undefined = undefined>(
+  var<A extends number | undefined = undefined, K extends boolean = false>(
     this: [D] extends ["str" | TemporalDType]
       ? 0 extends 1 & D
         ? Lazy<D, S>
@@ -664,12 +722,18 @@ export abstract class Lazy<
       : Lazy<D, S>,
     axis?: A,
     ddof = 0,
-  ): Expr<VarianceDType<D>, ReduceShape<S, A>> {
-    return this.varianceOp("var", axis, checkFinite(ddof, "ddof"));
+    options?: ReduceOptions<K>,
+  ): Expr<VarianceDType<D>, ReduceShape<S, A, K>> {
+    return keepDims(
+      this.varianceOp("var", axis, checkFinite(ddof, "ddof")),
+      this.shape,
+      axis === undefined ? undefined : [axis],
+      options ?? {},
+    );
   }
 
   /** Standard deviation over the flattened input or one axis. */
-  std<A extends number | undefined = undefined>(
+  std<A extends number | undefined = undefined, K extends boolean = false>(
     this: [D] extends ["str" | TemporalDType]
       ? 0 extends 1 & D
         ? Lazy<D, S>
@@ -677,8 +741,14 @@ export abstract class Lazy<
       : Lazy<D, S>,
     axis?: A,
     ddof = 0,
-  ): Expr<VarianceDType<D>, ReduceShape<S, A>> {
-    return this.varianceOp("std", axis, checkFinite(ddof, "ddof"));
+    options?: ReduceOptions<K>,
+  ): Expr<VarianceDType<D>, ReduceShape<S, A, K>> {
+    return keepDims(
+      this.varianceOp("std", axis, checkFinite(ddof, "ddof")),
+      this.shape,
+      axis === undefined ? undefined : [axis],
+      options ?? {},
+    );
   }
 
   /** Cumulative sum over the flattened input or one axis. */
@@ -706,15 +776,16 @@ export abstract class Lazy<
   }
 
   /** First index of the maximum value. The result uses dtype `int64`. */
-  argmax<A extends number | undefined = undefined>(
+  argmax<A extends number | undefined = undefined, K extends boolean = false>(
     this: [D] extends ["str" | TemporalDType]
       ? 0 extends 1 & D
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
     axis?: A,
-  ): Expr<"int64", ReduceShape<S, A>> {
-    return this.reduceOp("argmax", axis);
+    options?: ReduceOptions<K>,
+  ): Expr<"int64", ReduceShape<S, A, K>> {
+    return this.reduceOp("argmax", axis, options);
   }
 
   matmul<D2 extends NumericDType, S2 extends Shape>(

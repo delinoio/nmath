@@ -437,19 +437,61 @@ export type MutableShape<S extends Shape> = S extends readonly [
   : S;
 
 /** Shape after reducing over one non-negative literal axis. */
-export type ReduceShape<S extends Shape, A extends number | undefined> = [
-  A,
-] extends [undefined]
-  ? []
-  : number[] extends S
+type MapAxes<
+  S extends Shape,
+  I extends number,
+  Keep extends boolean,
+  Idx extends unknown[] = [],
+  Out extends number[] = [],
+> = S extends readonly [infer H extends number, ...infer R extends Shape]
+  ? MapAxes<
+      R,
+      I,
+      Keep,
+      [...Idx, unknown],
+      Idx["length"] extends I
+        ? Keep extends true
+          ? [...Out, 1]
+          : Out
+        : [...Out, H]
+    >
+  : Out;
+type AxisList<A> = A extends readonly number[] ? A[number] : A;
+
+/**
+ * Reduction result shape for no axis, one axis or an axis list. `K` keeps
+ * reduced axes with length 1. Non-literal or negative axes and non-literal
+ * `keepdims` make the shape dynamic.
+ */
+export type ReduceShape<
+  S extends Shape,
+  A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+> = [A] extends [undefined]
+  ? K extends true
+    ? number[] extends S
+      ? number[]
+      : MapAxes<S, number, true>
+    : boolean extends K
+      ? number[]
+      : []
+  : boolean extends K
     ? number[]
-    : A extends number
-      ? IsLiteral<A> extends true
-        ? `${A}` extends `-${string}`
-          ? number[]
-          : DropAt<S, A>
-        : number[]
-      : number[];
+    : number[] extends S
+      ? number[]
+      : AxisList<A> extends infer I extends number
+        ? IsLiteral<I> extends true
+          ? [Extract<`${I}`, `-${string}`>] extends [never]
+            ? MapAxes<S, I, K>
+            : number[]
+          : number[]
+        : number[];
+
+/** Reduction options. */
+export interface ReduceOptions<K extends boolean = boolean> {
+  /** Keep reduced axes with length 1, as NumPy `keepdims=True`. */
+  readonly keepdims?: K;
+}
 
 /** Matrix product shape with broadcast batch axes and vector promotion. */
 export type MatMulShape<

@@ -40,6 +40,7 @@ import type {
   SumDType,
   VarianceDType,
   TrueDivide,
+  ReduceOptions,
   ReduceShape,
   ScalarOf,
   Shape,
@@ -156,79 +157,121 @@ export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
 export function sum<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  A extends number | undefined = undefined,
+  const A extends number | readonly number[] | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<SumDType<D>, ReduceShape<S, A>>;
-export function sum(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.sum(axis);
+  options?: ReduceOptions<K>,
+): Expr<SumDType<D>, ReduceShape<S, A, K>>;
+export function sum(
+  x: Lazy<any, any>,
+  axis?: number | readonly number[],
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.sum(axis, options);
 }
 export function mean<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  A extends number | undefined = undefined,
+  const A extends number | readonly number[] | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A>>;
-export function mean(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.mean(axis);
+  options?: ReduceOptions<K>,
+): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>>;
+export function mean(
+  x: Lazy<any, any>,
+  axis?: number | readonly number[],
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.mean(axis, options);
 }
 export function min<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  A extends number | undefined = undefined,
+  const A extends number | readonly number[] | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<D, ReduceShape<S, A>>;
-export function min(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.min(axis);
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, A, K>>;
+export function min(
+  x: Lazy<any, any>,
+  axis?: number | readonly number[],
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.min(axis, options);
 }
 export function max<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  A extends number | undefined = undefined,
+  const A extends number | readonly number[] | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<D, ReduceShape<S, A>>;
-export function max(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.max(axis);
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, A, K>>;
+export function max(
+  x: Lazy<any, any>,
+  axis?: number | readonly number[],
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.max(axis, options);
 }
 export function prod<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
   S extends Shape,
-  A extends number | undefined = undefined,
+  const A extends number | readonly number[] | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<SumDType<D>, ReduceShape<S, A>>;
-export function prod(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.prod(axis);
+  options?: ReduceOptions<K>,
+): Expr<SumDType<D>, ReduceShape<S, A, K>>;
+export function prod(
+  x: Lazy<any, any>,
+  axis?: number | readonly number[],
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.prod(axis, options);
 }
 export function argmin<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
   S extends Shape,
   A extends number | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<"int64", ReduceShape<S, A>>;
-export function argmin(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.argmin(axis);
+  options?: ReduceOptions<K>,
+): Expr<"int64", ReduceShape<S, A, K>>;
+export function argmin(
+  x: Lazy<any, any>,
+  axis?: number,
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.argmin(axis, options);
 }
 export function argmax<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
   S extends Shape,
   A extends number | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
-): Expr<"int64", ReduceShape<S, A>>;
-export function argmax(x: Lazy<any, any>, axis?: number): Expr<any, any> {
-  return x.argmax(axis);
+  options?: ReduceOptions<K>,
+): Expr<"int64", ReduceShape<S, A, K>>;
+export function argmax(
+  x: Lazy<any, any>,
+  axis?: number,
+  options?: ReduceOptions,
+): Expr<any, any> {
+  return x.argmax(axis, options);
 }
 export function cumsum<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
@@ -256,33 +299,39 @@ export function var_<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
   S extends Shape,
   A extends number | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
   ddof?: number,
-): Expr<VarianceDType<D>, ReduceShape<S, A>>;
+  options?: ReduceOptions<K>,
+): Expr<VarianceDType<D>, ReduceShape<S, A, K>>;
 export function var_(
   x: Lazy<any, any>,
   axis?: number,
   ddof?: number,
+  options?: ReduceOptions,
 ): Expr<any, any> {
-  return x.var(axis, ddof);
+  return x.var(axis, ddof, options);
 }
 export function std<
   D extends Exclude<ComputableDType, "str" | TemporalDType>,
   S extends Shape,
   A extends number | undefined = undefined,
+  K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   axis?: A,
   ddof?: number,
-): Expr<VarianceDType<D>, ReduceShape<S, A>>;
+  options?: ReduceOptions<K>,
+): Expr<VarianceDType<D>, ReduceShape<S, A, K>>;
 export function std(
   x: Lazy<any, any>,
   axis?: number,
   ddof?: number,
+  options?: ReduceOptions,
 ): Expr<any, any> {
-  return x.std(axis, ddof);
+  return x.std(axis, ddof, options);
 }
 export { var_ as var };
 export function matmul<

@@ -147,14 +147,14 @@ for op, target in {"add":"add", "subtract":"subtract", "multiply":"multiply", "d
         NUMERIC_LIMITS + ["No out, where, casting/order keyword surface or ufunc method parity; boolean power/remainder produce int8."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
 for op in ["sum", "mean", "min", "max"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
-        "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
-        NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+        "reductions", ["array", "axis: integer, integer list or omitted", "keepdims option"], NUMERIC,
+        NUMERIC_LIMITS + ["No out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS + ["packages/nmath/test/keepdims.test.mjs", "packages/nmath/test/types/keepdims.ts"], DTYPE_FIXTURES)
 for op in ["var", "std"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
-        "reductions", ["array", "axis: one integer or omitted", "ddof: finite number"], NUMERIC,
+        "reductions", ["array", "axis: one integer or omitted", "ddof: finite number", "keepdims option"], NUMERIC,
         NUMERIC_LIMITS + ["Two-pass mean and squared deviations. Result dtype keeps float16, maps float32/complex64 to float32 and other dtypes to float64; complex variance is real. The divisor clamps at zero, so zero divisors return NaN or infinity. Strings and temporal dtypes are rejected. GPU rejects variance before admission."],
         CORE + ["crates/nmath-core/src/kernels.rs"],
-        DTYPE_TESTS + ["packages/nmath/test/variance.test.mjs", "packages/nmath/test/types/variance.ts", "crates/nmath-core/tests/variance.rs"],
+        DTYPE_TESTS + ["packages/nmath/test/variance.test.mjs", "packages/nmath/test/types/variance.ts", "crates/nmath-core/tests/variance.rs", "packages/nmath/test/keepdims.test.mjs"],
         DTYPE_FIXTURES + ["crates/nmath-core/tests/fixtures/variance/oracle.json"])
 for op in ["cumsum", "cumprod"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},

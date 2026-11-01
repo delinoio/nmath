@@ -122,6 +122,8 @@ Elementwise math ufuncs use one lazy math node. The [runtime contract](crates-nm
 
 Bitwise, shift and logical operators extend the lazy binary node, and `invert` uses the math node. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns integer promotion and shift semantics, and the [package contract](packages-nmath-package-contract.md#typing) owns the declarations.
 
+Reduction axis lists use the native multi-axis reduce node, and `keepdims` reshapes its result in the package layer. The [package contract](packages-nmath-package-contract.md#typing) owns the option surface and shape inference.
+
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
 
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.
