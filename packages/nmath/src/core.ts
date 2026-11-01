@@ -39,6 +39,7 @@ import type {
   MatMulShape,
   MutableShape,
   Promote,
+  VarianceDType,
   PromoteWeak,
   ReduceShape,
   ScalarOf,
@@ -240,6 +241,16 @@ function checkInt(value: number | undefined, what: string): number | undefined {
   return value;
 }
 
+function checkFinite(value: number, what: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new NMathError(
+      "NMATH_INDEX_INVALID",
+      `NMATH_INDEX_INVALID: ${what} must be a finite number.`,
+    );
+  }
+  return value;
+}
+
 function toNativeSelector(selector: Selector): NativeSelector {
   if (typeof selector === "number") {
     return { kind: "index", index: checkInt(selector, "An index") };
@@ -341,6 +352,7 @@ export type BinaryOperator = "add" | "sub" | "mul" | "div" | "mod" | "pow";
 export type ReduceOperator =
   "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
 export type ScanOperator = "cumsum" | "cumprod";
+export type VarianceOperator = "var" | "std";
 
 /** Type-only brand that identifies NMath values regardless of dtype and shape. */
 export declare const lazyBrand: unique symbol;
@@ -582,6 +594,53 @@ export abstract class Lazy<
       ),
       this.context,
     );
+  }
+
+  /** @internal */
+  varianceOp(
+    op: VarianceOperator,
+    axis: number | undefined,
+    ddof: number,
+  ): Expr<any, any> {
+    return new Expr(
+      native(() =>
+        binding.NativeExpr.variance(
+          op,
+          this.nativeExpr(),
+          axis === undefined
+            ? undefined
+            : (checkInt(axis, "An axis") as number),
+          ddof,
+        ),
+      ),
+      this.context,
+    );
+  }
+
+  /** Variance over the flattened input or one axis. */
+  var<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+    ddof = 0,
+  ): Expr<VarianceDType<D>, ReduceShape<S, A>> {
+    return this.varianceOp("var", axis, checkFinite(ddof, "ddof"));
+  }
+
+  /** Standard deviation over the flattened input or one axis. */
+  std<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+    ddof = 0,
+  ): Expr<VarianceDType<D>, ReduceShape<S, A>> {
+    return this.varianceOp("std", axis, checkFinite(ddof, "ddof"));
   }
 
   /** Cumulative sum over the flattened input or one axis. */

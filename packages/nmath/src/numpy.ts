@@ -24,6 +24,7 @@ import type {
   MatMulCheck,
   MutableShape,
   SumDType,
+  VarianceDType,
   TrueDivide,
   ReduceShape,
   ScalarOf,
@@ -236,6 +237,39 @@ export function cumprod<
 export function cumprod(x: Lazy<any, any>, axis?: number): Expr<any, any> {
   return x.cumprod(axis);
 }
+export function var_<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+  ddof?: number,
+): Expr<VarianceDType<D>, ReduceShape<S, A>>;
+export function var_(
+  x: Lazy<any, any>,
+  axis?: number,
+  ddof?: number,
+): Expr<any, any> {
+  return x.var(axis, ddof);
+}
+export function std<
+  D extends Exclude<ComputableDType, "str" | TemporalDType>,
+  S extends Shape,
+  A extends number | undefined = undefined,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis?: A,
+  ddof?: number,
+): Expr<VarianceDType<D>, ReduceShape<S, A>>;
+export function std(
+  x: Lazy<any, any>,
+  axis?: number,
+  ddof?: number,
+): Expr<any, any> {
+  return x.std(axis, ddof);
+}
+export { var_ as var };
 export function matmul<
   A extends NumericDType,
   AS extends Shape,

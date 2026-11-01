@@ -8,7 +8,7 @@ use napi_derive::napi;
 use nmath_core::{
     BinaryOp, Buffer as CoreBuffer, CancellationToken, Context, ContextOptions, DType, Device,
     Error as CoreError, ErrorCode, Expr, Generator, NdArray, ReduceOp, Scalar, ScanOp, Selector,
-    UnaryOp, Value, context::JobOutput, io::WriteMode,
+    UnaryOp, Value, VarianceOp, context::JobOutput, io::WriteMode,
 };
 
 static LOGGING: Once = Once::new();
@@ -478,6 +478,23 @@ impl NativeExpr {
         };
         Ok(Self {
             inner: Expr::reduce(op, &input.inner, axes).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn variance(op: String, input: &NativeExpr, axis: Option<i64>, ddof: f64) -> Result<Self> {
+        let op = match op.as_str() {
+            "var" => VarianceOp::Var,
+            "std" => VarianceOp::Std,
+            other => {
+                return Err(core_err(
+                    ErrorCode::IndexInvalid,
+                    format!("Unknown variance operation '{other}'."),
+                ));
+            }
+        };
+        Ok(Self {
+            inner: Expr::variance(op, &input.inner, axis, ddof).map_err(to_napi)?,
         })
     }
 

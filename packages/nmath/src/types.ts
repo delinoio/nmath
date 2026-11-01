@@ -419,6 +419,13 @@ type DropAt<
     : DropAt<R, I, [...Acc, H]>
   : Acc;
 
+/** NumPy variance result dtype: float16 stays, float32/complex64 become float32. */
+export type VarianceDType<D extends ComputableDType> = D extends "float16"
+  ? "float16"
+  : D extends "float32" | "complex64"
+    ? "float32"
+    : "float64";
+
 /** The same shape with mutable tuple members. */
 export type MutableShape<S extends Shape> = S extends readonly [
   ...infer D extends number[],
