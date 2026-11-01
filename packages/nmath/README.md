@@ -214,7 +214,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | Area                 | Available now                                                                                                                                                                                            | Not yet available                                                                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                        | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
-| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes                                                                                                                 | comparisons, bitwise, ufunc methods, `where`, math functions                                                                                             |
+| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`                                                                   | string/temporal comparisons, bitwise, ufunc methods, one-argument `where`, math functions                                                                |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod`, `argmin`, `argmax` (all axes or one axis)                                                                                                                           | `std`, `var`, `cumsum`, `cumprod`, multi-axis lists, `keepdims`                                                                                          |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                          | several advanced selectors combined, `newaxis`, ellipsis                                                                                                 |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
@@ -442,6 +442,19 @@ console.log((await equal(a, a).compute()).toArray()); // [true, true, true]
 ```
 
 `equal` and `not_equal` accept complex operands and compare both components. Ordering comparisons reject complex operands. NaN ordering and equality are false, and inequality is true. String and temporal comparisons remain targets. GPU execution rejects the bool result before admission.
+
+### Selection
+
+`where(condition, x, y)` returns `x` where the condition is nonzero and `y` elsewhere. It is exported from the core and NumPy entry points. All three operands broadcast together, and the branches promote like arithmetic.
+
+```ts
+import { less, where } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([1, 2, 3], { dtype: "int16" });
+console.log((await where(less(a, 2.5), a, 0n).compute()).toArray()); // [1, 2, 0]
+```
+
+The condition must be an NMath array or expression. Branches can be arrays or weak `number`, `bigint`, `boolean` and `Complex` scalars. A JS `number` is a weak float, so `where(mask, a, 0)` returns `float64`; use `0n` to keep an integer dtype. String and temporal operands are rejected. GPU execution rejects `where` before admission. The one-argument form remains a target.
 
 ### Cumulative scans
 

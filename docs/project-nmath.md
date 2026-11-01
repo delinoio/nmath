@@ -116,6 +116,8 @@ Pivot plans extend the table engine with row/column key reshaping and grouped ce
 
 Elementwise comparisons extend the lazy binary node with bool results and broadcast shape inference. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns promotion, complex restrictions and NaN behavior, and the [package contract](packages-nmath-package-contract.md#typing) owns the function declarations.
 
+Elementwise selection adds a three-operand `where` node that shares binary promotion and broadcasting. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns condition truthiness and branch casting, and the [package contract](packages-nmath-package-contract.md#typing) owns the declarations.
+
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
 
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.

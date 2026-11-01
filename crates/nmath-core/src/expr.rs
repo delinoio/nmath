@@ -29,6 +29,9 @@ pub enum ExprKind {
         rhs: Expr,
         compute_dtype: DType,
     },
+    /// NumPy `where(condition, x, y)`; both branches are cast to the node
+    /// dtype.
+    Where(Expr, Expr, Expr),
     Reduce(ReduceOp, Expr, Option<Vec<i64>>),
     Scan(ScanOp, Expr, Option<i64>),
     Variance(VarianceOp, Expr, Option<i64>, f64),
@@ -176,6 +179,28 @@ impl Expr {
                 rhs: rhs.clone(),
                 compute_dtype,
             },
+            dtype,
+            shape,
+            context_id,
+        ))
+    }
+
+    /// NumPy `where`: branch dtypes promote with NEP 50 weak scalars and all
+    /// three operands broadcast together.
+    pub fn select(condition: &Expr, x: &Expr, y: &Expr) -> Result<Expr> {
+        let context_id = join_context(
+            join_context(condition.context_id(), x.context_id())?,
+            y.context_id(),
+        )?;
+        kernels::validate_select(condition.dtype(), x.dtype(), y.dtype())?;
+        let shape = broadcast_shapes(&broadcast_shapes(condition.shape(), x.shape())?, y.shape())?;
+        let dtype = match (x.weak_scalar(), y.weak_scalar()) {
+            (Some(_), Some(_)) | (None, None) => DType::promote(x.dtype(), y.dtype())?,
+            (Some(s), None) => weak_scalar_dtype(y.dtype(), s)?,
+            (None, Some(s)) => weak_scalar_dtype(x.dtype(), s)?,
+        };
+        Ok(Expr::node(
+            ExprKind::Where(condition.clone(), x.clone(), y.clone()),
             dtype,
             shape,
             context_id,
@@ -481,6 +506,7 @@ impl Expr {
             ExprKind::Scalar(_) => "scalar",
             ExprKind::Unary(op, _) => op.id(),
             ExprKind::Binary { op, .. } => op.id(),
+            ExprKind::Where(..) => "where",
             ExprKind::Reduce(op, _, _) => op.id(),
             ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::Variance(op, ..) => op.id(),
@@ -512,6 +538,7 @@ impl Expr {
             | ExprKind::Cast(e, _)
             | ExprKind::Transpose(e, _)
             | ExprKind::Reshape(e, _) => vec![e],
+            ExprKind::Where(c, x, y) => vec![c, x, y],
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::MatMul(lhs, rhs)
             | ExprKind::Polynomial(_, lhs, rhs) => vec![lhs, rhs],
@@ -792,6 +819,12 @@ impl JobEnv {
                 let a = self.eval_dense(lhs)?;
                 let b = self.eval_dense(rhs)?;
                 kernels::binary(*op, &a, &b, *compute_dtype, &budget, &token)
+            }
+            ExprKind::Where(c, x, y) => {
+                let c = self.eval_dense(c)?;
+                let x = self.eval_dense(x)?;
+                let y = self.eval_dense(y)?;
+                kernels::select(&c, &x, &y, expr.dtype(), &budget, &token)
             }
             ExprKind::Reduce(op, e, axes) => {
                 let v = self.eval_dense(e)?;

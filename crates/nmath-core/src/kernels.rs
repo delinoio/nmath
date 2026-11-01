@@ -1546,6 +1546,90 @@ pub fn variance(
     DenseArray::new(out_shape, buffer, reservation)
 }
 
+/// Rejects `where` operands outside the numeric CPU subset.
+pub fn validate_select(condition: DType, x: DType, y: DType) -> Result<()> {
+    if [condition, x, y]
+        .iter()
+        .any(|d| d.kind() == DTypeKind::Other)
+    {
+        return Err(Error::new(
+            ErrorCode::DTypeUnsupported,
+            "where does not support string or temporal operands. Use numeric or bool arrays.",
+        ));
+    }
+    Ok(())
+}
+
+fn select_loop<T: Copy>(
+    condition: &[bool],
+    x: &[T],
+    y: &[T],
+    shape: &[usize],
+    strides: [Vec<isize>; 3],
+    token: &CancellationToken,
+) -> Result<Vec<T>> {
+    let [c_strides, x_strides, y_strides] = strides;
+    let picks = BroadcastPairs::new(shape, c_strides, x_strides);
+    let others = BroadcastPairs::new(shape, y_strides, vec![0; shape.len()]);
+    let mut out = Vec::with_capacity(picks.remaining);
+    for (n, ((c, i), (j, _))) in picks.zip(others).enumerate() {
+        if n % CHUNK == 0 {
+            token.check()?;
+        }
+        out.push(if condition[c] { x[i] } else { y[j] });
+    }
+    Ok(out)
+}
+
+/// NumPy `where(condition, x, y)` with three-way broadcasting. The condition
+/// uses nonzero truthiness and both branches are cast to `dtype` first.
+pub fn select(
+    condition: &DenseArray,
+    x: &DenseArray,
+    y: &DenseArray,
+    dtype: DType,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    validate_select(condition.dtype(), x.dtype(), y.dtype())?;
+    let shape = broadcast_shapes(&broadcast_shapes(&condition.shape, &x.shape)?, &y.shape)?;
+    let reservation = reserve_for(budget, dtype, shape.iter().product())?;
+    let (c, _c_reservation) = cast_operand(&condition.buffer, DType::Bool, budget, token)?;
+    let (a, _a_reservation) = cast_operand(&x.buffer, dtype, budget, token)?;
+    let (b, _b_reservation) = cast_operand(&y.buffer, dtype, budget, token)?;
+    let Buffer::Bool(c) = c.as_ref() else {
+        unreachable!("the condition was cast to bool")
+    };
+    let strides = [
+        broadcast_strides(&condition.shape, &shape),
+        broadcast_strides(&x.shape, &shape),
+        broadcast_strides(&y.shape, &shape),
+    ];
+    macro_rules! pick {
+        ($x:expr, $y:expr) => {
+            select_loop(c, $x, $y, &shape, strides, token)?.into()
+        };
+    }
+    let buffer = match (a.as_ref(), b.as_ref()) {
+        (Buffer::Bool(x), Buffer::Bool(y)) => pick!(x, y),
+        (Buffer::I8(x), Buffer::I8(y)) => pick!(x, y),
+        (Buffer::I16(x), Buffer::I16(y)) => pick!(x, y),
+        (Buffer::I32(x), Buffer::I32(y)) => pick!(x, y),
+        (Buffer::I64(x), Buffer::I64(y)) => pick!(x, y),
+        (Buffer::U8(x), Buffer::U8(y)) => pick!(x, y),
+        (Buffer::U16(x), Buffer::U16(y)) => pick!(x, y),
+        (Buffer::U32(x), Buffer::U32(y)) => pick!(x, y),
+        (Buffer::U64(x), Buffer::U64(y)) => pick!(x, y),
+        (Buffer::F16(x), Buffer::F16(y)) => pick!(x, y),
+        (Buffer::F32(x), Buffer::F32(y)) => pick!(x, y),
+        (Buffer::F64(x), Buffer::F64(y)) => pick!(x, y),
+        (Buffer::C64(x), Buffer::C64(y)) => pick!(x, y),
+        (Buffer::C128(x), Buffer::C128(y)) => pick!(x, y),
+        _ => unreachable!("branches were cast to one dtype"),
+    };
+    DenseArray::new(shape, buffer, reservation)
+}
+
 pub fn validate_variance(dtype: DType) -> Result<()> {
     if matches!(dtype, DType::Str(_)) || dtype.temporal_unit().is_some() {
         return Err(Error::new(

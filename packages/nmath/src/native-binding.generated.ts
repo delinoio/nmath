@@ -70,6 +70,7 @@ export declare class NativeExpr {
   static intScalar(value: bigint): NativeExpr
   static boolScalar(value: boolean): NativeExpr
   static binary(op: string, lhs: NativeExpr, rhs: NativeExpr): NativeExpr
+  static where(condition: NativeExpr, x: NativeExpr, y: NativeExpr): NativeExpr
   static unary(op: string, input: NativeExpr): NativeExpr
   static reduce(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static shift(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr

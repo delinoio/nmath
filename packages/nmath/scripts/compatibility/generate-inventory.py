@@ -114,6 +114,10 @@ for op, target in {"equal":"equal", "not_equal":"not_equal", "less":"less", "les
         NUMERIC_LIMITS + ["Returns bool. Ordering rejects complex operands; equality compares both complex components. Strings and temporal dtypes are rejected. GPU rejects the bool result before admission."],
         CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/comparisons.test.mjs", "packages/nmath/test/types/comparisons.ts", "crates/nmath-core/tests/comparisons.rs"],
         ["crates/nmath-core/tests/fixtures/comparisons/oracle.json"])
+counterparts({"numpy.where": "numpy.where"}, "elementwise", ["contextual operands", "three-way broadcasting", "weak scalar branches"], NUMERIC,
+    NUMERIC_LIMITS + ["Three-argument form only; the one-argument nonzero form is not provided. The condition must be an NMath value and uses nonzero truthiness. Branches promote with NEP 50 weak scalars. String and temporal operands are rejected. GPU rejects the operation before admission."],
+    CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/where.test.mjs", "packages/nmath/test/types/where.ts", "crates/nmath-core/tests/where.rs"],
+    ["crates/nmath-core/tests/fixtures/where/oracle.json"])
 for op, target in {"add":"add", "subtract":"subtract", "multiply":"multiply", "divide":"divide", "true_divide":"trueDivide", "remainder":"remainder", "mod":"mod", "power":"power", "positive":"positive", "negative":"negative"}.items():
     dtypes = [d for d in NUMERIC if not (op in {"remainder", "mod"} and d.startswith("complex")) and not (op in {"subtract", "positive", "negative"} and d == "bool")]
     counterparts({"numpy." + op: "numpy." + target}, "elementwise", ["contextual operands", "broadcasting", "weak scalars"], dtypes,

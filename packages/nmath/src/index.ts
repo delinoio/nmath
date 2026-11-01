@@ -171,6 +171,71 @@ export const greater_equal: OrderedComparisonFunction = (
   b: Operand,
 ) => binary("ge", a, b);
 
+/** Weak scalars accepted as `where` branches. */
+export type WhereScalar = number | bigint | boolean | Complex;
+export interface WhereFunction {
+  <
+    C extends NumericDType,
+    CS extends Shape,
+    A extends NumericDType,
+    AS extends Shape,
+    B extends NumericDType,
+    BS extends Shape,
+  >(
+    condition: Lazy<NoInfer<C>, CS> & { readonly dtype: C },
+    x: Lazy<NoInfer<A>, AS> & { readonly dtype: A } & BroadcastCheck<CS, AS>,
+    y: Lazy<NoInfer<B>, BS> & {
+      readonly dtype: B;
+    } & BroadcastCheck<Broadcast<CS, AS>, BS>,
+  ): Expr<Promote<A, B>, Broadcast<Broadcast<CS, AS>, BS>>;
+  <
+    C extends NumericDType,
+    CS extends Shape,
+    A extends NumericDType,
+    AS extends Shape,
+    W extends WhereScalar,
+  >(
+    condition: Lazy<NoInfer<C>, CS> & { readonly dtype: C },
+    x: Lazy<NoInfer<A>, AS> & { readonly dtype: A } & BroadcastCheck<CS, AS>,
+    y: W,
+  ): Expr<PromoteWeak<A, W>, Broadcast<CS, AS>>;
+  <
+    C extends NumericDType,
+    CS extends Shape,
+    W extends WhereScalar,
+    B extends NumericDType,
+    BS extends Shape,
+  >(
+    condition: Lazy<NoInfer<C>, CS> & { readonly dtype: C },
+    x: W,
+    y: Lazy<NoInfer<B>, BS> & { readonly dtype: B } & BroadcastCheck<CS, BS>,
+  ): Expr<PromoteWeak<B, W>, Broadcast<CS, BS>>;
+  <
+    C extends NumericDType,
+    CS extends Shape,
+    X extends WhereScalar,
+    Y extends WhereScalar,
+  >(
+    condition: Lazy<NoInfer<C>, CS> & { readonly dtype: C },
+    x: X,
+    y: Y,
+  ): Expr<Promote<WeakDType<X>, WeakDType<Y>>, CS>;
+}
+/**
+ * NumPy `where(condition, x, y)`: picks `x` where the condition is nonzero and
+ * `y` elsewhere, broadcasting all three operands.
+ */
+export const where: WhereFunction = (
+  condition: Lazy<any, any>,
+  x: Operand,
+  y: Operand,
+) => {
+  if (!(condition instanceof Lazy)) {
+    throw new TypeError("The condition must be an NMath array or expression.");
+  }
+  return condition.whereOp(x, y);
+};
+
 function binary(op: BinaryOperator, a: Operand, b: Operand): Expr<any, any> {
   if (a instanceof Lazy) {
     return a.binaryOp(op, b);

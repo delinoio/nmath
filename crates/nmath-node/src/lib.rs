@@ -442,6 +442,13 @@ impl NativeExpr {
         })
     }
 
+    #[napi(factory, js_name = "where")]
+    pub fn select(condition: &NativeExpr, x: &NativeExpr, y: &NativeExpr) -> Result<Self> {
+        Ok(Self {
+            inner: Expr::select(&condition.inner, &x.inner, &y.inner).map_err(to_napi)?,
+        })
+    }
+
     #[napi(factory)]
     pub fn unary(op: String, input: &NativeExpr) -> Result<Self> {
         let op = match op.as_str() {
