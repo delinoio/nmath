@@ -19,6 +19,7 @@ pub mod random;
 pub mod shape;
 pub mod sync;
 pub mod temporal;
+pub mod ufunc;
 
 pub use array::NdArray;
 pub use buffer::{Buffer, DenseArray, Scalar};

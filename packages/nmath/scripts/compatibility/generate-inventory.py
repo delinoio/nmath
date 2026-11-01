@@ -114,6 +114,19 @@ for op, target in {"equal":"equal", "not_equal":"not_equal", "less":"less", "les
         NUMERIC_LIMITS + ["Returns bool. Ordering rejects complex operands; equality compares both complex components. Strings and temporal dtypes are rejected. GPU rejects the bool result before admission."],
         CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/comparisons.test.mjs", "packages/nmath/test/types/comparisons.ts", "crates/nmath-core/tests/comparisons.rs"],
         ["crates/nmath-core/tests/fixtures/comparisons/oracle.json"])
+REAL_NUMERIC = [d for d in NUMERIC if not d.startswith("complex")]
+MATH_FLOAT = "sqrt cbrt exp exp2 expm1 log log2 log10 log1p sin cos tan arcsin arccos arctan sinh cosh tanh arcsinh arccosh arctanh deg2rad rad2deg fabs rint spacing".split()
+MATH_ALIASES = {"abs": "absolute", "conj": "conjugate", "asin": "arcsin", "acos": "arccos", "atan": "arctan", "asinh": "arcsinh", "acosh": "arccosh", "atanh": "arctanh"}
+MATH_DTYPES = {op: REAL_NUMERIC for op in MATH_FLOAT + ["absolute", "square", "floor", "ceil", "trunc", "signbit"]}
+MATH_DTYPES.update({"reciprocal": ["float16", "float32", "float64"], "sign": REAL_NUMERIC[1:]})
+MATH_DTYPES.update({op: NUMERIC for op in ["conjugate", "isnan", "isinf", "isfinite", "logical_not"]})
+for alias, op in MATH_ALIASES.items():
+    MATH_DTYPES[alias] = MATH_DTYPES[op]
+for op, dtype in MATH_DTYPES.items():
+    counterparts({"numpy." + op: "numpy." + op}, "elementwise", ["contextual operand"], dtype,
+        NUMERIC_LIMITS + ["Result dtypes follow the NumPy loop tables. Transcendental functions are within NumPy's accuracy-suite ULP bound of a correctly rounded reference; other functions match NumPy exactly. Complex inputs are supported only by conjugate and the predicates. Integer reciprocal is rejected because NumPy's result for zero is platform-dependent. No out, where, casting or dtype arguments. GPU rejects the operation before admission."],
+        CORE + ["packages/nmath/src/ufunc.ts", "crates/nmath-core/src/ufunc.rs"], ["packages/nmath/test/math.test.mjs", "packages/nmath/test/types/math.ts", "crates/nmath-core/tests/math.rs"],
+        ["crates/nmath-core/tests/fixtures/math/oracle.json"])
 counterparts({"numpy.where": "numpy.where"}, "elementwise", ["contextual operands", "three-way broadcasting", "weak scalar branches"], NUMERIC,
     NUMERIC_LIMITS + ["Three-argument form only; the one-argument nonzero form is not provided. The condition must be an NMath value and uses nonzero truthiness. Branches promote with NEP 50 weak scalars. String and temporal operands are rejected. GPU rejects the operation before admission."],
     CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/where.test.mjs", "packages/nmath/test/types/where.ts", "crates/nmath-core/tests/where.rs"],

@@ -383,6 +383,7 @@ export function loadNpz(
   return context.loadNpz(path, options);
 }
 
+export * from "./ufunc.js";
 export * as linalg from "./linalg.js";
 export * as fft from "./fft.js";
 
