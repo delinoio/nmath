@@ -704,6 +704,22 @@ With omitted or null `copy`, compatible layouts share storage. This includes reg
 
 Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
 
+### Ranges, identity matrices and `_like` arrays
+
+`linspace`, `logspace`, `eye`, `identity` and `empty` take an explicit context. `zeros_like`, `ones_like`, `full_like` and `empty_like` use the context and shape of their source value.
+
+```ts
+import { eye, linspace, logspace, zeros_like } from "@delinoio/nmath/numpy";
+
+linspace(ctx, 2, 3, 5).toArray(); // [2, 2.25, 2.5, 2.75, 3]
+const [samples, step] = linspace(ctx, 2, 3, 5, { endpoint: false, retstep: true }); // step 0.2
+logspace(ctx, 2, 3, 4, { base: 2 }).shape; // [4]
+eye(ctx, 2, 3, { k: 1, dtype: "int32" }).toArray(); // [[0, 1, 0], [0, 0, 1]]
+zeros_like(samples, "int64").shape; // [5]
+```
+
+`linspace` and `eye` produce the same values as NumPy 2.5.4. `logspace` uses JS `Math.pow` with C `pow` results for a base of 1 and for -1 raised to an infinite power. Other values can differ from NumPy's platform `pow` by a few ULP. Integer dtypes floor `linspace` samples and truncate `logspace` samples; values outside the integer range fail with `RangeError`. `empty` and `empty_like` return zero-filled arrays. Array-valued endpoints, `axis`, `device` and `order` remain compatibility targets.
+
 ## Evaluate polynomials
 
 ```ts

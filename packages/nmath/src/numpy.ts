@@ -434,6 +434,7 @@ export function loadNpz(
 
 export * from "./ufunc.js";
 export * from "./axes.js";
+export * from "./creation.js";
 export * as linalg from "./linalg.js";
 export * as fft from "./fft.js";
 

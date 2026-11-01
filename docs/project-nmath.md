@@ -145,3 +145,5 @@ Cumulative sum and product scans use their own lazy node. The [runtime contract]
 Product and index reductions use the same lazy reduce node as the existing sum, mean, min and max operations. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns dtype promotion, empty-axis identity, first-position and NaN selection, and GPU admission; the [package contract](packages-nmath-package-contract.md#typing) owns `int64`/`bigint` result typing and declaration-level rejection.
 
 Axis-manipulation helpers (`squeeze`, `expand_dims`, `swapaxes`, `moveaxis`, `ravel` and the flips) compose the existing reshape, transpose and slice-read nodes in the package layer, with a native contiguous C-order flatten for `ravel`; the [package contract](packages-nmath-package-contract.md#typing) owns their axis normalization, error codes and static shape inference.
+
+Range, identity and `_like` constructors compute their values in the package layer and create ordinary context arrays; the [package contract](packages-nmath-package-contract.md#typing) owns the NumPy algorithms, the logspace tolerance and the zero-filled `empty` adaptation.
