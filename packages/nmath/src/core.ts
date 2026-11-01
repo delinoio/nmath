@@ -268,7 +268,8 @@ function token(s: Selector | null): Token {
 
 /**
  * Output axis labels in NumPy order. Integer and array selectors form one
- * advanced block when an array selector is present; the block stays in place
+ * advanced block when an array selector is present. Array selectors are
+ * one-dimensional, so the block is one axis. The block stays in place
  * when its selectors are adjacent and moves to the front otherwise. A
  * `newaxis` between advanced selectors breaks adjacency, as in NumPy.
  */
@@ -288,7 +289,9 @@ function outputLabels(tokens: readonly Token[], rank: number): string[] {
       continue;
     }
     if (t === "slice") labels.push(`axis${axis}`);
-    if (t === "array" && !front) labels.push("block");
+    if (t === "array" && !front && !labels.includes("block")) {
+      labels.push("block");
+    }
     axis += 1;
   }
   for (; axis < rank; axis += 1) labels.push(`axis${axis}`);

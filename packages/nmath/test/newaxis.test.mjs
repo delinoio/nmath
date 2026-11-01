@@ -53,6 +53,30 @@ test("newaxis and ellipsis reads match NumPy", async () => {
   }
 });
 
+test("several array selectors broadcast in reads and writes", async () => {
+  const ctx = context();
+  try {
+    const a = ctx.zeros([3, 4], "int32");
+    await a.set([indices([0, 2]), indices([1, 3])], 9n);
+    assert.deepEqual(a.toArray(), [
+      [0, 9, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 9],
+    ]);
+    await a.set([mask([false, true, false]), indices([0, 2])], 4n);
+    assert.deepEqual(a.toArray()[1], [4, 0, 4, 0]);
+    assert.deepEqual(a.get(indices([0, 1]), indices([1, 2])).shape, [2]);
+    assert.throws(() => a.get(indices([0, 1]), indices([0, 1, 2])), {
+      code: "NMATH_INDEX_INVALID",
+    });
+    assert.throws(() => a.get(indices([0, 3]), indices([0, 1])), {
+      code: "NMATH_INDEX_OUT_OF_BOUNDS",
+    });
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("ellipsis writes and newaxis rejections", async () => {
   const ctx = context();
   try {

@@ -25,6 +25,12 @@ INDEXES = [
     (N, 0, N, [1, 2]), ([0, 1], N), (sl(), N, [1, 2], N), (0, E, [1, 2]), (E, [0, 2]),
     (np.array([True, False]), N, 0), (sl(), np.array([True, False, True]), N),
     (N, sl(), 0, [3, 0]), (sl(), 0, N, [1, 3]), (-1, N, E, N),
+    # Several integer-array and mask selectors broadcast into one block.
+    ([0, 1], [2, 0]), ([1], [0, 1, 2]), ([0, 1], sl(), [3, 1]), ([1, 0], [2, 2], [3, 0]),
+    (np.array([True, True]), [0, 2]), ([0, 1], np.array([False, True, True]), 1),
+    (sl(), [0, 2], [1, 3]), (0, [1, 2], [3, 0]), ([1], sl(), [0, 1, 2, 3]),
+    ([0, 1], N, [1, 2]), (E, [0, 1], [2, 3]), ([[0]][0], [1], [2]),
+    (np.array([False, False]), [0]),
 ]
 
 
