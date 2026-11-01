@@ -215,7 +215,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                        | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions                  | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
-| NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod`, `argmin`, `argmax` (all axes or one axis)                                                                                                                           | `std`, `var`, `cumsum`, `cumprod`, multi-axis lists, `keepdims`                                                                                          |
+| NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                      | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                          | several advanced selectors combined, `newaxis`, ellipsis                                                                                                 |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                             | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
@@ -483,6 +483,21 @@ console.log((await left_shift(a, 1n).compute()).toArray()); // [24, 10]
 ```
 
 Use `bigint` scalars: a JS `number` is a weak float, and floats have no bitwise loop. int64 combined with uint64 is rejected, as in NumPy. Shifting by a negative count or by at least the bit width gives 0, or -1 when right-shifting a negative value. GPU execution rejects these functions before admission.
+
+### Axis lists and keepdims
+
+`sum`, `mean`, `min`, `max` and `prod` accept an axis list. Every reduction accepts `{ keepdims: true }` after its axis argument (after `ddof` for `var` and `std`).
+
+```ts
+import { sum, argmax } from "@delinoio/nmath/numpy";
+
+const a = ctx.zeros([2, 3, 4], "int32");
+console.log(sum(a, [0, 2]).shape); // [3]
+console.log(sum(a, [0, 2], { keepdims: true }).shape); // [1, 3, 1]
+console.log(argmax(a, 1, { keepdims: true }).shape); // [2, 1, 4]
+```
+
+Repeated or out-of-range axes are rejected. `argmin` and `argmax` take one axis, as in NumPy. Axis lists for `var`, `std`, `cumsum` and `cumprod` remain targets.
 
 ### Cumulative scans
 
