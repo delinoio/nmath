@@ -106,6 +106,14 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             Ok(())
         }
         ExprKind::Reduce(op, a, axes) => {
+            if !matches!(
+                op,
+                ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
+            ) {
+                return Err(unsupported(
+                    "The reduction is outside the GPU subset. Compute it on the CPU.",
+                ));
+            }
             validate_node(a, None)?;
             let axes = kernels::reduce_axes(a.shape().len(), axes.as_deref())?;
             if matches!(op, ReduceOp::Min | ReduceOp::Max)

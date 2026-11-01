@@ -102,6 +102,9 @@ fn native_gpu_operations() {
             ReduceOp::Mean => vec![1.5, 3.5],
             ReduceOp::Min => vec![1.0, 3.0],
             ReduceOp::Max => vec![2.0, 4.0],
+            ReduceOp::Prod | ReduceOp::ArgMin | ReduceOp::ArgMax => {
+                unreachable!("the loop admits only the GPU reduction subset")
+            }
         };
         assert_eq!(execute(&expr).unwrap().buffer, Buffer::F32(expected));
     }

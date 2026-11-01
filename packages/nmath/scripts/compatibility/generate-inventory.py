@@ -116,6 +116,13 @@ for op in ["sum", "mean", "min", "max"]:
     counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
         "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
         NUMERIC_LIMITS + ["No axis tuple, keepdims, out, dtype, initial or where options on the public wrapper; integer mean/division return float64; narrow integer sums widen."], CORE, DTYPE_TESTS, DTYPE_FIXTURES)
+for op in ["prod", "argmin", "argmax"]:
+    counterparts({"numpy." + op: "numpy." + op, "numpy.ndarray." + op: "core.Lazy." + op},
+        "reductions", ["array", "axis: one integer or omitted"], NUMERIC,
+        NUMERIC_LIMITS + ["At most one axis; strings and temporal dtypes are rejected. Products reuse the sum dtype promotion and empty-axis identity. Index reductions return int64 bigint positions, keep the first equal or NaN position, compare complex values lexicographically, and reject a zero-length reduced axis with NMATH_SHAPE_MISMATCH. GPU rejects all three before admission."],
+        CORE + ["crates/nmath-core/src/kernels.rs"],
+        DTYPE_TESTS + ["packages/nmath/test/reductions.test.mjs", "packages/nmath/test/types/reductions.ts", "crates/nmath-core/tests/reductions.rs"],
+        DTYPE_FIXTURES + ["crates/nmath-core/tests/fixtures/reductions/oracle.json"])
 counterparts({"numpy.matmul":"numpy.matmul"}, "matrix-product", ["a", "b"], NUMERIC,
     NUMERIC_LIMITS + ["Broadcast batch axes and NumPy vector promotion; full ufunc options remain targets. Exact small-value fixtures are not arbitrary floating-point or platform acceptance."],
     CORE + ["crates/nmath-core/src/shape.rs", "crates/nmath-core/src/kernels.rs"],

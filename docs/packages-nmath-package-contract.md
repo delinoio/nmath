@@ -74,7 +74,9 @@ Complex arithmetic, unary operations, reductions, indexing, writes, copies, expl
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
 
-The NumPy `sum`, `mean`, `min` and `max` wrappers preserve the core methods' dtype and shape inference. Omitting the axis, or passing `undefined`, produces a scalar result type. A literal axis removes its dimension from a tuple shape. A dynamic axis retains the result dtype and uses a dynamic shape because its result rank is not known at type-check time.
+The NumPy `sum`, `mean`, `min`, `max`, `prod`, `argmin` and `argmax` wrappers preserve the core methods' dtype and shape inference. Omitting the axis, or passing `undefined`, produces a scalar result type. A literal axis removes its dimension from a tuple shape. A dynamic axis retains the result dtype and uses a dynamic shape because its result rank is not known at type-check time. `prod` widens like `sum`; `argmin` and `argmax` use `int64`, so rank-0 index results are `bigint` and array results use `bigint` elements. The declarations reject string and temporal operands for products and index reductions, and runtime validation rejects them again with `NMATH_DTYPE_UNSUPPORTED`.
+
+Index reductions return the first equal value's position, keep the first NaN position, and compare complex values lexicographically. They accept one axis or no axis. A zero-length reduced axis fails with `NMATH_SHAPE_MISMATCH`; with a nonempty reduced axis and an empty retained shape the result is empty. Product reductions use the multiplicative identity for zero-length reduced axes. GPU requests reject product and index reductions before admission with `NMATH_GPU_UNSUPPORTED_OPERATION`.
 
 ### Errors
 
