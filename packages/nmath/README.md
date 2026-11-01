@@ -414,6 +414,20 @@ console.log((await a.argmax(1).compute()).toArray()); // [0n, 1n]
 
 Equal values keep their first position, and NaNs are sticky: the first NaN position wins. Complex values compare by real component, then imaginary component. A zero-length reduced axis fails with `NMATH_SHAPE_MISMATCH`, except for `prod`, which returns the multiplicative identity. String and temporal arrays reject products and index reductions at expression construction. GPU execution rejects these reductions before admission. `std`, `var`, cumulative scans and multi-axis lists remain targets.
 
+### Comparisons
+
+The NumPy entry point exports `equal`, `not_equal`, `less`, `less_equal`, `greater` and `greater_equal`. They return lazy `bool` arrays and accept arrays or weak `number`, `bigint`, `boolean` and `Complex` scalars.
+
+```ts
+import { less, equal } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([1, 2, 3], { dtype: "int32" });
+console.log((await less(a, 3).compute()).toArray()); // [true, true, false]
+console.log((await equal(a, a).compute()).toArray()); // [true, true, true]
+```
+
+`equal` and `not_equal` accept complex operands and compare both components. Ordering comparisons reject complex operands. NaN ordering and equality are false, and inequality is true. String and temporal comparisons remain targets. GPU execution rejects the bool result before admission.
+
 ### Cumulative scans
 
 `cumsum` and `cumprod` accumulate over the flattened input or one axis. Without an axis the result is one-dimensional; with an axis it keeps the input shape. Small integers widen like `sum`.

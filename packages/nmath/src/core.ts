@@ -348,7 +348,19 @@ function pickContext(
   return a ?? b;
 }
 
-export type BinaryOperator = "add" | "sub" | "mul" | "div" | "mod" | "pow";
+export type BinaryOperator =
+  | "add"
+  | "sub"
+  | "mul"
+  | "div"
+  | "mod"
+  | "pow"
+  | "eq"
+  | "ne"
+  | "lt"
+  | "le"
+  | "gt"
+  | "ge";
 export type ReduceOperator =
   "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
 export type ScanOperator = "cumsum" | "cumprod";

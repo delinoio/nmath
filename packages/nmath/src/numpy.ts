@@ -13,7 +13,20 @@ import {
   type NMathGenerator,
   type Operand,
 } from "./core.js";
-import { add, div, mod, mul, pow, sub } from "./index.js";
+import {
+  add,
+  div,
+  equal,
+  greater,
+  greater_equal,
+  less,
+  less_equal,
+  mod,
+  mul,
+  not_equal,
+  pow,
+  sub,
+} from "./index.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
 import type {
@@ -33,6 +46,7 @@ import type {
   TypedArrayOf,
 } from "./types.js";
 
+export { equal, greater, greater_equal, less, less_equal, not_equal };
 export { indices, mask, slice } from "./core.js";
 import type {
   ReshapeShape,
