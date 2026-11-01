@@ -214,7 +214,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | Area                 | Available now                                                                                                                                                                                            | Not yet available                                                                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                        | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
-| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`                                                                   | string/temporal comparisons, bitwise, ufunc methods, one-argument `where`, math functions                                                                |
+| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs                                                 | string/temporal comparisons, bitwise, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                               |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod`, `argmin`, `argmax` (all axes or one axis)                                                                                                                           | `std`, `var`, `cumsum`, `cumprod`, multi-axis lists, `keepdims`                                                                                          |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                          | several advanced selectors combined, `newaxis`, ellipsis                                                                                                 |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
@@ -455,6 +455,20 @@ console.log((await where(less(a, 2.5), a, 0n).compute()).toArray()); // [1, 2, 0
 ```
 
 The condition must be an NMath array or expression. Branches can be arrays or weak `number`, `bigint`, `boolean` and `Complex` scalars. A JS `number` is a weak float, so `where(mask, a, 0)` returns `float64`; use `0n` to keep an integer dtype. String and temporal operands are rejected. GPU execution rejects `where` before admission. The one-argument form remains a target.
+
+### Math functions
+
+The NumPy entry point exports elementwise math functions: `sqrt`, `cbrt`, `exp`, `exp2`, `expm1`, `log`, `log2`, `log10`, `log1p`, trigonometric and hyperbolic functions with their inverses, `deg2rad`, `rad2deg`, `fabs`, `rint`, `spacing`, `absolute`, `square`, `reciprocal`, `sign`, `floor`, `ceil`, `trunc`, `conjugate`, `isnan`, `isinf`, `isfinite`, `signbit` and `logical_not`. The NumPy 2 aliases `abs`, `conj`, `asin`, `acos`, `atan`, `asinh`, `acosh` and `atanh` are also available.
+
+```ts
+import { sqrt, sin } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([1, 4, 9], { dtype: "int16" });
+console.log(sqrt(a).dtype); // "float32", as in NumPy
+console.log((await sqrt(a).compute()).toArray()); // [1, 2, 3]
+```
+
+Result dtypes follow NumPy: small integers use float16 or float32 loops. Transcendental results stay within NumPy's own accuracy-test bounds; other functions match NumPy exactly. Complex inputs work with `conjugate` and the `is*`/`logical_not` predicates only. Integer `reciprocal` is rejected. `out`, `where` and the other ufunc keyword arguments remain targets. GPU execution rejects math functions before admission.
 
 ### Cumulative scans
 

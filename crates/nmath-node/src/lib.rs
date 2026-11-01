@@ -442,6 +442,14 @@ impl NativeExpr {
         })
     }
 
+    #[napi(factory)]
+    pub fn math(op: String, input: &NativeExpr) -> Result<Self> {
+        let op = nmath_core::ufunc::MathOp::from_id(&op).map_err(to_napi)?;
+        Ok(Self {
+            inner: Expr::math(op, &input.inner).map_err(to_napi)?,
+        })
+    }
+
     #[napi(factory, js_name = "where")]
     pub fn select(condition: &NativeExpr, x: &NativeExpr, y: &NativeExpr) -> Result<Self> {
         Ok(Self {

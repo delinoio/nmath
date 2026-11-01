@@ -32,6 +32,8 @@ pub enum ExprKind {
     /// NumPy `where(condition, x, y)`; both branches are cast to the node
     /// dtype.
     Where(Expr, Expr, Expr),
+    /// Elementwise NumPy math ufunc.
+    Math(crate::ufunc::MathOp, Expr),
     Reduce(ReduceOp, Expr, Option<Vec<i64>>),
     Scan(ScanOp, Expr, Option<i64>),
     Variance(VarianceOp, Expr, Option<i64>, f64),
@@ -204,6 +206,16 @@ impl Expr {
             dtype,
             shape,
             context_id,
+        ))
+    }
+
+    pub fn math(op: crate::ufunc::MathOp, input: &Expr) -> Result<Expr> {
+        let dtype = op.result_dtype(input.dtype())?;
+        Ok(Expr::node(
+            ExprKind::Math(op, input.clone()),
+            dtype,
+            input.shape().to_vec(),
+            input.context_id(),
         ))
     }
 
@@ -507,6 +519,7 @@ impl Expr {
             ExprKind::Unary(op, _) => op.id(),
             ExprKind::Binary { op, .. } => op.id(),
             ExprKind::Where(..) => "where",
+            ExprKind::Math(op, _) => op.id(),
             ExprKind::Reduce(op, _, _) => op.id(),
             ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::Variance(op, ..) => op.id(),
@@ -530,6 +543,7 @@ impl Expr {
             ExprKind::Linalg(_, a, b) => std::iter::once(a).chain(b.as_ref()).collect(),
             ExprKind::Fft(_, e) | ExprKind::PolynomialDerivative(_, e) => vec![e],
             ExprKind::Unary(_, e)
+            | ExprKind::Math(_, e)
             | ExprKind::Reduce(_, e, _)
             | ExprKind::Scan(_, e, _)
             | ExprKind::Variance(_, e, _, _)
@@ -825,6 +839,10 @@ impl JobEnv {
                 let x = self.eval_dense(x)?;
                 let y = self.eval_dense(y)?;
                 kernels::select(&c, &x, &y, expr.dtype(), &budget, &token)
+            }
+            ExprKind::Math(op, e) => {
+                let v = self.eval_dense(e)?;
+                crate::ufunc::execute(*op, &v, &budget, &token)
             }
             ExprKind::Reduce(op, e, axes) => {
                 let v = self.eval_dense(e)?;
