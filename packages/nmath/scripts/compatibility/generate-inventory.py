@@ -331,6 +331,28 @@ for op in ["fftfreq", "rfftfreq"]:
         ["context", "n: positive uint32", "d: finite spacing"], ["float64"],
         ["Returns a float64 array charged to the explicit context. The sample spacing must be finite. Cross-platform acceptance remains pending."],
         ["packages/nmath/src/fft.ts"], ["packages/nmath/test/fft-helpers.test.mjs", "packages/nmath/test/types/fft-helpers.ts"])
+LOGIC_TESTS = ["packages/nmath/test/logic.test.mjs", "packages/nmath/test/types/logic.ts"]
+LOGIC_FIXTURES = ["packages/nmath/test/fixtures/logic.json"]
+for op in ["any", "all", "count_nonzero"]:
+    counterparts({"numpy." + op: "numpy." + op}, "reductions",
+        ["array", "axis: integer, integer list or omitted", "keepdims option"], NUMERIC,
+        ["CPU composition of a truthiness comparison and the lazy int64 sum: any/all compare the truthy/falsy count with zero and return bool; count_nonzero returns int64 (bigint at rank 0).",
+         "NaN and complex values with any nonzero component are true; empty reductions give false/true/0. No out or where options; unknown options fail with NMATH_INDEX_INVALID.",
+         "String and temporal dtypes are rejected; ndarray methods are not provided. GPU rejects the bool comparison before admission. Exact NumPy 2.5.4 oracle results."],
+        ["packages/nmath/src/logic.ts"], LOGIC_TESTS, LOGIC_FIXTURES)
+counterparts({"numpy.isclose": "numpy.isclose"}, "elementwise",
+    ["a", "b", "rtol: number", "atol: number", "equal_nan", "broadcasting", "weak scalars"], NUMERIC,
+    ["CPU composition in NumPy's numeric.py order: b becomes inexact, then abs(a - b) <= atol + rtol * abs(b) where b is finite, or a == b; equal_nan adds isnan(a) & isnan(b).",
+     "Tolerances are JS numbers, not arrays. Complex magnitudes use the native vector infinity norm because absolute has no complex loop. Timedelta, string and datetime operands are rejected.",
+     "GPU rejects the bool result before admission. Exact NumPy 2.5.4 oracle results."],
+    ["packages/nmath/src/logic.ts"], LOGIC_TESTS, LOGIC_FIXTURES)
+for op, args in [("allclose", ["a", "b", "rtol: number", "atol: number", "equal_nan", "broadcasting", "weak scalars"]),
+                 ("array_equal", ["a1", "a2", "equal_nan"]), ("array_equiv", ["a1", "a2", "weak scalar a2"])]:
+    counterparts({"numpy." + op: "numpy." + op}, "reductions", args, NUMERIC,
+        ["CPU composition returning a lazy rank-0 bool expression that computes to a JS boolean: allclose is all(isclose(...)); array_equal and array_equiv reduce equality with all.",
+         "Shapes are known before execution: different shapes (array_equal) or shapes that do not broadcast (array_equiv) give a constant false expression without reading the inputs.",
+         "String and temporal dtypes are rejected. GPU rejects the bool comparison before admission. Exact NumPy 2.5.4 oracle results."],
+        ["packages/nmath/src/logic.ts"], LOGIC_TESTS, LOGIC_FIXTURES)
 for name, target, arguments in [
     ("numpy.polyval", "numpy.polyval", ["coefficients: descending", "points"]),
     ("numpy.polynomial.polynomial.polyval", "numpy.polynomial.polynomial.polyval", ["points", "coefficients: ascending", "options: tensor boolean, default true"]),

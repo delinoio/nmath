@@ -443,6 +443,23 @@ console.log((await equal(a, a).compute()).toArray()); // [true, true, true]
 
 `equal` and `not_equal` accept complex operands and compare both components. Ordering comparisons reject complex operands. NaN ordering and equality are false, and inequality is true. String and temporal comparisons remain targets. GPU execution rejects the bool result before admission.
 
+### Truth tests and closeness
+
+`any`, `all` and `count_nonzero` reduce over all axes, one axis or an axis list, with `keepdims`. Nonzero values and NaN are true, and a complex value is true when either component is nonzero. Empty reductions give `false` for `any` and `true` for `all`. `count_nonzero` returns `int64`.
+
+```ts
+import { allclose, any, array_equal, count_nonzero, isclose } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([0, 1, NaN], { dtype: "float64" });
+console.log(await any(a).compute()); // true
+console.log(await count_nonzero(a).compute()); // 2n
+console.log((await isclose(a, 1.000001).compute()).toArray()); // [false, true, false]
+console.log(await allclose(a, a, { equal_nan: true }).compute()); // true
+console.log(await array_equal(a, ctx.zeros([2], "float64")).compute()); // false
+```
+
+`isclose`, `allclose`, `array_equal` and `array_equiv` follow NumPy's definitions, including the default `rtol` 1e-05 and `atol` 1e-08 and the `equal_nan` option. `isclose` is not symmetric: `b` is the reference value. Tolerances are JS numbers. The results are lazy `bool` expressions; rank-0 results compute to JS booleans. Inputs with different shapes give `false` from `array_equal`. String and temporal operands are rejected. GPU execution rejects these functions before admission.
+
 ### Selection
 
 `where(condition, x, y)` returns `x` where the condition is nonzero and `y` elsewhere. It is exported from the core and NumPy entry points. All three operands broadcast together, and the branches promote like arithmetic.

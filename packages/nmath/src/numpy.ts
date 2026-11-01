@@ -436,6 +436,7 @@ export * from "./ufunc.js";
 export * from "./axes.js";
 export * from "./creation.js";
 export * from "./products.js";
+export * from "./logic.js";
 export * as linalg from "./linalg.js";
 export * as fft from "./fft.js";
 
