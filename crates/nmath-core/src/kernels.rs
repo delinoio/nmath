@@ -33,6 +33,19 @@ pub enum BinaryOp {
     LogicalAnd,
     LogicalOr,
     LogicalXor,
+    Maximum,
+    Minimum,
+    Fmax,
+    Fmin,
+    Copysign,
+    Nextafter,
+    Fmod,
+    FloorDivide,
+    Arctan2,
+    Hypot,
+    Heaviside,
+    Logaddexp,
+    Logaddexp2,
 }
 
 impl BinaryOp {
@@ -58,6 +71,19 @@ impl BinaryOp {
             BinaryOp::LogicalAnd => "logical_and",
             BinaryOp::LogicalOr => "logical_or",
             BinaryOp::LogicalXor => "logical_xor",
+            BinaryOp::Maximum => "maximum",
+            BinaryOp::Minimum => "minimum",
+            BinaryOp::Fmax => "fmax",
+            BinaryOp::Fmin => "fmin",
+            BinaryOp::Copysign => "copysign",
+            BinaryOp::Nextafter => "nextafter",
+            BinaryOp::Fmod => "fmod",
+            BinaryOp::FloorDivide => "floor_divide",
+            BinaryOp::Arctan2 => "arctan2",
+            BinaryOp::Hypot => "hypot",
+            BinaryOp::Heaviside => "heaviside",
+            BinaryOp::Logaddexp => "logaddexp",
+            BinaryOp::Logaddexp2 => "logaddexp2",
         }
     }
 
@@ -83,6 +109,26 @@ impl BinaryOp {
                 | BinaryOp::BitXor
                 | BinaryOp::LeftShift
                 | BinaryOp::RightShift
+        )
+    }
+
+    /// Binary math ufuncs implemented in `crate::ufunc`.
+    pub fn is_math(self) -> bool {
+        matches!(
+            self,
+            BinaryOp::Maximum
+                | BinaryOp::Minimum
+                | BinaryOp::Fmax
+                | BinaryOp::Fmin
+                | BinaryOp::Copysign
+                | BinaryOp::Nextafter
+                | BinaryOp::Fmod
+                | BinaryOp::FloorDivide
+                | BinaryOp::Arctan2
+                | BinaryOp::Hypot
+                | BinaryOp::Heaviside
+                | BinaryOp::Logaddexp
+                | BinaryOp::Logaddexp2
         )
     }
 
@@ -122,6 +168,19 @@ impl BinaryOp {
             BinaryOp::LogicalAnd,
             BinaryOp::LogicalOr,
             BinaryOp::LogicalXor,
+            BinaryOp::Maximum,
+            BinaryOp::Minimum,
+            BinaryOp::Fmax,
+            BinaryOp::Fmin,
+            BinaryOp::Copysign,
+            BinaryOp::Nextafter,
+            BinaryOp::Fmod,
+            BinaryOp::FloorDivide,
+            BinaryOp::Arctan2,
+            BinaryOp::Hypot,
+            BinaryOp::Heaviside,
+            BinaryOp::Logaddexp,
+            BinaryOp::Logaddexp2,
         ]
         .into_iter()
         .find(|op| op.id() == id)
@@ -135,6 +194,9 @@ impl BinaryOp {
 
     /// Result dtype given the promoted operand dtype.
     pub fn result_dtype(self, promoted: DType) -> Result<DType> {
+        if self.is_math() {
+            return crate::ufunc::binary_dtype(self, promoted);
+        }
         if self.is_logical() {
             return Ok(DType::Bool);
         }
@@ -307,7 +369,7 @@ impl ShiftOp {
 }
 
 /// Elements processed between cancellation checks.
-const CHUNK: usize = 1 << 14;
+pub(crate) const CHUNK: usize = 1 << 14;
 
 trait Num: Copy + PartialOrd + Send + Sync + Default {
     fn nan(self) -> bool {
@@ -838,7 +900,7 @@ fn binary_loop<T: Num>(
 
 /// Walks a broadcast output shape in C order and yields the matching element
 /// offsets of both operands without materializing offset vectors.
-struct BroadcastPairs {
+pub(crate) struct BroadcastPairs {
     shape: Vec<usize>,
     a_strides: Vec<isize>,
     b_strides: Vec<isize>,
@@ -849,7 +911,7 @@ struct BroadcastPairs {
 }
 
 impl BroadcastPairs {
-    fn new(shape: &[usize], a_strides: Vec<isize>, b_strides: Vec<isize>) -> Self {
+    pub(crate) fn new(shape: &[usize], a_strides: Vec<isize>, b_strides: Vec<isize>) -> Self {
         Self {
             shape: shape.to_vec(),
             a_strides,
@@ -887,7 +949,7 @@ impl Iterator for BroadcastPairs {
     }
 }
 
-fn reserve_for(
+pub(crate) fn reserve_for(
     budget: &MemoryBudget,
     dtype: DType,
     len: usize,
@@ -909,7 +971,7 @@ fn checked_reduction_bytes(len: usize, item_size: usize) -> Result<u64> {
 
 /// Casts an operand to `dtype`. A matching buffer is borrowed; a converted
 /// temporary copy is charged to `budget` while it lives.
-fn cast_operand<'a>(
+pub(crate) fn cast_operand<'a>(
     buffer: &'a Buffer,
     dtype: DType,
     budget: &MemoryBudget,
@@ -936,6 +998,9 @@ pub fn binary(
 ) -> Result<DenseArray> {
     if lhs.dtype().kind() == DTypeKind::Other || rhs.dtype().kind() == DTypeKind::Other {
         return special_binary(op, lhs, rhs, budget, token);
+    }
+    if op.is_math() {
+        return crate::ufunc::binary(op, lhs, rhs, compute_dtype, budget, token);
     }
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;

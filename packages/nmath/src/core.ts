@@ -402,7 +402,20 @@ export type BinaryOperator =
   | "right_shift"
   | "logical_and"
   | "logical_or"
-  | "logical_xor";
+  | "logical_xor"
+  | "maximum"
+  | "minimum"
+  | "fmax"
+  | "fmin"
+  | "copysign"
+  | "nextafter"
+  | "fmod"
+  | "floor_divide"
+  | "arctan2"
+  | "hypot"
+  | "heaviside"
+  | "logaddexp"
+  | "logaddexp2";
 export type ReduceOperator =
   "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
 export type ScanOperator = "cumsum" | "cumprod";

@@ -169,6 +169,9 @@ impl Expr {
             ));
         }
         let compute_dtype = match (lhs.weak_scalar(), rhs.weak_scalar()) {
+            (Some(_), Some(_)) | (None, None) if op.is_math() => {
+                crate::ufunc::binary_loop_dtype(op, lhs.dtype(), rhs.dtype())?
+            }
             (Some(_), Some(_)) | (None, None) => DType::promote(lhs.dtype(), rhs.dtype())?,
             (Some(s), None) => weak_scalar_dtype(rhs.dtype(), s)?,
             (None, Some(s)) => weak_scalar_dtype(lhs.dtype(), s)?,

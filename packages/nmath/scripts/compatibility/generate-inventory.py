@@ -137,6 +137,13 @@ for op, dtype in BINARY_UFUNCS.items():
         NUMERIC_LIMITS + ["Bitwise and shift operators require a common bool or integer dtype; int64 with uint64 and JS number scalars are rejected. Shifts by a negative count or at least the bit width follow NumPy. Logical operators return bool by truthiness. No out, where, casting or dtype arguments. GPU rejects the operation before admission."],
         CORE + ["packages/nmath/src/ufunc.ts", "crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/bitwise.test.mjs", "packages/nmath/test/types/bitwise.ts", "crates/nmath-core/tests/bitwise.rs"],
         ["crates/nmath-core/tests/fixtures/bitwise/oracle.json"])
+BINARY_MATH = {op: NUMERIC for op in ["maximum", "minimum", "fmax", "fmin"]}
+BINARY_MATH.update({op: REAL_NUMERIC for op in ["fmod", "floor_divide", "copysign", "nextafter", "arctan2", "atan2", "hypot", "heaviside", "logaddexp", "logaddexp2"]})
+for op, dtype in BINARY_MATH.items():
+    counterparts({"numpy." + op: "numpy." + op}, "elementwise", ["contextual operands", "broadcasting", "weak scalars"], dtype,
+        NUMERIC_LIMITS + ["Loop dtypes follow NumPy, including per-operand float loops. Results match NumPy exactly on the validation host; arctan2, hypot, logaddexp and logaddexp2 use the platform libm and their cross-platform criterion is pending. Complex operands are supported only by maximum, minimum, fmax and fmin. No out, where, casting or dtype arguments. GPU rejects the operation before admission."],
+        CORE + ["packages/nmath/src/ufunc.ts", "crates/nmath-core/src/ufunc.rs"], ["packages/nmath/test/binary-math.test.mjs", "packages/nmath/test/types/binary-math.ts", "crates/nmath-core/tests/binary_math.rs"],
+        ["crates/nmath-core/tests/fixtures/binary_math/oracle.json"])
 counterparts({"numpy.where": "numpy.where"}, "elementwise", ["contextual operands", "three-way broadcasting", "weak scalar branches"], NUMERIC,
     NUMERIC_LIMITS + ["Three-argument form only; the one-argument nonzero form is not provided. The condition must be an NMath value and uses nonzero truthiness. Branches promote with NEP 50 weak scalars. String and temporal operands are rejected. GPU rejects the operation before admission."],
     CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/where.test.mjs", "packages/nmath/test/types/where.ts", "crates/nmath-core/tests/where.rs"],
