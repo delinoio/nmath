@@ -531,7 +531,7 @@ ravel(a).shape; // [12]
 flip(a, -1).shape; // [1, 3, 4], last axis reversed
 ```
 
-Axes can be negative or a list. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`, and a repeated or non-integer axis fails with `NMATH_INDEX_INVALID`. Squeezing an axis whose length is not 1 fails with `NMATH_SHAPE_MISMATCH`. `ravel` supports C order only. With literal shapes and axes, TypeScript infers the result shape. GPU execution rejects these functions, as it does `reshape` and `transpose`.
+Axes can be negative or a list. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`, and a repeated or non-integer axis fails with `NMATH_INDEX_INVALID`. Squeezing an axis whose length is not 1 fails with `NMATH_SHAPE_MISMATCH`. `ravel` supports C order only. Like NumPy, it returns a view of a C-contiguous input and a copy of a stepped, reversed or transposed one. With literal shapes and axes, TypeScript infers the result shape. GPU execution rejects these functions, as it does `reshape` and `transpose`.
 
 ### newaxis and ellipsis
 

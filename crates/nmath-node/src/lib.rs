@@ -567,6 +567,14 @@ impl NativeExpr {
         })
     }
 
+    /// C-order flattening that copies unless the input layout is contiguous.
+    #[napi(factory)]
+    pub fn ravel(input: &NativeExpr) -> Result<Self> {
+        Ok(Self {
+            inner: Expr::ravel(&input.inner).map_err(to_napi)?,
+        })
+    }
+
     #[napi(factory)]
     pub fn matmul(lhs: &NativeExpr, rhs: &NativeExpr) -> Result<Self> {
         Ok(Self {

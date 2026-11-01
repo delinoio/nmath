@@ -12,7 +12,7 @@ import {
   squeeze,
   swapaxes,
 } from "../dist/numpy.js";
-import { NMathError } from "../dist/index.js";
+import { NMathError, slice } from "../dist/index.js";
 import { context } from "./helpers.mjs";
 
 const fixture = JSON.parse(
@@ -145,6 +145,38 @@ test("axis helpers reject unsupported arguments", async () => {
       () => moveaxis(a, [0], [1, 0]),
       (error) => error.code === "NMATH_INDEX_INVALID",
     );
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("ravel views contiguous inputs and copies strided ones", async () => {
+  const ctx = context();
+  try {
+    const a = ctx.array([0, 1, 2, 3, 4, 5], { dtype: "int32", shape: [2, 3] });
+    const view = await ravel(a).compute();
+    assert.ok(view.sharesStorage(a));
+    for (const [expr, values] of [
+      [ravel(a.get(0, slice(undefined, undefined, 2))), [0, 2]],
+      [ravel(flip(a)), [5, 4, 3, 2, 1, 0]],
+      [ravel(swapaxes(a, 0, 1)), [0, 3, 1, 4, 2, 5]],
+    ]) {
+      const flat = await expr.compute();
+      assert.deepEqual(flat.toArray(), values);
+      assert.ok(!flat.sharesStorage(a));
+      await flat.set([0], 9);
+      assert.deepEqual(a.toArray(), [
+        [0, 1, 2],
+        [3, 4, 5],
+      ]);
+      flat.dispose();
+    }
+    // A stepped view that is already materialized also copies.
+    const stepped = await a.get(0, slice(undefined, undefined, 2)).compute();
+    assert.ok(stepped.sharesStorage(a));
+    const copied = await ravel(stepped).compute();
+    assert.ok(!copied.sharesStorage(a));
+    for (const array of [view, stepped, copied]) array.dispose();
   } finally {
     await ctx.close();
   }

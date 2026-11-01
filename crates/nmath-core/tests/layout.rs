@@ -218,3 +218,46 @@ fn basic_index_of_computed_transpose_retains_strides() {
     assert_eq!(output.to_buffer(), Buffer::I32(vec![1, 4, 2, 5, 3, 6]));
     assert!(Expr::reshape(&Expr::input(&output), &[6], CopyPolicy::Never).is_err());
 }
+#[test]
+fn ravel_views_contiguous_layouts_and_copies_strided_ones() {
+    let a = array();
+    let input = Expr::input(&a);
+    let mut job = env(4096);
+    let flat = Expr::ravel(&input).unwrap();
+    job.freeze(&flat).unwrap();
+    let flat = result(&mut job, &flat);
+    assert_eq!(flat.shape(), &[6]);
+    assert!(flat.shares_storage(&a));
+
+    let step = Selector::Slice {
+        start: None,
+        stop: None,
+        step: Some(2),
+    };
+    let reverse = Selector::Slice {
+        start: None,
+        stop: None,
+        step: Some(-1),
+    };
+    let row = Expr::index(&input, vec![Selector::Index(0)]).unwrap();
+    for (expr, values) in [
+        (Expr::index(&row, vec![step]).unwrap(), vec![0, 2]),
+        (Expr::index(&row, vec![reverse]).unwrap(), vec![2, 1, 0]),
+        (
+            Expr::transpose(&input, None).unwrap(),
+            vec![0, 3, 1, 4, 2, 5],
+        ),
+    ] {
+        let flat = Expr::ravel(&expr).unwrap();
+        let mut job = env(4096);
+        job.freeze(&flat).unwrap();
+        let flat = result(&mut job, &flat);
+        assert_eq!(flat.to_buffer(), Buffer::I32(values));
+        assert!(!flat.shares_storage(&a));
+    }
+    // A contiguous row of a larger array stays a view.
+    let flat = Expr::ravel(&row).unwrap();
+    let mut job = env(4096);
+    job.freeze(&flat).unwrap();
+    assert!(result(&mut job, &flat).shares_storage(&a));
+}

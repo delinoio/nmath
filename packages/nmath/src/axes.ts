@@ -4,8 +4,9 @@
 // 2.5.4 uses, so results keep the dtype, context and snapshot behavior of
 // those nodes. Axis validation runs when the expression is built.
 
-import { type Expr, type Lazy, type ReadSelector, slice } from "./core.js";
-import { NMathError } from "./errors.js";
+import { Expr, type Lazy, type ReadSelector, slice } from "./core.js";
+import { NMathError, native } from "./errors.js";
+import { binding } from "./native.js";
 import type { ComputableDType, MutableShape, Shape } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -550,8 +551,12 @@ export function ravel<D extends ComputableDType, S extends Shape>(
 ): Expr<D, [number]> {
   if (order !== "C")
     throw new TypeError("Ravel currently supports order 'C' only.");
-  const source = layout(a);
-  return source.reshape([source.shape.reduce((n, m) => n * m, 1)]);
+  // NumPy returns a contiguous result: a view of a C-contiguous input and a
+  // copy otherwise, which a plain reshape would not guarantee.
+  return new Expr(
+    native(() => binding.NativeExpr.ravel(a.nativeExpr())),
+    a.context,
+  );
 }
 
 /**

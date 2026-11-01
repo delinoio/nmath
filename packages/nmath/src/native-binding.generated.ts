@@ -79,6 +79,8 @@ export declare class NativeExpr {
   static scan(op: string, input: NativeExpr, axis?: number | undefined | null): NativeExpr
   static transpose(input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static reshape(input: NativeExpr, shape: Array<number>, copy?: boolean | undefined | null): NativeExpr
+  /** C-order flattening that copies unless the input layout is contiguous. */
+  static ravel(input: NativeExpr): NativeExpr
   static matmul(lhs: NativeExpr, rhs: NativeExpr): NativeExpr
   static linalg(op: string, input: NativeExpr, rhs?: NativeExpr | undefined | null): NativeExpr
   /** NumPy `norm` over the final axis (`vector`) or final two axes. */
