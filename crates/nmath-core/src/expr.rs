@@ -461,6 +461,25 @@ impl Expr {
         ))
     }
 
+    /// NumPy's C-order `ravel`: a view when the input layout is C-contiguous
+    /// and an independent copy otherwise, so the flat result never aliases
+    /// stepped, reversed or transposed storage.
+    pub fn ravel(input: &Expr) -> Result<Expr> {
+        let expected = crate::layout::checked_strides(input.shape())?;
+        let contiguous = input
+            .shape()
+            .iter()
+            .zip(input.layout_strides()?)
+            .zip(expected)
+            .all(|((&dim, stride), expected)| dim <= 1 || stride == expected);
+        let copy = if contiguous {
+            crate::layout::CopyPolicy::IfNeeded
+        } else {
+            crate::layout::CopyPolicy::Always
+        };
+        Expr::reshape(input, &[-1], copy)
+    }
+
     // Infer layout without reading data. Arithmetic produces C-order storage;
     // pure shape/index transforms retain the layout of their input. This lets
     // copy:false reject incompatible views even over a computed expression.

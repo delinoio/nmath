@@ -143,3 +143,5 @@ Variance and standard deviation use their own lazy node with a two-pass computat
 Cumulative sum and product scans use their own lazy node. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns flattening, promotion and accumulator order, and the [package contract](packages-nmath-package-contract.md#typing) owns the one-dimensional result type.
 
 Product and index reductions use the same lazy reduce node as the existing sum, mean, min and max operations. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns dtype promotion, empty-axis identity, first-position and NaN selection, and GPU admission; the [package contract](packages-nmath-package-contract.md#typing) owns `int64`/`bigint` result typing and declaration-level rejection.
+
+Axis-manipulation helpers (`squeeze`, `expand_dims`, `swapaxes`, `moveaxis`, `ravel` and the flips) compose the existing reshape, transpose and slice-read nodes in the package layer, with a native contiguous C-order flatten for `ravel`; the [package contract](packages-nmath-package-contract.md#typing) owns their axis normalization, error codes and static shape inference.
