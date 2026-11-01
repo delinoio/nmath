@@ -15,6 +15,8 @@ pub enum ErrorCode {
     ShapeBroadcast,
     ShapeMismatch,
     LinalgSingular,
+    LinalgNotPositiveDefinite,
+    LinalgNoConvergence,
     DTypeUnsupported,
     IndexOutOfBounds,
     IndexInvalid,
@@ -30,7 +32,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    pub const ALL: [ErrorCode; 22] = [
+    pub const ALL: [ErrorCode; 24] = [
         ErrorCode::ContextInvalidOptions,
         ErrorCode::ContextMismatch,
         ErrorCode::ContextClosed,
@@ -41,6 +43,8 @@ impl ErrorCode {
         ErrorCode::ShapeBroadcast,
         ErrorCode::ShapeMismatch,
         ErrorCode::LinalgSingular,
+        ErrorCode::LinalgNotPositiveDefinite,
+        ErrorCode::LinalgNoConvergence,
         ErrorCode::DTypeUnsupported,
         ErrorCode::IndexOutOfBounds,
         ErrorCode::IndexInvalid,
@@ -67,6 +71,8 @@ impl ErrorCode {
             ErrorCode::ShapeBroadcast => "NMATH_SHAPE_BROADCAST",
             ErrorCode::ShapeMismatch => "NMATH_SHAPE_MISMATCH",
             ErrorCode::LinalgSingular => "NMATH_LINALG_SINGULAR",
+            ErrorCode::LinalgNotPositiveDefinite => "NMATH_LINALG_NOT_POSITIVE_DEFINITE",
+            ErrorCode::LinalgNoConvergence => "NMATH_LINALG_NO_CONVERGENCE",
             ErrorCode::DTypeUnsupported => "NMATH_DTYPE_UNSUPPORTED",
             ErrorCode::IndexOutOfBounds => "NMATH_INDEX_OUT_OF_BOUNDS",
             ErrorCode::IndexInvalid => "NMATH_INDEX_INVALID",
@@ -86,6 +92,14 @@ impl ErrorCode {
     pub fn recovery(self) -> &'static str {
         match self {
             ErrorCode::LinalgSingular => "Use a nonsingular square matrix.",
+            ErrorCode::LinalgNotPositiveDefinite => {
+                "Use a Hermitian positive-definite matrix, or use a factorization that does not \
+                 require positive definiteness."
+            }
+            ErrorCode::LinalgNoConvergence => {
+                "The iterative factorization did not converge. Check the input for NaN or infinite \
+                 values."
+            }
             ErrorCode::ContextInvalidOptions => {
                 "Pass positive maxConcurrentJobs and non-negative queue and memory limits."
             }

@@ -1,0 +1,2703 @@
+{
+ "numpy": "2.5.4",
+ "environment": {
+  "python": "3.13.15",
+  "system": "Darwin",
+  "machine": "arm64"
+ },
+ "criterion": "NumPy 2.5.4 test_linalg criteria: assert_almost_equal with decimal 6 for float32/complex64 and 12 otherwise; reconstruction allclose with rtol 1e-5 or 1e-11 and atol 0; Cholesky reconstruction atol 500*n*eps.",
+ "cases": [
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "a987aebf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "a987ae3f"
+   },
+   "shapes": {
+    "svdU": [
+     1,
+     1
+    ],
+    "svdVh": [
+     1,
+     1
+    ],
+    "svdUReduced": [
+     1,
+     1
+    ],
+    "svdVhReduced": [
+     1,
+     1
+    ],
+    "qrQ": [
+     1,
+     1
+    ],
+    "qrR": [
+     1,
+     1
+    ],
+    "qrQComplete": [
+     1,
+     1
+    ],
+    "qrRComplete": [
+     1,
+     1
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "000080bf"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "f6c09e3e"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "ba4f5e3fb5f4bb3f9ec6b7bff4af753f2836bbbfa91b96bfe25ab3bf0b84a63f6e113ebf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "7bc12b40b4fe10401bc7903f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "0000803f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "78cef63f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "5f5071bfafcc9b3fda6ca3bfc23c96bfd2e19d3f513bba3fa7533f3f645dbdbfe34ca13f7eab1dbf981583bf5d4974bf9aa02abf0a0759bfaddab0bfcd5c3e3f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "89cd4740615218409ffbfa3fa53e793e"
+   },
+   "shapes": {
+    "svdU": [
+     4,
+     4
+    ],
+    "svdVh": [
+     4,
+     4
+    ],
+    "svdUReduced": [
+     4,
+     4
+    ],
+    "svdVhReduced": [
+     4,
+     4
+    ],
+    "qrQ": [
+     4,
+     4
+    ],
+    "qrR": [
+     4,
+     4
+    ],
+    "qrQComplete": [
+     4,
+     4
+    ],
+    "qrRComplete": [
+     4,
+     4
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "0000803f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "4d08a23f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "dfa7853f48e6363f126ca33f714bb43f42e6ba3f7b9a823ff61094bf8d5c88bf04bd82bf421835bf9dcd5f3fef953abf2473953f05e500bf7f756b3f600d8f3fa1ebb1bf5059a9bf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "52685a40991a023f0560e23a22f81a40d651e43fbf25c33e"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     3,
+     3
+    ],
+    "svdVh": [
+     2,
+     3,
+     3
+    ],
+    "svdUReduced": [
+     2,
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     2,
+     3,
+     3
+    ],
+    "qrQ": [
+     2,
+     3,
+     3
+    ],
+    "qrR": [
+     2,
+     3,
+     3
+    ],
+    "qrQComplete": [
+     2,
+     3,
+     3
+    ],
+    "qrRComplete": [
+     2,
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float32",
+    "shape": [
+     2
+    ],
+    "hex": "0000803f0000803f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [
+     2
+    ],
+    "hex": "09f1b9c0363aff3e"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     5,
+     3
+    ],
+    "hex": "fc4e5f3fe120a6bf0f4d9fbf7531903f7bb703bfb1493abfdd90813fd8412d3f0e7e4bbf6f0c9e3ff5e828bf55bf723f7cc6abbf08556c3f5ae6663f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "43404c407c3fd03f0f34a53f"
+   },
+   "shapes": {
+    "svdU": [
+     5,
+     5
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     5,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     5,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     5,
+     5
+    ],
+    "qrRComplete": [
+     5,
+     3
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     5
+    ],
+    "hex": "668072bfef43953f3ec0113f780281bfa6e3b53f574cbf3f66e91abf9bc64d3f68cb33bf6ebeb7bf37154b3f8867683f5039003f4314a1bf15e3073f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "55533f408d801840e8f51b3f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     5,
+     5
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     5
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     5
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     5
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     4,
+     2
+    ],
+    "hex": "70249e3f4bfc8f3f37b503bfc7ad853f2cb11fbf7a858dbf5ddd143fef800bbf4bd2ba3f404b09bfe145473f999389bf6e22aa3f0b4d82bfab3c1b3f78666e3f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "5f3a0940c08dab3f83d724407c0ba13f"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     4,
+     4
+    ],
+    "svdVh": [
+     2,
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     4,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     4,
+     2
+    ],
+    "qrR": [
+     2,
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     4,
+     4
+    ],
+    "qrRComplete": [
+     2,
+     4,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "deb2b7bf"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "deb2b7bf"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "deb2b7bf"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "36751240"
+   },
+   "cholesky": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "b3a1c13f"
+   },
+   "choleskyUpper": {
+    "dtype": "float32",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "b3a1c13f"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "5721783f74554a3e6a21803e74554a3eed7671bf52a0643f6a21803e52a0643f33cf01bf"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "8b7dd2bf448ba33d72b28a3f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "8b7dd2bf448ba33d72b28a3f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "1b38d140832b65bf1a053cc0832b65bf682bc440d4c390bf19053cc0d4c390bf9a450e41"
+   },
+   "cholesky": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "68a5234000000000000000004c40b3be47de1c4000000000891093bfdd2220bfb97f2b40"
+   },
+   "choleskyUpper": {
+    "dtype": "float32",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "68a523404c40b3be891093bf0000000047de1c40de2220bf0000000000000000b97f2b40"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "df7f94bfcead55bfa0999bbfa84164bfcead55bf32ed99bf2c574e3fbe3e603ea0999bbf2c574e3f40bf163f56e2b0bea84164bfbe3e603e56e2b0be3b71233f"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "f97e0fc07e7dc3bf078f6f3f195fd93f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "f97e0fc07e7dc3bf078f6f3f195fd93f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "c401124120426d3f907e5d4074ff934020426d3ff26ec340e069fe3f20fe6f3e907e5d40e069fe3f88540e414c0b564074ff934020fe6f3e4c0b564064000a41"
+   },
+   "cholesky": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "53554140000000000000000000000000d6149d3e74f01c40000000000000000003a5923f50ce2a3ff9fc2a400000000039f8c33f3d8ec4bd65871e3f7d4d1b40"
+   },
+   "choleskyUpper": {
+    "dtype": "float32",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "53554140d6149d3e03a5923f39f8c33f0000000074f01c4050ce2a3f3d8ec4bd0000000000000000f9fc2a4065871e3f0000000000000000000000007d4d1b40"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "3bef063f3068173e604bcb3c3068173ec793b5bf029038be604bcb3c029038bec69b413f0f55bebfb2e3793f32a0dbbeb2e3793fc4228ebfc0a173bd32a0dbbec0a173bdf2d0bb3f"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "d3ecb8bfb0a8093f6994453f463614c0a0cab7be53b8c53f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "d3ecb8bfb0a8093f6994453f463614c0a0cab7be53b8c53f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "2817d140bcd10f3e080e33c0bcd10f3e5ebac84028f1db3f080e33c028f1db3fa95be7401f64b04038cb8fbfbd20724038cb8fbf89bab04064d601c0bc20724064d601c0c66d0c41"
+   },
+   "cholesky": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "859823400000000000000000970d613d9b402040000000006c188cbf27d3353f087816408e4216400000000000000000c8fbf4bed1401340000000002042ce3f70ef0bbfe0351b40"
+   },
+   "choleskyUpper": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "85982340970d613d6c188cbf000000009b40204027d3353f0000000000000000087816408e421640c8fbf4be2142ce3f00000000d14013406fef0bbf0000000000000000e0351b40"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "5540bf70de53e93f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "5540bf70de53e93f"
+   },
+   "shapes": {
+    "svdU": [
+     1,
+     1
+    ],
+    "svdVh": [
+     1,
+     1
+    ],
+    "svdUReduced": [
+     1,
+     1
+    ],
+    "svdVhReduced": [
+     1,
+     1
+    ],
+    "qrQ": [
+     1,
+     1
+    ],
+    "qrR": [
+     1,
+     1
+    ],
+    "qrQComplete": [
+     1,
+     1
+    ],
+    "qrRComplete": [
+     1,
+     1
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "000000000000f03f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "98fdb7d17deecdbf"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "b875cb9a5dd4f53ff565da8a4e94e7bff0450f2e6383f3bfc4e6b097b6a4e5bf041987c29f10f3bf4642767b94d7f03f46203d42666deb3f81d6e1a7a178f53fa0f3acaefde0ec3f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "5b5af7b4709b01403454fe7a87b400403e653d15212ef03f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "000000000000f0bf"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "14f93939dc94f83f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "af774af77bc2f6bf76e7163ab633f0bf9a5b934e548be43f7eb323c4241be73f0f958326ce2fea3f066fc7e89b15f23f746c71d2d65aebbf669bbded476bf4bf8c9f4201b329ec3f8ebb9dd8e860e03f4026fb40ff42f33f4525b422f99ff0bf543164e1a8fff63fdef567893f92f6bfb4d1a32f2725f1bff706c0c4d234f7bf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "1abcb8518f3f0b40f792e34a8b840140df030cf1cedef83fe82847f62bf2e23f"
+   },
+   "shapes": {
+    "svdU": [
+     4,
+     4
+    ],
+    "svdVh": [
+     4,
+     4
+    ],
+    "svdUReduced": [
+     4,
+     4
+    ],
+    "svdVhReduced": [
+     4,
+     4
+    ],
+    "qrQ": [
+     4,
+     4
+    ],
+    "qrR": [
+     4,
+     4
+    ],
+    "qrQComplete": [
+     4,
+     4
+    ],
+    "qrRComplete": [
+     4,
+     4
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "000000000000f03f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "bb8b40bffbd1fe3f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "8e1b1ecf64d7f63f4820fd48e280f73f806d29fbb831f5bfcf3358fef4a3e1bf83b8a9d6488cf7bf8d3706696a17e8bfc319774fd486ecbff03434bbbb96f43f5f979256571ef03f2db6e90f6bdcef3f76f195c7a138e53f52f672a3c2a2eebf648d68ed90d2f33f540b60052cf7f33f4caf0bded075ebbfd5d750f71ab2f7bf2e1d70bc5e5ff53f8a24a8480dc7f73f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "f820738bda1f05408c6e1d1af6090240fba431498221e43f4a4c368c445d0740d6a25b97f440ff3f4b02747a26b2c03f"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     3,
+     3
+    ],
+    "svdVh": [
+     2,
+     3,
+     3
+    ],
+    "svdUReduced": [
+     2,
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     2,
+     3,
+     3
+    ],
+    "qrQ": [
+     2,
+     3,
+     3
+    ],
+    "qrR": [
+     2,
+     3,
+     3
+    ],
+    "qrQComplete": [
+     2,
+     3,
+     3
+    ],
+    "qrRComplete": [
+     2,
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000f03f000000000000f0bf"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [
+     2
+    ],
+    "hex": "8c92bd552b21f53f040c11f542ead2bf"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     5,
+     3
+    ],
+    "hex": "681dcbb6bbebf3bff31c04825dc8edbf8d464be0e1c3eabfd5cb65d1459be5bf1439e0e0a83ae83f5441bb61ceadf23f094e3a504b42ee3f0c9d314077e5e3bff616c74a8754f1bf33169278dd53eabfccea294f3b1af5bf951c2ba2b68cecbf426053cf9854f43f314fe9a9d3abed3fd6e34abefed5e43f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "d0e593b227e008405eb08eba39aa00403d917edecf42d03f"
+   },
+   "shapes": {
+    "svdU": [
+     5,
+     5
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     5,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     5,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     5,
+     5
+    ],
+    "qrRComplete": [
+     5,
+     3
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     5
+    ],
+    "hex": "e0ec64e8eadbedbf6b0f0d9a464fe4bff08e7946ad98ebbfa271236b44f5f1bf30e0cca2a50ce33ffb2244a0d582f5bf4c39b3d1d3e1efbfa5e3d120302af7bfd40154cee3c2eb3fd2f498602ffbf6bfe9ccf42ba8f9edbf3db328ff2113e4bf81b87896ce21eb3f8536a41d39e8e33f2f974ea8636be33f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "ef52981dd9cb0640f580824e3eedfc3f88b1ce596d4afa3f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     5,
+     5
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     5
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     5
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     5
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     4,
+     2
+    ],
+    "hex": "f182a1b4b274f13f41f48040c1a9f43f7ea237a330cfe0bfea6517f8c4e3ecbf5cd6c8164fc0f13fa55022fe6bd2f73fa111409859dcf5bf709b281ca551e8bf7e9825b8f0cef23fcebe84946cf9f1bf2ae6f9c6a1c5f1bf90cb7c1b24b0f63f863036d8eb0debbf909abc4d7f0ae8bfeed09f095831f7bf9d7e420c933af0bf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "2188293defaa084029ff667f2279e23fa44471e28d930340790460f5859b0040"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     4,
+     4
+    ],
+    "svdVh": [
+     2,
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     4,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     4,
+     2
+    ],
+    "qrR": [
+     2,
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     4,
+     4
+    ],
+    "qrRComplete": [
+     2,
+     4,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "e9194795fef5e33f"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "e9194795fef5e33f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "e9194795fef5e33f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "f4d8e296399c0740"
+   },
+   "cholesky": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "5020e3a0a37cfb3f"
+   },
+   "choleskyUpper": {
+    "dtype": "float64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "5020e3a0a37cfb3f"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "960b5cc45160f7bfba043da686e0f6bfb6816d00e25dc3bfba043da686e0f6bfad95ef6fe9a8f13ff803a6c70e85cdbfb6816d00e25dc3bff803a6c70e85cdbfc15ca63fbedbe5bf"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "5f87ad26941701c0b135b06fcbf5e4bf4c85f390c604fc3f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "5e87ad26941701c0b035b06fcbf5e4bf4a85f390c604fc3f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "3c961eee68ee19409b4fedcbc8b202405c277b74c12800c09b4fedcbc8b20240b69fa56fb59c1a400b54cd19e149ce3f5c277b74c12800c01054cd19e149ce3f650a47e00bfb1a40"
+   },
+   "cholesky": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "eae01df47d5e0440000000000000000000000000000000008803648e1160ed3fba98e437a34803400000000000000000eaea4e91de62e9bfec2c707d4c9ed93fc07a8133f3850340"
+   },
+   "choleskyUpper": {
+    "dtype": "float64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "eae01df47d5e04408803648e1160ed3feaea4e91de62e9bf0000000000000000ba98e437a3480340eb2c707d4c9ed93f00000000000000000000000000000000c07a8133f3850340"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "a2b5da9fe2ebf53f56498f470647c1bff6f08485f29acabfc031b57e7cbd9b3f56498f470647c1bf0a312fadb27ef7bf88ead20a1605f03fb0b7a2251ab7b7bff6f08485f29acabf88ead20a1605f03f04bf2bf93842e43fe6cca9905c83edbfc031b57e7cbd9b3fb0b7a2251ab7b7bfe6cca9905c83edbf0297404e8396edbf"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "3a9a525b8649ffbfbc69c2625602f3bfa68b19a1b145f23fea901ce535c9f93f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "369a525b8649ffbfbc69c2625602f3bfaa8b19a1b145f23fec901ce535c9f93f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "ee63903e708b1b405f526cecc119c33f0e5ea6050a000340721811b325fd02405f526cecc119c33f53480f40de5b1d405979f8755bb2dbbfeeedc06c986807c00e5ea6050a0003405979f8755bb2dbbfe6a35a18cfe4184012f30b2d3781ff3f721811b325fd0240eeedc06c986807c012f30b2d3781ff3ff105c2e25d942440"
+   },
+   "cholesky": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "1ed29c1143fe0440000000000000000000000000000000000000000000000000f5e340fd771dad3f335b7d5133ab05400000000000000000000000000000000069d60d2244f6ec3f024f811016e2c6bf01174df1eb8a02400000000000000000296d57a8dbf1ec3fc37cc589a896f1bfa1d119029e56da3f8da85ea47dc20640"
+   },
+   "choleskyUpper": {
+    "dtype": "float64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "1ed29c1143fe0440f5e340fd771dad3f69d60d2244f6ec3f296d57a8dbf1ec3f0000000000000000335b7d5133ab0540024f811016e2c6bfc37cc589a896f1bf0000000000000000000000000000000001174df1eb8a0240a1d119029e56da3f0000000000000000000000000000000000000000000000008da85ea47dc20640"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "bac37bf13595f43f2055e9372b67ac3f688355d48175ec3f2055e9372b67ac3f1b0dfe3e5bf4f03f982dbd92d28ca63f688355d48175ec3f982dbd92d28ca63f370ff2be03d3f7bf22d42c59ed9bf73f7061e8ac5da0acbfd0c866d5debfa23f7061e8ac5da0acbfd55dcc10ba45e73f25c88a2766c3f3bfd0c866d5debfa23f25c88a2766c3f3bfe41668b979aaf5bf"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "e805b66c25fffbbf2e5b2badd1d1f03f546c1231e1e3f83f79c2d982a5dbfebf80bd4ca49478f43f22f1b78661f7f73f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "e405b66c25fffbbf315b2badd1d1f03f586c1231e1e3f83f7bc2d982a5dbfebf82bd4ca49478f43f23f1b78661f7f73f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "04bb71bb9f4b1e407658cac1dbbafc3f79385b29a7dbf7bf7658cac1dbbafc3ff017e9165bab19405645e212e34fbabf79385b29a7dbf7bf4045e212e34fbabf7932eae79e8a1740f9f1513134301d4048e24cd38b7bfd3f85d41cc42366fa3f48e24cd38b7bfd3f4c807ac731d91640b2b20257f082ba3f85d41cc42366fa3fb0b20257f082ba3f24a263b46b4a1a40"
+   },
+   "cholesky": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "3c28bead390406400000000000000000000000000000000031185c5cfae0e43fa8375d2c0e95034000000000000000008fb6f7759956e1bfea56d8822339ba3f01c344955be60240588ea742489c0540000000000000000000000000000000008f0c017810d4e53f88ae78cd1f53024000000000000000007a761c309a8be33f18d5bcd5cd7ec1bf89673d33a1e30340"
+   },
+   "choleskyUpper": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "3c28bead3904064031185c5cfae0e43f8fb6f7759956e1bf0000000000000000a8375d2c0e950340e256d8822339ba3f0000000000000000000000000000000001c344955be60240588ea742489c05408f0c017810d4e53f7a761c309a8be33f000000000000000088ae78cd1f53024018d5bcd5cd7ec1bf0000000000000000000000000000000089673d33a1e30340"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "e210a5bf7d0517bf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "8184b53f"
+   },
+   "shapes": {
+    "svdU": [
+     1,
+     1
+    ],
+    "svdVh": [
+     1,
+     1
+    ],
+    "svdUReduced": [
+     1,
+     1
+    ],
+    "svdVhReduced": [
+     1,
+     1
+    ],
+    "qrQ": [
+     1,
+     1
+    ],
+    "qrR": [
+     1,
+     1
+    ],
+    "qrQComplete": [
+     1,
+     1
+    ],
+    "qrRComplete": [
+     1,
+     1
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex64",
+    "shape": [],
+    "hex": "38cc68bf85fdd4be"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "60dab23e"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "c7c4b53f0e0d2abffbc0643f47c5bebff777623fba9b41bfd7f1b9bfed007a3fab8cbebf36d154bfb118503f2a44a2bf56559bbfd29d923f5a20bd3f2030a73f1e57bc3ffa71913f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "ac48804019383f400ae2e63e"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex64",
+    "shape": [],
+    "hex": "5e0e76bf4b508d3e"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "97e3d73f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "3f889b3fa86332bf47d503bfdb6327bf119b6bbf49eba33f5e4cb03f2e728fbfd58a55bf7adb6abfa2d761bf3eb95bbfccd57a3f6ed3ba3feb5c9bbf663e8bbff3192fbf405f72bf93bf0a3fc263ae3f2a4bbdbf8101143f5f7aa7bfc6380ebf329e533f80508d3f711a94bf2dee8fbfaff39c3fb0f75f3f89eca4bf5fe28b3f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "b1f68e40aba25a4031b6d63ff53d143f"
+   },
+   "shapes": {
+    "svdU": [
+     4,
+     4
+    ],
+    "svdVh": [
+     4,
+     4
+    ],
+    "svdUReduced": [
+     4,
+     4
+    ],
+    "svdVhReduced": [
+     4,
+     4
+    ],
+    "qrQ": [
+     4,
+     4
+    ],
+    "qrR": [
+     4,
+     4
+    ],
+    "qrQComplete": [
+     4,
+     4
+    ],
+    "qrRComplete": [
+     4,
+     4
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex64",
+    "shape": [],
+    "hex": "42b968bf5550d5be"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [],
+    "hex": "5e902c40"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "dffe993f00d026bf87fd10bfb752aa3f13b9193face8703fe13c1fbf4aba9b3fc97dba3ff680723f9e1db03f122a013f5ad146bfa8a5603fd221203f3ce5433ff564bebf44d8b7bf2182bd3f8af8263f44f9333fd7175a3fafb1bd3f7b9291bf0bd12dbf64f784bfa598803fcad5b43fcef8483fa92a6cbf0aa7ad3fbba960bff47c60bf36f87fbf528e9abf7041093f"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "93894c401c13244075c5b83f2a40614003a4294068b4683e"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     3,
+     3
+    ],
+    "svdVh": [
+     2,
+     3,
+     3
+    ],
+    "svdUReduced": [
+     2,
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     2,
+     3,
+     3
+    ],
+    "qrQ": [
+     2,
+     3,
+     3
+    ],
+    "qrR": [
+     2,
+     3,
+     3
+    ],
+    "qrQComplete": [
+     2,
+     3,
+     3
+    ],
+    "qrRComplete": [
+     2,
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex64",
+    "shape": [
+     2
+    ],
+    "hex": "0d12aebe29c070bfd46373bf1fb69ebe"
+   },
+   "slogdetLogabs": {
+    "dtype": "float32",
+    "shape": [
+     2
+    ],
+    "hex": "f31a1e409f5d403f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     5,
+     3
+    ],
+    "hex": "a542233fa949a53f42c389bfa4c587bfe5d58e3f74cd923fcdb895bfc8430f3f5afa593f873b4e3f7a0c9e3f09d7273f3d90a5bf1c8078bf2c59a03fc5714a3faf1b903f46c728bf725622bffc6b40bf7706a9bfa25761bfb81496bf9810a23fc7a8963f5a05bdbf5e4d0a3fd061bfbf3c9b46bf2f803dbf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "9f2c8940066a5640ee4bcc3f"
+   },
+   "shapes": {
+    "svdU": [
+     5,
+     5
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     5,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     5,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     5,
+     5
+    ],
+    "qrRComplete": [
+     5,
+     3
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     5
+    ],
+    "hex": "1305373f35c11d3f369142bf97ca423f427d893f6712153ffeed943f484f2fbf8af78e3f6445b73f2d5b92bf3765ae3fec9c81bfa18f40bf0b1b5b3f936e0ebf51259e3f82ed08bf3e1b55bfbcab32bf72d88ebf04d919bf55e8313fbae494bf091e37bf3aa91cbf5468413fde7756bff665b6bf2ebd67bf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "12ea804044a93140557db33f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     5,
+     5
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     5
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     5
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     5
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     4,
+     2
+    ],
+    "hex": "01f5313f2959bbbf1aef0a3fc50b103f391f2f3fb13042bfcbc1713fe30b04bfa97c03bfc66793bf4932b33f86f70ebf8a02b3bfd6569bbf82bf413f3b9000bf277563bf0e5c363f78be72bf95c4933fa045b43fd4bb9bbff76328bf754e5cbf3811a83fe946233f57b9303fce829ebfe9b4b4bfc8784a3f1f964a3f07db97bf"
+   },
+   "svdvals": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "1d7d5f406e3a953f87da5d402b490e40"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     4,
+     4
+    ],
+    "svdVh": [
+     2,
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     4,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     4,
+     2
+    ],
+    "qrR": [
+     2,
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     4,
+     4
+    ],
+    "qrRComplete": [
+     2,
+     4,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "40657fbf00000000"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "40657fbf"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     1
+    ],
+    "hex": "40657fbf"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "4e6cd93fd86176b2"
+   },
+   "cholesky": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "dfd2a63f00000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex64",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "dfd2a63f00000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "3274a53f000000000068aeb9f9236dbf6065913f6c99e6bd0068aeb9f9236d3f7f69a3bf000000004e934e3fea8429be6065913f6c99e63d4e934e3fea84293ea355353f00000000"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "220ff6bff765823e94151940"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     3
+    ],
+    "hex": "220ff6bff765823e94151940"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "d8002b410000000087ad1e4060c51f3d08cd553f52672a3f87ad1e4060c51fbdcb6b194100000000e13884c089cbf6bf08cd553f52672abfe13884c089cbf63f841afb4000000000"
+   },
+   "cholesky": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "ab3a514000000000000000000000000000000000000000000426423f6b7c43bce4244040000000000000000000000000fecb823ed37e50be1687b8bf4a50313f78b1114000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex64",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "ab3a5140000000000426423f6b7c433cfecb823ed37e503e0000000000000000e4244040000000001687b8bf4a5031bf0000000000000000000000000000000078b1114000000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "0f2ba4bf00000000ac1f843d3d46423f52cc873f1efa493e70b0573d5688543fac1f843d3d4642bfcbc2b43f000000005ad36e3f10f106bda03dab3c0728993f52cc873f1efa49be5ad36e3f10f1063d88cbaf3f000000008a9b83be4ad2873f70b0573d568854bfa03dab3c072899bf8a9b83be4ad287bfdf9d8e3f00000000"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "cc7dfebfacf40e3ea4bc333f04e17040"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     4
+    ],
+    "hex": "cc7dfebfacf40e3ea4bc333f04e17040"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "16ea4941000000004347e73f31af8d40bb353ec0ec94f0c0febdd2bfc6a12ec04347e73f31af8dc0e641574100000000e1d454c048af77c0c0116a3f7c1ca140bb353ec0ec94f040e1d454c048af774028786d41000000001cd9fd3edadb323ffebdd2bfc6a12e40c0116a3f7c1ca1c01cd9fd3edadb32bf70cc3b4100000000"
+   },
+   "cholesky": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "c35a6340000000000000000000000000000000000000000000000000000000008835023f2b899fbf795d5a400000000000000000000000000000000000000000e22c56bf66720740be609dbd16ec8f3fe5683940000000000000000000000000674bedbe77a2443f9f1e1e3f41ddb5bf0d3f343de8a01fbe84a83a4000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex64",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "c35a6340000000008835023f2b899f3fe22c56bf667207c0674bedbe77a244bf0000000000000000795d5a4000000000be609dbd16ec8fbf9f1e1e3f41ddb53f00000000000000000000000000000000e5683940000000000d3f343de8a01f3e00000000000000000000000000000000000000000000000084a83a4000000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "1e68953f0000000028ffdcbd9fe367bf701cf13d58c468bf28ffdcbd9fe3673fa1c7b93f00000000c54d7f3f1801dfbe701cf13d58c4683fc54d7f3f1801df3e1bf71ebf00000000fb37b03f00000000ae2e963f0e7c7ebf241b76bf5c8c79bfae2e963f0e7c7e3f1214b0bf00000000980c15be857a903e241b76bf5c8c793f980c15be857a90be0b3f1abf00000000"
+   },
+   "eigvalsh": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "5b05a2bf2810f73ec1fa314036001fc0251b1fbf31492040"
+   },
+   "eigvalshUpper": {
+    "dtype": "float32",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "5b05a2bf2810f73ec1fa314036001fc0251b1fbf31492040"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "7ea5204100000000a2db9140c8f985c03f2e06c0035c6440a2db9140c8f985407dc924410000000042fecebf12c310403f2e06c0035c64c042fecebf12c310c0e05202410000000022a11a4100000000d2bd673f1d472cc08c8a813e65bae1bfd2bd673f1d472c4054a426410000000096ce82bfd8e25e3f8c8a813e65bae13f96ce82bfd8e25ebfed83db4000000000"
+   },
+   "cholesky": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "51cb4a4000000000000000000000000000000000000000003020b83f4420a93f28f822400000000000000000000000007f6229bfe42290bfd861a53e6f7118bf1e831c4000000000cbf546400000000000000000000000000000000000000000f816953e08ab5d3f8b184640000000000000000000000000ebada63d9638113f9636febe5eaf9fbe26331f4000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex64",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "51cb4a40000000003020b83f4420a9bf7f6229bfe422903f000000000000000028f8224000000000d861a53e6f71183f000000000000000000000000000000001e831c4000000000cbf5464000000000f816953e08ab5dbfebada63d963811bf00000000000000008b184640000000009636febe5eaf9f3e0000000000000000000000000000000026331f4000000000"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "f6032a006876f0bf2d272482e03ee3bf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "2abaf7899211f33f"
+   },
+   "shapes": {
+    "svdU": [
+     1,
+     1
+    ],
+    "svdVh": [
+     1,
+     1
+    ],
+    "svdUReduced": [
+     1,
+     1
+    ],
+    "svdVhReduced": [
+     1,
+     1
+    ],
+    "qrQ": [
+     1,
+     1
+    ],
+    "qrR": [
+     1,
+     1
+    ],
+    "qrQComplete": [
+     1,
+     1
+    ],
+    "qrRComplete": [
+     1,
+     1
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex128",
+    "shape": [],
+    "hex": "0e05938565a0ebbf8833ad8d0326e0bf"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "0d5a2fc65b75c63f"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "1747d8309dfdf73f06d9b18336a7f0bf0249b1725f75f33f2fc2bb54e04de03f7eb0cb10759ae8bffeb2e6de4075f4bf136979b0dd4af63f05bae9e1685cf1bfec82a5498405f53f1672b98ed9bae53fb2045cda573cf03f9a38bb6e24b6f73f0a3325cb6159f6bfa5d3efc0d5efe5bf90a4eb3d72f2edbf72e4b8c48414e13fe7b9c8873d57e03f9890c905d985e13f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "c89eea1d5f940b40020f722ac83e044038c5906d11bff43f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex128",
+    "shape": [],
+    "hex": "3af6706f8857e83f6e56286499c5e4bf"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "903967443b680340"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "4eb0373ffed8eabf5467ae43608bf63fead099f439eef0bf3998ddbe0079ee3ffb21d8bfafe0e3bfa21853d5b931e6bf4657ed5aae5cf5bf4f4ca6782ddff4bf5f7a0bceb0ededbfb843d502c379f1bf9bf30a871340f33fa626efcfb5daf1bf2c924aa875c9f43ffcc0199fa637e73fc645f1724b84f63f0451dcba45c8f6bf908f9fbaa3b2e4bf821137662e8ff4bf74ab337b1d07e2bf6792f1c37336e83fc6913fcf329bf1bfa32428ca7946e03f426085533623e43f2646eef97c49e6bf8a2d6c4f99e0f43ffa3aa1dffabaf4bf83529939a7d5f43f169d84e3cf57ed3f27de1cf67232efbf3bef55fc3ccbe0bf9ccdcce73359f0bfe06727f65613e7bf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "40c55b7d25f21140d94dc6e2fb3b0740c325a086ff9802404267d9680136d43f"
+   },
+   "shapes": {
+    "svdU": [
+     4,
+     4
+    ],
+    "svdVh": [
+     4,
+     4
+    ],
+    "svdUReduced": [
+     4,
+     4
+    ],
+    "svdVhReduced": [
+     4,
+     4
+    ],
+    "qrQ": [
+     4,
+     4
+    ],
+    "qrR": [
+     4,
+     4
+    ],
+    "qrQComplete": [
+     4,
+     4
+    ],
+    "qrRComplete": [
+     4,
+     4
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex128",
+    "shape": [],
+    "hex": "7501e67fbc25d63fa8b30e34db05ee3f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "409eaa3cc6100240"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "65d92a15ed61f23f9b2178762cd8f6bfd15271e42891ef3ff43cd5636841ebbfcf02ca6d42c8e8bf46ebd5c9e40ef63f1605c521fb85f63f0ddb5257cea7ec3f4a129fc0f339ee3feba2d1903e0ff23f03bd3deb8949eabfbe8d1a0a531ef03f79678475140ae6bf0962f1d315a4f53f4a895116bbe2f6bf32b607db3b93f5bfa0de985b23fef53fe8a1f72b96aae23fd83c1d2a6d96edbfceb225e26c25f23f03e8f6f9f44cef3faa48b3b22988e6bfee1f97d3135df5bf1cdc38ff4d04f33f361a6f55e2b6f53fd4ebd43a1664e53f83e8763273aeecbfd81726a61d11f73f513d3d1bece6f13f229c5e0c8a2eed3f826fe7190057e53fc25cdcba9089f03f5b119e9bbf83ecbfc89db44d1be9f5bf9aa56374589fe13f820cdf16da64f1bf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "d622f39d76a41040ebc9518e89b80040d8c6dbe4c99dee3f62d63b349ace0c40698571859b7703403681c9900a07ed3f"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     3,
+     3
+    ],
+    "svdVh": [
+     2,
+     3,
+     3
+    ],
+    "svdUReduced": [
+     2,
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     2,
+     3,
+     3
+    ],
+    "qrQ": [
+     2,
+     3,
+     3
+    ],
+    "qrR": [
+     2,
+     3,
+     3
+    ],
+    "qrQComplete": [
+     2,
+     3,
+     3
+    ],
+    "qrRComplete": [
+     2,
+     3,
+     3
+    ]
+   },
+   "slogdetSign": {
+    "dtype": "complex128",
+    "shape": [
+     2
+    ],
+    "hex": "60f5593a47b392bffbfdf744a2feef3fe401d6397102e2bf038bf00c7673ea3f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [
+     2
+    ],
+    "hex": "fe755cd30bf300401bbde2b674950040"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     5,
+     3
+    ],
+    "hex": "bcf9706c0fedf23f8be4facec8ede6bf92ee38418cc5f63f5e6d67af9b2bf63fad2ad6c07e6bf13fadcc9b6111a7e7bf1e994a67361ff73f52278cc44554f3bf1dbbcbc45ff6f63f8d8a2f18cf5be3bf7c4a6a2fcc7af33f186aae847668f03f7088386e5a16e0bff5d5572f1bace73f7a255fb5cbc9e0bfce189991eda0efbf18d3dbcc6a67f73fbed1484235c6e3bf72244342eb00e8bf2f4fd6e8b4b1f4bf8e4f94a96800e5bf7709a599c024e0bf5431cd9e6f48f43f4aa59c6c1431f13f585609ff3300f7bfd062cafd9a91f53feff38fe865d1ec3fa68f5eb3d5a8f3bf9e09d9a343fbf63fb022086a08caef3f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "1e5fee431c601140416458e2fa520a404071fc3d3d730340"
+   },
+   "shapes": {
+    "svdU": [
+     5,
+     5
+    ],
+    "svdVh": [
+     3,
+     3
+    ],
+    "svdUReduced": [
+     5,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     3
+    ],
+    "qrQ": [
+     5,
+     3
+    ],
+    "qrR": [
+     3,
+     3
+    ],
+    "qrQComplete": [
+     5,
+     5
+    ],
+    "qrRComplete": [
+     5,
+     3
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     5
+    ],
+    "hex": "1ceff2e8008cf1bff35ded3cd8b6f03fdc9b83c2c744f7bf916fc9fb092ee7bf0ca32ba12861e93f2008c99ed4b4e0bf4eaaa05ae46ae13f7d19ffb49cd1e4bf912ac193cf0ee6bf4c65a1a317f6f73f86a32dbb43f9f0bff2bf7c24c74cf3bfde004efa99c1efbf74fc6ffdf1a7f73f4b3ab28faab2f13f07d3a25baa8cf53f86d218ef5955f73f1c2c1fcf6fd9e4bfcc22a24269aaf6bf40f3548ace16f2bf740e291ae771ee3f3a6b8d2f6680ed3ff0f2d5d66ebef7bfd906b07000f8f33f7674cf4476c6f43fde2b6886a4faf63f347b6ce52ae4f43fe89b9ec3c53ae1bff626bbd1c024f13f1ccf7dfbba53ebbf"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "a4b84c8c926f1240426d3f1e02c10d4012fa78738063f63f"
+   },
+   "shapes": {
+    "svdU": [
+     3,
+     3
+    ],
+    "svdVh": [
+     5,
+     5
+    ],
+    "svdUReduced": [
+     3,
+     3
+    ],
+    "svdVhReduced": [
+     3,
+     5
+    ],
+    "qrQ": [
+     3,
+     3
+    ],
+    "qrR": [
+     3,
+     5
+    ],
+    "qrQComplete": [
+     3,
+     3
+    ],
+    "qrRComplete": [
+     3,
+     5
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     4,
+     2
+    ],
+    "hex": "6deaf8b112a3e3bf5ff6ca26e6d9ebbf800abfd8e929eebf9e634d5d58a0e03fce2b14310325f33f5831c9739156ee3f601bcf7ea29ff2bfe9fe05b6f8aae43fb6ac1e2c8a1be13f606f0f0480aff53fc2120b6d1501f73f0ee187ef8a8ce83f2d6fd7dfff09e13f42c05f378976f73f4a121434b3b4f1bf79575ba7c419e1bf4bda1e094983e43feb4caf56e0e3e83f1fb4c56bb8a4ee3fb28eb0ed0df4f0bf71bc3e80fb0ce6bf27f5e5167c91f23f5c4e0bf69b83f73f9b1a5cc9d945eabfa46e6e7bbccbf7bf9bcbe1b395f0e43f5e16e118ad1ff63f1659679483dae63fddaf4cb829d6eebf49f68f98862eea3f02545fe7afe2f5bf3f3b3ef77ecdee3f"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "e654f9755d0c07403f56d88c53e30440ed82bc5b2d5c0d40ed68f8e5b2c6fe3f"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     4,
+     4
+    ],
+    "svdVh": [
+     2,
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     4,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     4,
+     2
+    ],
+    "qrR": [
+     2,
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     4,
+     4
+    ],
+    "qrRComplete": [
+     2,
+     4,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "a41beabfa24eec3f0000000000000000"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "a41beabfa24eec3f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     1
+    ],
+    "hex": "a41beabfa24eec3f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "4e3bdda95fdc0c40f86319a9571c8ebc"
+   },
+   "cholesky": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "24319f3ad163fe3f0000000000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex128",
+    "shape": [
+     1,
+     1
+    ],
+    "hex": "24319f3ad163fe3f0000000000000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "823337fb2cecf6bf0000000000000000ee072fa01846eebf7e9ff9854edfd0bf8e3e88191233e8bf7a1c9c092fe6c2bfee072fa01846eebf7e9ff9854edfd03f2ee9d61a70eaf1bf00000000000000008293927d3305c5bf2820c29e18b0efbf8e3e88191233e8bf7a1c9c092fe6c23f8293927d3305c5bf2820c29e18b0ef3fc847a45e88eee73f0000000000000000"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "2595cd118b6a04c0cdaaf465cfa3e5bfe586d9efa4c7f63f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "hex": "2895cd118b6a04c0c0aaf465cfa3e5bfe386d9efa4c7f63f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "a09e4962ae6b1f4000000000000000004764e176b037f2bf5681b0f2265efd3fa2745d5019bd0cc0e29783222e4208c04764e176b037f2bf5681b0f2265efdbfeb08514c389c244000000000000000000cc73372f0a7fa3f10cebf39f8a10140a2745d5019bd0cc0e29783222e4208400cc73372f0a7fa3f10cebf39f8a101c01890745f986721400000000000000000"
+   },
+   "cholesky": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "cd8d74cbf06b064000000000000000000000000000000000000000000000000000000000000000000000000000000000aeeba775fbffd9bf3cdd75d0ecf4e4bfad9b850e23ee084000000000000000000000000000000000000000000000000080b2af80ff81f4bfc626c3ab8f4ff13fbbea33425909e33f3eede0e20400d3bf224d6c96bdab02400000000000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex128",
+    "shape": [
+     3,
+     3
+    ],
+    "hex": "cd8d74cbf06b06400000000000000000aeeba775fbffd9bf3cdd75d0ecf4e43f80b2af80ff81f4bfc626c3ab8f4ff1bf00000000000000000000000000000000ad9b850e23ee08400000000000000000bbea33425909e33f3eede0e20400d33f0000000000000000000000000000000000000000000000000000000000000000224d6c96bdab02400000000000000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "7925c05499d7e03f0000000000000000f4cce8d629acbd3fb9de589def64e7bf01ac45188c5ed33fd088ffcc7791d13f9423dbf2a5ccce3f78966ba2228aea3ff4cce8d629acbd3fb9de589def64e73ff3a1d534ef8bf13f000000000000000096596ec1302eed3f6e9598468852f3bfaa7e6dcd0dbccabfb4b9a34d6c38d23f01ac45188c5ed33fd088ffcc7791d1bf96596ec1302eed3f6e9598468852f33f349cc70adcf8e4bf0000000000000000ae3476cdc14ad73f2e3c027483fce6bf9423dbf2a5ccce3f78966ba2228aeabfaa7e6dcd0dbccabfb4b9a34d6c38d2bfae3476cdc14ad73f2e3c027483fce63fce6653d2a982f23f0000000000000000"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "2a8885d1486cffbf2425a3fec501b83f96bed7433c5df83f5172f4ec73c60340"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     4
+    ],
+    "hex": "2c8885d1486cffbf0e25a3fec501b83f9abed7433c5df83f5172f4ec73c60340"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "ede1fa37021b284000000000000000005ac38cdaef4202c06cb6c18dcbf6de3f68d8619477abc8bfb92b8a28dffc1640fa8e8596dde61ec00b33953cc22d0bc05ac38cdaef4202c06cb6c18dcbf6debfa6a79a8ccb612d4000000000000000008ad5f992ad5203402e720ec217b31dc074e6e15ece4d0f403a1ce47a70a2ff3f68d8619477abc8bfb92b8a28dffc16c08ad5f992ad5203402e720ec217b31d40ca8dc51ba6252c400000000000000000529584569c69fbbff8981391f8bc1340fa8e8596dde61ec00b33953cc22d0b4074e6e15ece4d0f403a1ce47a70a2ffbf529584569c69fbbff8981391f8bc13c0f2d9efa3d20530400000000000000000"
+   },
+   "cholesky": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "6daac6740ec60b400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cb54af80530ae5bf59e051e182d6c1bff2c703301e300e40000000000000000000000000000000000000000000000000000000000000000000000000000000004e3ea14d7f6cacbfaa3cbdb7607cfabf3c448b698c37e23faca78dc46ce6fa3ff95ac5b03fe1064000000000000000000000000000000000000000000000000099239b9f55cd01c0ab8aafe88650ef3ff7ee00c288eee53fea7dd9d26c5cd1bf0d59d174c708abbf9b0b39d651b6a33f8663810c2bbe08400000000000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex128",
+    "shape": [
+     4,
+     4
+    ],
+    "hex": "6daac6740ec60b400000000000000000cb54af80530ae5bf59e051e182d6c13f4e3ea14d7f6cacbfaa3cbdb7607cfa3f99239b9f55cd01c0ab8aafe88650efbf00000000000000000000000000000000f2c703301e300e4000000000000000003c448b698c37e23faca78dc46ce6fabff7ee00c288eee53fea7dd9d26c5cd13f0000000000000000000000000000000000000000000000000000000000000000f95ac5b03fe1064000000000000000000d59d174c708abbf9b0b39d651b6a3bf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008663810c2bbe08400000000000000000"
+   }
+  },
+  {
+   "kind": "hermitian",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "7e873ad67604f2bf0000000000000000f58fd325dcfee9bf9fe9b7e1ee8fd93f4077c7afffbaebbfd0c1acb9102098bff58fd325dcfee9bf9fe9b7e1ee8fd9bf88bdeac1fc67f1bf0000000000000000ee2284f71422eabf3ee8157e1df2d9bf4077c7afffbaebbfd0c1acb91020983fee2284f71422eabf3ee8157e1df2d93ff6fde072c2b3f2bf00000000000000004c07d1f6b17bf2bf00000000000000001870e533909ac13f726928a493ade7bf1e1170d3cf64efbf8ba8a48351fadbbf1870e533909ac13f726928a493ade73f5e8a27edc8e7f13f00000000000000000019d3ba9807b5bfae0af01065b4c23f1e1170d3cf64efbf8ba8a48351fadb3f0019d3ba9807b5bfae0af01065b4c2bf39225ad1bbd4e1bf0000000000000000"
+   },
+   "eigvalsh": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "c8859264065607c0424e2f46e317d2bfcd1eab828371c7bfdc082e4e60fc00c08ad7f603bc5fc53fbaa8862982cef53f"
+   },
+   "eigvalshUpper": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     3
+    ],
+    "hex": "cb859264065607c0414e2f46e317d2bfe41eab828371c7bfde082e4e60fc00c08cd7f603bc5fc53fbca8862982cef53f"
+   }
+  },
+  {
+   "kind": "spd",
+   "input": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "917631bc8d9b1f400000000000000000dfa67ab6b11e01c08625f92aa9e4d93f14655fe8fb60ffbf021a8332916009c0dfa67ab6b11e01c08625f92aa9e4d9bf1809ff05a1711e400000000000000000c872d61c8da902404cb249bf7147f53f14655fe8fb60ffbf021a833291600940c872d61c8da902404cb249bf7147f5bf7152945e433a234000000000000000009884a0a86e53224000000000000000006840956eb9a5c5bf5160d7c63a0400c0a4c3e1c9e5fe0540f2b2ebef6d2af8bf6840956eb9a5c5bf5160d7c63a040040c64c0828836c21400000000000000000d7f6a5c1d04ee13f7d3496459678fabfa4c3e1c9e5fe0540f2b2ebef6d2af83fd7f6a5c1d04ee13f7d3496459678fa3f7c4609cea28823400000000000000000"
+   },
+   "cholesky": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "d22483fefe7c064000000000000000000000000000000000000000000000000000000000000000000000000000000000a8bc9ade6a5ce8bfdd038b852c6cc2bf87181397a32e0540000000000000000000000000000000000000000000000000598449275353e6bf1669d70f310ef23fe6199242b5bce73f4967e06192e8c1bfac29f2253f97054000000000000000003461c73a5f3708400000000000000000000000000000000000000000000000000000000000000000000000000000000039f1c7eff79aacbfd983df7a242ae53f457747200c0207400000000000000000000000000000000000000000000000006b6100e1cd10ed3f048f3dbce5eedf3fc029ba9c6149b73ffd0d597b1367e93fd2f644c24cb406400000000000000000"
+   },
+   "choleskyUpper": {
+    "dtype": "complex128",
+    "shape": [
+     2,
+     3,
+     3
+    ],
+    "hex": "d22483fefe7c06400000000000000000a8bc9ade6a5ce8bfdd038b852c6cc23f598449275353e6bf1669d70f310ef2bf0000000000000000000000000000000087181397a32e05400000000000000000e6199242b5bce73f4967e06192e8c13f0000000000000000000000000000000000000000000000000000000000000000ac29f2253f97054000000000000000003461c73a5f370840000000000000000039f1c7eff79aacbfd983df7a242ae5bf6b6100e1cd10ed3f048f3dbce5eedfbf00000000000000000000000000000000457747200c0207400000000000000000c029ba9c6149b73ffd0d597b1367e9bf0000000000000000000000000000000000000000000000000000000000000000d2f644c24cb406400000000000000000"
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "int32",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "04000000010000000200000003000000"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2
+    ],
+    "hex": "341cc60e797714402eba63c53345ff3f"
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "000000000000f03f"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "1655b5bbb16b0240"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     2
+    ],
+    "svdVh": [
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     2
+    ],
+    "qrR": [
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     2
+    ],
+    "qrRComplete": [
+     2,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "general",
+   "input": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "000000000000f03f000000000000004000000000000000400000000000001040"
+   },
+   "svdvals": {
+    "dtype": "float64",
+    "shape": [
+     2
+    ],
+    "hex": "000000000000144020cf681e1726aa3c"
+   },
+   "slogdetSign": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "0000000000000000"
+   },
+   "slogdetLogabs": {
+    "dtype": "float64",
+    "shape": [],
+    "hex": "000000000000f0ff"
+   },
+   "shapes": {
+    "svdU": [
+     2,
+     2
+    ],
+    "svdVh": [
+     2,
+     2
+    ],
+    "svdUReduced": [
+     2,
+     2
+    ],
+    "svdVhReduced": [
+     2,
+     2
+    ],
+    "qrQ": [
+     2,
+     2
+    ],
+    "qrR": [
+     2,
+     2
+    ],
+    "qrQComplete": [
+     2,
+     2
+    ],
+    "qrRComplete": [
+     2,
+     2
+    ]
+   }
+  }
+ ]
+}

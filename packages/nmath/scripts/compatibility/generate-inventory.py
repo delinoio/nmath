@@ -247,6 +247,18 @@ for family, ops in [("linalg", ["solve", "inv", "det"]), ("fft", ["fft", "ifft",
             ["packages/nmath/src/" + family + ".ts", "crates/nmath-core/src/numerical.rs"],
             ["packages/nmath/test/numerical.test.mjs", "crates/nmath-core/tests/numerical.rs"],
             ["crates/nmath-core/tests/fixtures/numerical/" + file for file in (["linalg.json"] if family == "linalg" else ["fft_adaptation.json", "fft_identity.json"])])
+LINALG_DTYPES = [d for d in NUMERIC if d != "float16"]
+for op, args in {"cholesky": ["a", "upper"], "qr": ["a", "mode: reduced/complete/r"], "eigh": ["a", "UPLO"], "eigvalsh": ["a", "UPLO"],
+                 "svd": ["a", "full_matrices", "compute_uv", "hermitian (accepted)"], "svdvals": ["x"], "slogdet": ["a"]}.items():
+    counterparts({"numpy.linalg." + op: "numpy.linalg." + op}, "linalg", args, LINALG_DTYPES,
+        ["CPU only; lazy scheduled results; batch axes on the final two matrix axes.",
+         "Integer/bool compute as float64; float32/complex64 keep single precision; eigenvalues, singular values and log-determinants use the real dtype.",
+         "Validated with NumPy test_linalg invariants: reconstruction, orthogonality and triangularity, plus unique results compared with NumPy at decimal 6/12. Factor signs and phases can differ from LAPACK.",
+         "Named results are frozen tuples with NumPy field names. qr raw mode is rejected; hermitian=True runs the general SVD.",
+         "Non-positive-definite Cholesky inputs and non-converging Jacobi iterations raise distinct linalg error codes. Non-finite/extreme-scale criteria and cross-platform acceptance remain pending."],
+        ["packages/nmath/src/linalg.ts", "crates/nmath-core/src/linalg.rs", "crates/nmath-core/src/decomp.rs"],
+        ["packages/nmath/test/decompositions.test.mjs", "packages/nmath/test/types/decompositions.ts", "crates/nmath-core/tests/decompositions.rs"],
+        ["crates/nmath-core/tests/fixtures/decompositions/oracle.json"])
 
 for name, target in {"pandas.DataFrame.pivot":"pandas.DataFrame.pivot", "pandas.DataFrame.pivot_table":"pandas.DataFrame.pivotTable"}.items():
     counterparts({name: target}, "tables",
