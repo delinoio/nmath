@@ -533,6 +533,23 @@ flip(a, -1).shape; // [1, 3, 4], last axis reversed
 
 Axes can be negative or a list. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`, and a repeated or non-integer axis fails with `NMATH_INDEX_INVALID`. Squeezing an axis whose length is not 1 fails with `NMATH_SHAPE_MISMATCH`. `ravel` supports C order only. Like NumPy, it returns a view of a C-contiguous input and a copy of a stepped, reversed or transposed one. With literal shapes and axes, TypeScript infers the result shape. GPU execution rejects these functions, as it does `reshape` and `transpose`.
 
+### Products, diagonals, clip and diff
+
+`dot`, `vdot`, `inner`, `outer`, `diagonal`, `trace`, `clip` and `diff` follow NumPy's shapes and result dtypes.
+
+```ts
+import { clip, diagonal, diff, dot, trace } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([[1, 2], [3, 4]], { dtype: "int32" });
+dot(a, ctx.zeros([3, 2, 5], "int32")).shape; // [2, 3, 5]
+await diagonal(a, 1).compute(); // [2]
+await trace(a).compute(); // 5n, int64 like NumPy's sum
+await clip(a, 2n, null).compute(); // [[2, 2], [3, 4]], int32
+await diff(a, 1, 0).compute(); // [[2, 2]]
+```
+
+In `clip`, `null` or `undefined` means no bound. Use `bigint` bounds to keep an integer dtype, because a JS `number` is a float. `diff` uses `not_equal` for bool input. Its `prepend` and `append` arguments remain targets.
+
 ### newaxis and ellipsis
 
 Reads accept `newaxis` (`null`) and `ellipsis`, like NumPy's `None` and `...`.

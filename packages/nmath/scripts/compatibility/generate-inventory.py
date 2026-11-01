@@ -360,6 +360,37 @@ for name, arguments in [
         ["packages/nmath/src/polynomial.ts", "packages/nmath/src/layout-types.ts", "packages/nmath/src/numpy.ts", "crates/nmath-node/src/lib.rs", "crates/nmath-core/src/polynomial.rs", "crates/nmath-core/src/kernels.rs", "crates/nmath-core/src/expr.rs"],
         ["packages/nmath/test/polynomial-derivative.test.mjs", "packages/nmath/test/types/polynomial-derivative.ts", "crates/nmath-core/tests/polynomial.rs"],
         ["crates/nmath-core/tests/fixtures/polynomial/derivative-oracle.json"])
+PRODUCT_TESTS = ["packages/nmath/test/products.test.mjs", "packages/nmath/test/types/products.ts"]
+PRODUCT_FIXTURES = ["packages/nmath/test/fixtures/products.json"]
+PRODUCT_EVIDENCE = "Exact NumPy 2.5.4 small-value fixtures with NaN equivalence and signed zeros uncompared; not arbitrary floating-point or platform acceptance."
+for op, args, limit in [
+    ("dot", ["a", "b"], "0-d operands multiply; otherwise the last axis of a contracts with the second-to-last axis of b through matmul/transpose/reshape. out remains a target."),
+    ("vdot", ["a", "b"], "Flattens both operands and conjugates a complex first operand; sizes must match."),
+    ("inner", ["a", "b"], "Contracts the last axes without conjugation; 0-d operands multiply."),
+    ("outer", ["a", "b"], "Flattens both operands and multiplies to (M, N). out remains a target."),
+]:
+    counterparts({"numpy." + op: "numpy." + op}, "matrix-product", args, NUMERIC,
+        ["CPU package-layer composition of existing lazy nodes; result dtypes follow NumPy without widening. Strings and temporal dtypes reject. GPU admission follows the composed nodes and has no dedicated validation.",
+         limit + " Mismatched contraction lengths fail with NMATH_SHAPE_MISMATCH.", PRODUCT_EVIDENCE],
+        ["packages/nmath/src/products.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
+for op, dtype, limit in [
+    ("diagonal", NUMERIC + ["str", "datetime64", "timedelta64"], "The diagonal is appended as the last axis through transpose and two broadcast index arrays; offsets beyond the matrix give an empty axis. Results are lazy copies, not writable views."),
+    ("trace", NUMERIC + ["timedelta64"], "Sums the diagonal with the sum node's dtype promotion. dtype and out remain targets."),
+]:
+    counterparts({"numpy." + op: "numpy." + op}, "indexing-casting", ["a", "offset", "axis1", "axis2"], dtype,
+        ["CPU package-layer composition of existing lazy nodes.", limit,
+         "Fewer than two dimensions or equal axes fail with NMATH_SHAPE_MISMATCH; out-of-range axes with NMATH_INDEX_OUT_OF_BOUNDS.", PRODUCT_EVIDENCE],
+        ["packages/nmath/src/products.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
+counterparts({"numpy.clip": "numpy.clip"}, "elementwise", ["a", "a_min: array, weak scalar, null or undefined", "a_max: array, weak scalar, null or undefined"], NUMERIC,
+    ["CPU composition minimum(maximum(a, a_min), a_max) following NumPy 2.5.4 _clip: NaN propagates, a_min > a_max yields a_max, out-of-range bigint bounds on integer input are dropped, and no bounds return positive(a), which rejects bool.",
+     "Weak bigint/boolean bounds keep the array dtype; a JS number is a weak float. Bounds promote with the input in turn. Temporal clipping, the min/max keywords, out and other ufunc keywords remain targets.",
+     PRODUCT_EVIDENCE],
+    ["packages/nmath/src/products.ts", "packages/nmath/src/ufunc.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
+counterparts({"numpy.diff": "numpy.diff"}, "elementwise", ["a", "n: non-negative safe integer, default 1", "axis: default -1"], NUMERIC + ["datetime64", "timedelta64"],
+    ["CPU repeated slicing differences; bool uses not_equal and datetimes subtract to timedeltas. n = 0 returns a view of the input.",
+     "Negative or non-integer n fails with NMATH_INDEX_INVALID; 0-d input fails with NMATH_SHAPE_MISMATCH. prepend and append remain targets.",
+     PRODUCT_EVIDENCE],
+    ["packages/nmath/src/products.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
 
 for op, args in [("squeeze", ["a", "axis: integer, integer list or omitted"]),
                  ("expand_dims", ["a", "axis: integer or integer list against the output rank"]),
