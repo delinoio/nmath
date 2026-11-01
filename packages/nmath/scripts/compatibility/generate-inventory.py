@@ -310,6 +310,15 @@ for op in ["fft2", "ifft2", "fftn", "ifftn"]:
          "fft2/ifft2 default to the final two axes; fftn/ifftn default to every axis. s crops or zero-pads each selected axis.",
          "Per-axis normalization composes to the NumPy total scale. Other FFT family members and cross-platform numerical acceptance remain pending."],
         ["packages/nmath/src/fft.ts"], ["packages/nmath/test/fft-helpers.test.mjs", "packages/nmath/test/types/fft-helpers.ts"])
+REAL_FFT = [d for d in NUMERIC if not d.startswith("complex")]
+for op, args, dtype in [("rfft2", ["a", "s", "axes", "norm"], REAL_FFT), ("irfft2", ["a", "s", "axes", "norm"], NUMERIC),
+                        ("rfftn", ["a", "s", "axes", "norm"], REAL_FFT), ("irfftn", ["a", "s", "axes", "norm"], NUMERIC),
+                        ("hfft", ["a", "n", "axis", "norm"], NUMERIC), ("ihfft", ["a", "n", "axis", "norm"], REAL_FFT)]:
+    counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft", args, dtype,
+        ["CPU composition of one-axis lazy transforms in NumPy's axis order; hfft/ihfft conjugate and swap the normalization direction.",
+         "s without axes selects the last len(s) axes; irfft2/irfftn default the last length to 2*(m-1).",
+         "Validated with NumPy test_pocketfft relations at atol 1e-6 (complex-transform slices, round trips, Hermitian symmetry); forward-output and cross-platform criteria remain pending."],
+        ["packages/nmath/src/fft.ts"], ["packages/nmath/test/fft-real.test.mjs", "packages/nmath/test/types/fft-real.ts"])
 for op in ["fftshift", "ifftshift"]:
     counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft",
         ["a", "axes"], NUMERIC + ["str", "datetime64", "timedelta64"],

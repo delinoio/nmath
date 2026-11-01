@@ -134,6 +134,8 @@ Norms use a native linalg node; rank, pseudo-inverse, condition number and matri
 
 General eigendecomposition extends the linalg node and always returns complex results; the [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns the algorithm and the pending dtype adaptation.
 
+Real and Hermitian multi-axis transforms compose the one-axis FFT nodes in the package layer; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy composition order.
+
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
 
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.

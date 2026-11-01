@@ -268,6 +268,159 @@ export function ifftn<
   return multiExpression("ifft", a, options, false);
 }
 
+type Norm = "backward" | "forward" | "ortho";
+/** Real input dtypes accepted by `rfft` and the transforms built on it. */
+export type RealFftDType = Exclude<NumericalDType, "complex64" | "complex128">;
+/** NumPy `_swap_direction`: Hermitian transforms reverse the scaling direction. */
+function swapDirection(norm: Norm | undefined): Norm {
+  if (norm === undefined || norm === "backward") return "forward";
+  if (norm === "forward") return "backward";
+  if (norm === "ortho") return "ortho";
+  throw new TypeError(
+    `Invalid norm value ${String(norm)}; should be "backward", "ortho" or "forward".`,
+  );
+}
+
+function conjugate(a: Lazy<any, any>): Expr<any, any> {
+  return new Expr(
+    native(() => binding.NativeExpr.math("conjugate", a.nativeExpr())),
+    a.context,
+  );
+}
+
+/** NumPy `_cook_nd_args`: lengths and axes for real multi-axis transforms. */
+function realAxes(
+  a: Lazy<any, any>,
+  options: MultiFftOptions,
+  inverse: boolean,
+  lastTwo: boolean,
+): { s: number[]; axes: number[] } {
+  for (const key of Object.keys(options))
+    if (!["s", "axes", "norm"].includes(key))
+      throw new TypeError(`Unsupported FFT option: ${key}`);
+  const rank = a.shape.length;
+  let axes: number[];
+  if (options.axes) axes = [...options.axes];
+  else if (options.s) axes = options.s.map((_, i) => i - options.s!.length);
+  else if (lastTwo) axes = [-2, -1];
+  else axes = Array.from({ length: rank }, (_, axis) => axis);
+  if (lastTwo && rank < 2 && !options.axes)
+    throw new RangeError("rfft2 and irfft2 require at least two dimensions.");
+  if (axes.length === 0) throw new RangeError("FFT axes must not be empty.");
+  const normalized = axes.map((axis) => (axis < 0 ? axis + rank : axis));
+  for (const axis of normalized)
+    if (!Number.isSafeInteger(axis) || axis < 0 || axis >= rank)
+      throw new RangeError(
+        "FFT axes must be safe integers inside the input rank.",
+      );
+  if (new Set(normalized).size !== normalized.length)
+    throw new RangeError("FFT axes must not repeat.");
+  let s: number[];
+  if (options.s) {
+    if (options.s.length !== axes.length)
+      throw new RangeError(
+        "FFT s must provide one length per transformed axis.",
+      );
+    s = [...options.s];
+  } else {
+    s = normalized.map((axis) => a.shape[axis]);
+    if (inverse)
+      s[s.length - 1] = (a.shape[normalized[normalized.length - 1]] - 1) * 2;
+  }
+  return { s, axes };
+}
+
+function rfftnExpression(
+  a: Lazy<any, any>,
+  options: MultiFftOptions,
+  lastTwo: boolean,
+) {
+  const { s, axes } = realAxes(a, options, false, lastTwo);
+  const last = axes.length - 1;
+  let out: any = rfft(a, { n: s[last], axis: axes[last], norm: options.norm });
+  for (let i = last - 1; i >= 0; i -= 1) {
+    out = fft(out, { n: s[i], axis: axes[i], norm: options.norm });
+  }
+  return out as Expr<any, any>;
+}
+
+function irfftnExpression(
+  a: Lazy<any, any>,
+  options: MultiFftOptions,
+  lastTwo: boolean,
+) {
+  const { s, axes } = realAxes(a, options, true, lastTwo);
+  const last = axes.length - 1;
+  let out: any = a;
+  for (let i = 0; i < last; i += 1) {
+    out = ifft(out, { n: s[i], axis: axes[i], norm: options.norm });
+  }
+  return irfft(out, {
+    n: s[last],
+    axis: axes[last],
+    norm: options.norm,
+  }) as Expr<any, any>;
+}
+
+/** Real input transform over the last two axes. */
+export function rfft2<D extends RealFftDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: MultiFftOptions = {},
+): Expr<FftDType<D>, DynamicShape<S>> {
+  return rfftnExpression(a, options, true);
+}
+
+/** Inverse of `rfft2`. */
+export function irfft2<D extends NumericalDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: MultiFftOptions = {},
+): Expr<IrfftDType<D>, DynamicShape<S>> {
+  return irfftnExpression(a, options, true);
+}
+
+/** Real input transform over all axes, or the given axes, in NumPy's order. */
+export function rfftn<D extends RealFftDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: MultiFftOptions = {},
+): Expr<FftDType<D>, DynamicShape<S>> {
+  return rfftnExpression(a, options, false);
+}
+
+/** Inverse of `rfftn`; the last axis defaults to `2 * (m - 1)` points. */
+export function irfftn<D extends NumericalDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: MultiFftOptions = {},
+): Expr<IrfftDType<D>, DynamicShape<S>> {
+  return irfftnExpression(a, options, false);
+}
+
+/** Transform of a Hermitian-symmetric signal given by its first half. */
+export function hfft<D extends NumericalDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: FftOptions = {},
+): Expr<IrfftDType<D>, DynamicShape<S>> {
+  const axis = options.axis ?? -1;
+  const length = a.shape[axis < 0 ? axis + a.shape.length : axis];
+  return irfft(conjugate(a), {
+    ...options,
+    n: options.n ?? (length - 1) * 2,
+    norm: swapDirection(options.norm),
+  }) as never;
+}
+
+/** Inverse of `hfft`: the conjugated real transform with swapped scaling. */
+export function ihfft<D extends RealFftDType, S extends Shape>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: FftOptions = {},
+): Expr<FftDType<D>, DynamicShape<S>> {
+  return conjugate(
+    rfft(a as never, {
+      ...options,
+      norm: swapDirection(options.norm),
+    }) as never,
+  ) as never;
+}
+
 function shiftExpression(
   op: "fftshift" | "ifftshift",
   x: Lazy<any, any>,
