@@ -598,6 +598,8 @@ impl NativeExpr {
             "svd_vh_full" => LinalgOp::SvdVh { full: true },
             "slogdet_sign" => LinalgOp::SlogdetSign,
             "slogdet_logabs" => LinalgOp::SlogdetLogabs,
+            "eigvals" => LinalgOp::EigValues,
+            "eig_vectors" => LinalgOp::EigVectors,
             _ => {
                 return Err(to_napi(nmath_core::Error::new(
                     nmath_core::ErrorCode::DTypeUnsupported,

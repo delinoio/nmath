@@ -53,6 +53,10 @@ pub enum LinalgOp {
     SlogdetLogabs,
     /// Vector norm over the final axis or matrix norm over the final two.
     Norm(NormKind),
+    /// Eigenvalues of a general matrix, always complex.
+    EigValues,
+    /// Right eigenvectors (columns) matching `EigValues`, always complex.
+    EigVectors,
 }
 
 /// NumPy `norm` orders. Vector kinds reduce the final axis; matrix kinds
@@ -258,6 +262,8 @@ impl LinalgOp {
             Self::SvdS => "svdvals",
             Self::SlogdetSign | Self::SlogdetLogabs => "slogdet",
             Self::Norm(_) => "norm",
+            Self::EigValues => "eigvals",
+            Self::EigVectors => "eig",
         }
     }
 
@@ -274,6 +280,17 @@ impl LinalgOp {
                 | Self::SvdS
                 | Self::SvdVh { .. }
         )
+    }
+}
+
+/// NumPy returns real eigenvalues for real input only when every eigenvalue
+/// is real, which depends on the data. Lazy nodes need a static dtype, so
+/// `eig` always uses the complex dtype of the input precision.
+fn complex_dtype(dtype: DType) -> DType {
+    match dtype {
+        DType::Float32 => DType::Complex64,
+        DType::Float64 => DType::Complex128,
+        other => other,
     }
 }
 
@@ -331,6 +348,14 @@ fn infer_decomposition(op: LinalgOp, a: &[usize], ad: DType) -> Result<(Vec<usiz
             dtype
         }
         LinalgOp::SlogdetSign => dtype,
+        LinalgOp::EigValues => {
+            shape.push(n);
+            complex_dtype(dtype)
+        }
+        LinalgOp::EigVectors => {
+            shape.extend([n, n]);
+            complex_dtype(dtype)
+        }
         LinalgOp::SlogdetLogabs => real_dtype(dtype),
         LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det | LinalgOp::Norm(_) => {
             unreachable!("not a factorization")
@@ -412,6 +437,10 @@ fn execute_decomposition(
                     LinalgOp::SvdS => s.into_iter().map(|x| C::new(x, 0.0)).collect(),
                     _ => vh,
                 }
+            }
+            LinalgOp::EigValues | LinalgOp::EigVectors => {
+                let (w, v) = crate::decomp::eig(&input, n, token)?;
+                if op == LinalgOp::EigValues { w } else { v }
             }
             LinalgOp::SlogdetSign | LinalgOp::SlogdetLogabs => {
                 let (sign, log) = crate::decomp::slogdet(&input, n, token)?;

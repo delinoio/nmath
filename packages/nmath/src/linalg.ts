@@ -762,3 +762,40 @@ export function matrix_power<
 function asExpr(a: Lazy<any, any>): Expr<any, any> {
   return a instanceof Expr ? a : new Expr(a.nativeExpr(), a.context);
 }
+
+/** Complex dtype of a general eigendecomposition result. */
+export type LinalgComplexResult<D extends LinalgDType> =
+  LinalgResult<D> extends "float32" | "complex64" ? "complex64" : "complex128";
+
+export type EigResult<D extends LinalgDType, S extends Shape> = readonly [
+  Expr<LinalgComplexResult<D>, Out<S, [...Batch<S>, Cols<S>]>>,
+  Expr<LinalgComplexResult<D>, S>,
+] & {
+  readonly eigenvalues: Expr<
+    LinalgComplexResult<D>,
+    Out<S, [...Batch<S>, Cols<S>]>
+  >;
+  readonly eigenvectors: Expr<LinalgComplexResult<D>, S>;
+};
+
+/**
+ * Eigenvalues and right eigenvectors of a general square matrix. Results are
+ * always complex: NumPy returns real arrays for real input only when every
+ * eigenvalue is real, which a lazy expression cannot know before execution.
+ * Eigenvalue order is unspecified, as in LAPACK.
+ */
+export function eig<D extends LinalgDType, S extends Shape>(
+  a: Arg<D, S> & Square<S>,
+): EigResult<D, S> {
+  return named(
+    ["eigenvalues", "eigenvectors"],
+    [factor("eigvals", a), factor("eig_vectors", a)],
+  ) as never;
+}
+
+/** Eigenvalues of a general square matrix; always complex, order unspecified. */
+export function eigvals<D extends LinalgDType, S extends Shape>(
+  a: Arg<D, S> & Square<S>,
+): Expr<LinalgComplexResult<D>, Out<S, [...Batch<S>, Cols<S>]>> {
+  return factor("eigvals", a);
+}
