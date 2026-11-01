@@ -121,30 +121,32 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 
 ### Error codes
 
-| Code                              | Meaning                                                              |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `NMATH_CONTEXT_INVALID_OPTIONS`   | Context options are missing or invalid.                              |
-| `NMATH_CONTEXT_MISMATCH`          | Values from different contexts were combined directly.               |
-| `NMATH_CONTEXT_CLOSED`            | The context is closed.                                               |
-| `NMATH_DISPOSED`                  | The object was disposed.                                             |
-| `NMATH_SCHED_QUEUE_FULL`          | The context queue is full.                                           |
-| `NMATH_CANCELLED`                 | The job was cancelled.                                               |
-| `NMATH_MEMORY_BUDGET_EXCEEDED`    | An allocation does not fit the device budget.                        |
-| `NMATH_SHAPE_BROADCAST`           | Shapes cannot broadcast.                                             |
-| `NMATH_SHAPE_MISMATCH`            | A shape does not match the operation requirement.                    |
-| `NMATH_LINALG_SINGULAR`           | A square matrix cannot be solved or inverted because it is singular. |
-| `NMATH_DTYPE_UNSUPPORTED`         | The dtype is not supported for the operation or device.              |
-| `NMATH_INDEX_OUT_OF_BOUNDS`       | An index is outside the axis.                                        |
-| `NMATH_INDEX_INVALID`             | A selector is malformed.                                             |
-| `NMATH_GPU_UNAVAILABLE`           | No supported GPU adapter is available.                               |
-| `NMATH_GPU_UNSUPPORTED_OPERATION` | The operation or dtype is outside the GPU subset.                    |
-| `NMATH_GPU_DEVICE_LOST`           | The GPU device was lost during execution.                            |
-| `NMATH_GPU_OUT_OF_MEMORY`         | The GPU driver reported memory exhaustion.                           |
-| `NMATH_IO_EXISTS`                 | The output file exists and overwrite was not requested.              |
-| `NMATH_IO_FORMAT`                 | The input file is malformed or unsupported.                          |
-| `NMATH_IO_MODIFIED`               | A change to an input file was detected during execution.             |
-| `NMATH_IO_FAILED`                 | An operating-system I/O operation failed.                            |
-| `NMATH_NATIVE_LOAD`               | The prebuilt native binary could not load.                           |
+| Code                                 | Meaning                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `NMATH_CONTEXT_INVALID_OPTIONS`      | Context options are missing or invalid.                                   |
+| `NMATH_CONTEXT_MISMATCH`             | Values from different contexts were combined directly.                    |
+| `NMATH_CONTEXT_CLOSED`               | The context is closed.                                                    |
+| `NMATH_DISPOSED`                     | The object was disposed.                                                  |
+| `NMATH_SCHED_QUEUE_FULL`             | The context queue is full.                                                |
+| `NMATH_CANCELLED`                    | The job was cancelled.                                                    |
+| `NMATH_MEMORY_BUDGET_EXCEEDED`       | An allocation does not fit the device budget.                             |
+| `NMATH_SHAPE_BROADCAST`              | Shapes cannot broadcast.                                                  |
+| `NMATH_SHAPE_MISMATCH`               | A shape does not match the operation requirement.                         |
+| `NMATH_LINALG_SINGULAR`              | A square matrix cannot be solved or inverted because it is singular.      |
+| `NMATH_LINALG_NOT_POSITIVE_DEFINITE` | A Cholesky factorization input is not Hermitian positive definite.        |
+| `NMATH_LINALG_NO_CONVERGENCE`        | An iterative eigenvalue or singular value factorization did not converge. |
+| `NMATH_DTYPE_UNSUPPORTED`            | The dtype is not supported for the operation or device.                   |
+| `NMATH_INDEX_OUT_OF_BOUNDS`          | An index is outside the axis.                                             |
+| `NMATH_INDEX_INVALID`                | A selector is malformed.                                                  |
+| `NMATH_GPU_UNAVAILABLE`              | No supported GPU adapter is available.                                    |
+| `NMATH_GPU_UNSUPPORTED_OPERATION`    | The operation or dtype is outside the GPU subset.                         |
+| `NMATH_GPU_DEVICE_LOST`              | The GPU device was lost during execution.                                 |
+| `NMATH_GPU_OUT_OF_MEMORY`            | The GPU driver reported memory exhaustion.                                |
+| `NMATH_IO_EXISTS`                    | The output file exists and overwrite was not requested.                   |
+| `NMATH_IO_FORMAT`                    | The input file is malformed or unsupported.                               |
+| `NMATH_IO_MODIFIED`                  | A change to an input file was detected during execution.                  |
+| `NMATH_IO_FAILED`                    | An operating-system I/O operation failed.                                 |
+| `NMATH_NATIVE_LOAD`                  | The prebuilt native binary could not load.                                |
 
 Every error message is English and includes recovery guidance.
 
@@ -265,6 +267,8 @@ Float16 file interchange currently uses NPY and NPZ. The CSV/JSON and Arrow/Parq
 ## Square linear algebra and one-axis transforms
 
 CPU lazy nodes provide `solve`, `inv`, `det`, `fft`, `ifft`, `rfft`, and `irfft`. Linear algebra uses the final two square axes and broadcasts batch axes. Only a rank-one solve right-hand side is a vector; all other right-hand sides are matrices. Empty matrices and batches retain NumPy shapes. Float16 linear algebra is rejected. Integer and boolean inputs compute as float64; float32/complex64 results retain their dtype unless an operand requires double precision. Singular solve/inverse fails with `NMATH_LINALG_SINGULAR`; singular determinants return zero.
+
+Factorization nodes provide `cholesky`, `qr` (reduced and complete), `eigh`/`eigvalsh` and `svd`/`svdvals` on the final two axes, plus `slogdet`. Each output of a multi-output factorization is its own lazy node, so each node runs the factorization on its snapshot. Cholesky reads the lower triangle and fails with `NMATH_LINALG_NOT_POSITIVE_DEFINITE` when a pivot is not positive; `upper` returns the conjugate transpose. QR uses Householder reflections; `R` is upper triangular. `eigh` reads the lower or upper triangle, ignores imaginary diagonal parts, uses cyclic Jacobi rotations and returns ascending eigenvalues. SVD uses one-sided Jacobi rotations and returns descending singular values; zero singular values and `full_matrices` complete `U` or `Vh` with an orthonormal basis. Jacobi iterations fail with `NMATH_LINALG_NO_CONVERGENCE` for non-finite input or after 100 sweeps. `slogdet` uses partial-pivot LU; a singular matrix returns sign zero and log-determinant negative infinity. Eigenvalues, singular values and log-determinants use the real dtype of the result. Factor signs and phases are not unique and can differ from LAPACK. Validation follows NumPy's test_linalg criteria: decimal 6 for single precision and 12 otherwise for unique results and orthogonality, rtol 1e-5 or 1e-11 with zero atol for reconstruction, and atol `500·n·eps` for Cholesky reconstruction. GPU admission rejects factorizations.
 
 Transforms accept one axis, optional positive length, and backward/forward/ortho normalization. They crop or zero-pad the selected axis. `irfft` on float16 returns float16. Other float16/float32/complex64 transforms use single-precision output; other supported numeric inputs use double precision. `rfft` rejects complex inputs. `irfft` defaults to twice the input axis length minus two, ignores the DC imaginary part and, for even output lengths, the Nyquist imaginary part, and reconstructs conjugate frequencies.
 

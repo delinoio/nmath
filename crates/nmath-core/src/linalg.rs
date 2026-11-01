@@ -17,6 +17,40 @@ pub enum LinalgOp {
     Solve,
     Inv,
     Det,
+    /// Cholesky factor; `upper` returns the conjugate transpose.
+    Cholesky {
+        upper: bool,
+    },
+    /// QR factor `Q`; `complete` selects NumPy mode `"complete"`.
+    QrQ {
+        complete: bool,
+    },
+    /// QR factor `R`; `complete` selects NumPy mode `"complete"`.
+    QrR {
+        complete: bool,
+    },
+    /// Ascending eigenvalues of a Hermitian matrix read from one triangle.
+    EighValues {
+        upper: bool,
+    },
+    /// Eigenvectors (columns) matching `EighValues`.
+    EighVectors {
+        upper: bool,
+    },
+    /// Left singular vectors; `full` selects `full_matrices=True`.
+    SvdU {
+        full: bool,
+    },
+    /// Descending singular values.
+    SvdS,
+    /// Conjugate-transposed right singular vectors.
+    SvdVh {
+        full: bool,
+    },
+    /// `slogdet` sign.
+    SlogdetSign,
+    /// `slogdet` natural log of the absolute determinant.
+    SlogdetLogabs,
 }
 impl LinalgOp {
     pub fn id(self) -> &'static str {
@@ -24,8 +58,183 @@ impl LinalgOp {
             Self::Solve => "solve",
             Self::Inv => "inv",
             Self::Det => "det",
+            Self::Cholesky { .. } => "cholesky",
+            Self::QrQ { .. } | Self::QrR { .. } => "qr",
+            Self::EighValues { .. } => "eigvalsh",
+            Self::EighVectors { .. } => "eigh",
+            Self::SvdU { .. } | Self::SvdVh { .. } => "svd",
+            Self::SvdS => "svdvals",
+            Self::SlogdetSign | Self::SlogdetLogabs => "slogdet",
         }
     }
+
+    fn is_decomposition(self) -> bool {
+        !matches!(self, Self::Solve | Self::Inv | Self::Det)
+    }
+
+    fn square(self) -> bool {
+        !matches!(
+            self,
+            Self::QrQ { .. }
+                | Self::QrR { .. }
+                | Self::SvdU { .. }
+                | Self::SvdS
+                | Self::SvdVh { .. }
+        )
+    }
+}
+
+fn real_dtype(dtype: DType) -> DType {
+    match dtype {
+        DType::Complex64 => DType::Float32,
+        DType::Complex128 => DType::Float64,
+        other => other,
+    }
+}
+
+/// Result shape and dtype of a factorization of `a` (..., m, n).
+fn infer_decomposition(op: LinalgOp, a: &[usize], ad: DType) -> Result<(Vec<usize>, DType)> {
+    if a.len() < 2 {
+        return Err(invalid(
+            "linalg requires at least two dimensions; the final two axes form the matrix.",
+        ));
+    }
+    let (m, n) = (a[a.len() - 2], a[a.len() - 1]);
+    if op.square() && m != n {
+        return Err(invalid(
+            "linalg requires square matrices on the final two axes.",
+        ));
+    }
+    let k = m.min(n);
+    let dtype = result_dtype(ad, None)?;
+    let mut shape = a[..a.len() - 2].to_vec();
+    let dtype = match op {
+        LinalgOp::Cholesky { .. } | LinalgOp::EighVectors { .. } => {
+            shape.extend([n, n]);
+            dtype
+        }
+        LinalgOp::QrQ { complete } => {
+            shape.extend([m, if complete { m } else { k }]);
+            dtype
+        }
+        LinalgOp::QrR { complete } => {
+            shape.extend([if complete { m } else { k }, n]);
+            dtype
+        }
+        LinalgOp::EighValues { .. } => {
+            shape.push(n);
+            real_dtype(dtype)
+        }
+        LinalgOp::SvdU { full } => {
+            shape.extend([m, if full { m } else { k }]);
+            dtype
+        }
+        LinalgOp::SvdS => {
+            shape.push(k);
+            real_dtype(dtype)
+        }
+        LinalgOp::SvdVh { full } => {
+            shape.extend([if full { n } else { k }, n]);
+            dtype
+        }
+        LinalgOp::SlogdetSign => dtype,
+        LinalgOp::SlogdetLogabs => real_dtype(dtype),
+        LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det => unreachable!("not a factorization"),
+    };
+    size(&shape)?;
+    Ok((shape, dtype))
+}
+
+/// Runs one factorization per batch matrix and writes the selected output.
+fn execute_decomposition(
+    op: LinalgOp,
+    a: &DenseArray,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    let (shape, dtype) = infer_decomposition(op, &a.shape, a.buffer.dtype())?;
+    let count = size(&shape)?;
+    let charge = budget.reserve(bytes(count, dtype.item_size())?)?;
+    let mut output = zeros(dtype, count)?;
+    let (m, n) = (a.shape[a.shape.len() - 2], a.shape[a.shape.len() - 1]);
+    let matrix = m.checked_mul(n).ok_or_else(overflow)?;
+    let batches = size(&a.shape[..a.shape.len() - 2])?;
+    if batches == 0 || count == 0 {
+        return DenseArray::new(shape, output, charge);
+    }
+    let per_batch = count / batches;
+    // Input copy, two m×m or n×n factors and the matrix-sized result.
+    let side = m.max(n);
+    let square = side.checked_mul(side).ok_or_else(overflow)?;
+    let workspace = matrix
+        .checked_add(square.checked_mul(3).ok_or_else(overflow)?)
+        .ok_or_else(overflow)?;
+    let _workspace = budget.reserve(bytes(workspace, std::mem::size_of::<C>())?)?;
+    let mut input = vec![C::new(0., 0.); matrix];
+    for batch in 0..batches {
+        token.check()?;
+        for (i, v) in input.iter_mut().enumerate() {
+            if i % 1024 == 0 {
+                token.check()?;
+            }
+            *v = read(&a.buffer, batch * matrix + i);
+        }
+        let base = batch * per_batch;
+        let values: Vec<C> = match op {
+            LinalgOp::Cholesky { upper } => {
+                let l = crate::decomp::cholesky(&input, n, token)?;
+                if upper {
+                    (0..n * n).map(|i| l[(i % n) * n + i / n].conj()).collect()
+                } else {
+                    l
+                }
+            }
+            LinalgOp::QrQ { complete } | LinalgOp::QrR { complete } => {
+                let (q, r) = crate::decomp::qr(&input, m, n, token)?;
+                let k = if complete { m } else { m.min(n) };
+                if matches!(op, LinalgOp::QrQ { .. }) {
+                    (0..m * k).map(|i| q[(i / k) * m + i % k]).collect()
+                } else {
+                    (0..k * n).map(|i| r[i]).collect()
+                }
+            }
+            LinalgOp::EighValues { upper } | LinalgOp::EighVectors { upper } => {
+                let (w, v) = crate::decomp::eigh(&input, n, upper, token)?;
+                if matches!(op, LinalgOp::EighValues { .. }) {
+                    w.into_iter().map(|x| C::new(x, 0.0)).collect()
+                } else {
+                    v
+                }
+            }
+            LinalgOp::SvdU { .. } | LinalgOp::SvdS | LinalgOp::SvdVh { .. } => {
+                let full = matches!(
+                    op,
+                    LinalgOp::SvdU { full: true } | LinalgOp::SvdVh { full: true }
+                );
+                let (u, s, vh) = crate::decomp::svd(&input, m, n, full, token)?;
+                match op {
+                    LinalgOp::SvdU { .. } => u,
+                    LinalgOp::SvdS => s.into_iter().map(|x| C::new(x, 0.0)).collect(),
+                    _ => vh,
+                }
+            }
+            LinalgOp::SlogdetSign | LinalgOp::SlogdetLogabs => {
+                let (sign, log) = crate::decomp::slogdet(&input, n, token)?;
+                vec![if op == LinalgOp::SlogdetSign {
+                    sign
+                } else {
+                    C::new(log, 0.0)
+                }]
+            }
+            LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det => unreachable!("not a factorization"),
+        };
+        debug_assert_eq!(values.len(), per_batch);
+        for (i, v) in values.into_iter().enumerate() {
+            write(&mut output, base + i, v);
+        }
+    }
+    token.check()?;
+    DenseArray::new(shape, output, charge)
 }
 fn invalid(message: &str) -> Error {
     Error::new(ErrorCode::ShapeMismatch, message)
@@ -57,6 +266,12 @@ pub fn infer(
     ad: DType,
     b: Option<(&[usize], DType)>,
 ) -> Result<(Vec<usize>, DType)> {
+    if op.is_decomposition() {
+        if b.is_some() {
+            return Err(invalid("Only solve accepts a right-hand side."));
+        }
+        return infer_decomposition(op, a, ad);
+    }
     if a.len() < 2 || a[a.len() - 2] != a[a.len() - 1] {
         return Err(invalid(
             "linalg requires square matrices on the final two axes.",
@@ -71,7 +286,7 @@ pub fn infer(
     match op {
         LinalgOp::Det => {}
         LinalgOp::Inv => shape.extend([n, n]),
-        LinalgOp::Solve => {
+        _ => {
             let (b, _) = b.ok_or_else(|| invalid("solve requires a right-hand side."))?;
             if b.len() == 1 {
                 if b[0] != n {
@@ -117,6 +332,9 @@ pub fn execute(
     token: &CancellationToken,
 ) -> Result<DenseArray> {
     token.check()?;
+    if op.is_decomposition() {
+        return execute_decomposition(op, a, budget, token);
+    }
     let (shape, dtype) = infer(
         op,
         &a.shape,
@@ -136,7 +354,7 @@ pub fn execute(
     let rank = match op {
         LinalgOp::Det => shape.len(),
         LinalgOp::Inv => shape.len() - 2,
-        LinalgOp::Solve => shape.len() - if vector { 1 } else { 2 },
+        _ => shape.len() - if vector { 1 } else { 2 },
     };
     let batch = &shape[..rank];
     let batches = size(batch)?;

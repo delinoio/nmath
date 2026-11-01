@@ -38,6 +38,7 @@ pub mod table;
 pub mod io_columnar;
 pub mod io_text;
 
+pub mod decomp;
 pub mod fft;
 pub mod linalg;
 mod numerical;
