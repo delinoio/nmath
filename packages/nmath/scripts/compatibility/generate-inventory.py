@@ -375,6 +375,31 @@ for op, args in [("squeeze", ["a", "axis: integer, integer list or omitted"]),
          "Exact shape and C-order values against recorded NumPy 2.5.4 int32 cases; ravel orders F/A/K, ndarray method forms and GPU execution remain targets."],
         ["packages/nmath/src/axes.ts"], ["packages/nmath/test/axes.test.mjs", "packages/nmath/test/types/axes.ts"],
         ["packages/nmath/test/fixtures/axes.json"])
+CREATION = ["packages/nmath/src/creation.ts", "packages/nmath/src/numpy.ts"]
+CREATION_TESTS = ["packages/nmath/test/creation.test.mjs", "packages/nmath/test/types/creation.ts"]
+for op, args, limits in [
+    ("linspace", ["context", "start: number", "stop: number", "num: count, default 50", "options: endpoint, dtype, retstep"],
+     ["Float64 evaluation in NumPy 2.5.4's step/div order, including the zero-step branch, NaN step for div <= 0 and the stop endpoint; one cast, flooring for integer dtypes.",
+      "retstep returns a frozen [samples, step] tuple. Fixture values, including the step, match NumPy bits exactly."]),
+    ("logspace", ["context", "start: number", "stop: number", "num: count, default 50", "options: endpoint, base, dtype"],
+     ["base ** linspace(start, stop) with JS Math.pow, then one cast truncating toward zero for integer dtypes.",
+      "Fixture tolerance: 4 ULP for float64 and 1 ULP for float32; integer results exact for the recorded inputs."]),
+    ("eye", ["context", "N", "M: default N", "options: k, dtype"], ["Ones at row r, column r + k; any safe-integer k. Fixture values match NumPy exactly."]),
+    ("identity", ["context", "n", "dtype"], ["Square eye(n). Fixture values match NumPy exactly."]),
+]:
+    counterparts({"numpy." + op: "numpy." + op}, "array-construction", args, NUMERIC,
+        limits + ["Scalar JS-number arguments; string and temporal dtypes reject. Integer casts outside the target range, NaN and infinities reject with RangeError.",
+                  "Counts and dimensions use the context dimension rule; the CPU budget is checked before input buffers are built.",
+                  "Array-valued endpoints/bases, axis, device, like and order remain pending. Cross-platform acceptance remains pending."],
+        CREATION, CREATION_TESTS, ["packages/nmath/test/fixtures/creation.json"])
+for op, args in [("empty", ["context", "shape", "dtype"]), ("zeros_like", ["a", "dtype"]), ("ones_like", ["a", "dtype"]),
+                 ("full_like", ["a", "fill_value", "dtype"]), ("empty_like", ["a", "dtype"])]:
+    counterparts({"numpy." + op: "numpy." + op}, "array-construction", args, NUMERIC + ["str", "datetime64", "timedelta64"],
+        ["New array charged to the explicit or source context; _like results keep the source shape and, for an unchanged dtype, its string width or time unit.",
+         "empty and empty_like zero-fill; NumPy leaves the contents unspecified. ones_like uses '1' for strings and one tick for temporal values.",
+         "full_like rejects strings longer than the source width instead of truncating and requires the source time unit. A value without a context rejects.",
+         "order, subok, shape, device and like remain pending."],
+        CREATION, CREATION_TESTS)
 
 TABLE_LIMITS = [
     "CPU numeric/bool columns with explicit validity masks; no string/temporal/complex/nested columns at the inspected revision.",
