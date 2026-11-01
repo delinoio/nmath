@@ -409,6 +409,24 @@ export abstract class Lazy<
     return new Expr(expr, pickContext(this.context, operandContext(other)));
   }
 
+  /** @internal NumPy `where(this, x, y)`; `this` is the condition. */
+  whereOp(x: Operand, y: Operand): Expr<any, any> {
+    const expr = native(() =>
+      binding.NativeExpr.where(
+        this.nativeExpr(),
+        operandExpr(x),
+        operandExpr(y),
+      ),
+    );
+    return new Expr(
+      expr,
+      pickContext(
+        this.context,
+        pickContext(operandContext(x), operandContext(y)),
+      ),
+    );
+  }
+
   /** @internal `scalar op this`. */
   reversedBinaryOp(op: BinaryOperator, scalar: WeakScalar): Expr<any, any> {
     const expr = native(() =>

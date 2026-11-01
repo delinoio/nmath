@@ -26,6 +26,7 @@ import {
   not_equal,
   pow,
   sub,
+  where,
 } from "./index.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
@@ -46,7 +47,7 @@ import type {
   TypedArrayOf,
 } from "./types.js";
 
-export { equal, greater, greater_equal, less, less_equal, not_equal };
+export { equal, greater, greater_equal, less, less_equal, not_equal, where };
 export { indices, mask, slice } from "./core.js";
 import type {
   ReshapeShape,
