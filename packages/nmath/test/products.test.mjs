@@ -257,6 +257,42 @@ test("diagonal and trace of empty retained axes skip diagonal selectors", async 
   }
 });
 
+test("dot and inner keep empty results within the dimension limit", async () => {
+  const ctx = context();
+  try {
+    const wide = ctx.zeros([65536, 65536, 0], "float64");
+    const cases = [
+      [dot(wide, ctx.zeros([0, 0], "float64")), [65536, 65536, 0]],
+      [dot(wide, ctx.zeros([3, 0, 0], "int32")), [65536, 65536, 3, 0]],
+      [
+        dot(
+          ctx.zeros([0, 0], "float32"),
+          ctx.zeros([65536, 0, 65536], "float32"),
+        ),
+        [0, 65536, 65536],
+      ],
+      [inner(wide, ctx.zeros([0, 0], "float64")), [65536, 65536, 0]],
+      [
+        inner(ctx.zeros([0, 0], "int8"), ctx.zeros([65536, 65536, 0], "int8")),
+        [0, 65536, 65536],
+      ],
+    ];
+    for (const [expr, shape] of cases) {
+      assert.deepEqual(expr.shape, shape);
+      const value = await expr.compute();
+      assert.deepEqual(value.shape, shape);
+      value.dispose();
+    }
+    // A one-dimensional b keeps the leading axes without flattening them.
+    assert.deepEqual(
+      dot(wide, ctx.zeros([0], "float64")).shape,
+      [65536, 65536],
+    );
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("products are lazy and snapshot inputs at execution start", async () => {
   const ctx = context();
   try {

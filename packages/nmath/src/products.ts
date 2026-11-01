@@ -184,6 +184,19 @@ function requireLazy(...values: unknown[]): void {
   }
 }
 
+/** The largest dimension a native shape accepts (`u32::MAX`). */
+const MAX_DIMENSION = 0xffff_ffff;
+
+/**
+ * Reshapes `(..., n)` to `(..., 1 x count, 1, n)`: a row batch that a matmul
+ * broadcasts against another operand's batch axes without merging dimensions.
+ */
+function rowBatch(x: Lazy<any, any>, count: number): Expr<any, any> {
+  const n = x.shape[x.ndim - 1];
+  const ones = Array<number>(count).fill(1);
+  return reshape(x, [...x.shape.slice(0, -1), ...ones, 1, n]);
+}
+
 function product(dims: readonly number[]): number {
   return dims.reduce((total, n) => total * n, 1);
 }
@@ -254,13 +267,22 @@ export function dot(a: Lazy<any, any>, b: Lazy<any, any>): Expr<any, any> {
     );
   }
   const lead = a.shape.slice(0, -1);
+  const rest =
+    b.ndim === 1 ? [] : [...b.shape.slice(0, -2), b.shape[b.ndim - 1]];
+  if (product(lead) > MAX_DIMENSION || product(rest) > MAX_DIMENSION) {
+    // Flattening would exceed the per-dimension limit, which an empty result
+    // can reach with representable operands. A broadcast batched matmul keeps
+    // every dimension: (..., 1, ..., 1, n) @ (..., n, m) -> (..., ..., 1, m).
+    if (b.ndim === 1) return a.matmul(b as never);
+    const left = rowBatch(a, b.ndim - 2);
+    return reshape(left.matmul(b as never), [...lead, ...rest]);
+  }
   const left = reshape(a, [product(lead), n]);
   if (b.ndim === 1) {
     return reshape(left.matmul(b as never), lead);
   }
   // Move the contraction axis of b first and flatten the rest:
   // (..., n, m) -> (n, ..., m) -> (n, prod(...) * m).
-  const rest = [...b.shape.slice(0, -2), b.shape[b.ndim - 1]];
   const order = [k, ...b.shape.slice(0, -2).map((_: number, i: number) => i)];
   order.push(b.ndim - 1);
   const right = reshape(b.transpose(order as never), [n, product(rest)]);
@@ -318,6 +340,13 @@ export function inner(a: Lazy<any, any>, b: Lazy<any, any>): Expr<any, any> {
   }
   const leadA = a.shape.slice(0, -1);
   const leadB = b.shape.slice(0, -1);
+  if (product(leadA) > MAX_DIMENSION || product(leadB) > MAX_DIMENSION) {
+    // As in dot, avoid flattening past the per-dimension limit:
+    // (..., 1, ..., 1, n) @ (..., n, 1) -> (..., ..., 1, 1).
+    const left = rowBatch(a, leadB.length);
+    const right = reshape(b, [...leadB, n, 1]);
+    return reshape(left.matmul(right as never), [...leadA, ...leadB]);
+  }
   const left = reshape(a, [product(leadA), n]);
   const right = reshape(b, [product(leadB), m]).transpose([1, 0] as never);
   return reshape(left.matmul(right as never), [...leadA, ...leadB]);
