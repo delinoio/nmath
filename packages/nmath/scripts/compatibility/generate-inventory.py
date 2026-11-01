@@ -259,6 +259,21 @@ for op, args in {"cholesky": ["a", "upper"], "qr": ["a", "mode: reduced/complete
         ["packages/nmath/src/linalg.ts", "crates/nmath-core/src/linalg.rs", "crates/nmath-core/src/decomp.rs"],
         ["packages/nmath/test/decompositions.test.mjs", "packages/nmath/test/types/decompositions.ts", "crates/nmath-core/tests/decompositions.rs"],
         ["crates/nmath-core/tests/fixtures/decompositions/oracle.json"])
+for op, args, limit in [
+    ("norm", ["x", "ord", "axis", "keepdims"], "All NumPy vector and matrix orders; float16 is rejected; inf/-inf orders over an empty axis fail at construction."),
+    ("matrix_rank", ["A", "tol", "rtol", "hermitian (accepted)"], "Inputs need at least two dimensions; the one-dimensional nonzero test remains a target."),
+    ("pinv", ["a", "rcond", "rtol", "hermitian (accepted)"], "Computed from the reduced SVD of the conjugate with NumPy's cutoff rule."),
+    ("cond", ["x", "p: None, 2, -2"], "Other orders depend on NumPy's error-ignoring inverse and remain targets; singular inputs give a value above 1e15 or infinity, as NumPy's tests require."),
+    ("matrix_power", ["a", "n"], "NumPy's multiplication order; integer and bool dtypes are kept for non-negative powers; negative powers invert first."),
+]:
+    counterparts({"numpy.linalg." + op: "numpy.linalg." + op}, "linalg", args,
+        LINALG_DTYPES if op != "matrix_power" else NUMERIC,
+        ["CPU only; lazy scheduled results.", limit,
+         "Validated against fixed NumPy 2.5.4 results with test_linalg decimals (pinv 5/11, others 6/12); integer and rank results exact.",
+         "Non-finite/extreme-scale criteria and cross-platform acceptance remain pending."],
+        ["packages/nmath/src/linalg.ts", "crates/nmath-core/src/linalg.rs"],
+        ["packages/nmath/test/linalg-derived.test.mjs", "packages/nmath/test/types/linalg-derived.ts"],
+        ["packages/nmath/test/fixtures/linalg-derived.json"])
 
 for name, target in {"pandas.DataFrame.pivot":"pandas.DataFrame.pivot", "pandas.DataFrame.pivot_table":"pandas.DataFrame.pivotTable"}.items():
     counterparts({name: target}, "tables",

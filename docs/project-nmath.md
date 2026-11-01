@@ -130,6 +130,8 @@ Binary math ufuncs extend the lazy binary node and run in the runtime ufunc modu
 
 Matrix factorizations extend the linalg node with one output per lazy node and run in the runtime decomposition module. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns algorithms, error codes and NumPy-derived criteria, and the [package contract](packages-nmath-package-contract.md#typing) owns named results and options.
 
+Norms use a native linalg node; rank, pseudo-inverse, condition number and matrix power compose lazy nodes in the package layer. The [package contract](packages-nmath-package-contract.md#typing) owns their NumPy composition order.
+
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
 
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.

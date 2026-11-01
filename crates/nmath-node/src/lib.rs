@@ -610,6 +610,37 @@ impl NativeExpr {
         })
     }
 
+    /// NumPy `norm` over the final axis (`vector`) or final two axes.
+    #[napi(factory)]
+    pub fn norm(input: &NativeExpr, kind: String, order: Option<f64>) -> Result<Self> {
+        use nmath_core::linalg::{LinalgOp, NormKind};
+        let kind = match kind.as_str() {
+            "vector_inf" => NormKind::VectorInf,
+            "vector_neg_inf" => NormKind::VectorNegInf,
+            "vector_zero" => NormKind::VectorZero,
+            "vector_one" => NormKind::VectorOne,
+            "vector_two" => NormKind::VectorTwo,
+            "vector_p" => NormKind::VectorP(order.unwrap_or(2.0).to_bits()),
+            "fro" => NormKind::Fro,
+            "nuc" => NormKind::Nuc,
+            "matrix_one" => NormKind::MatrixOne,
+            "matrix_neg_one" => NormKind::MatrixNegOne,
+            "matrix_two" => NormKind::MatrixTwo,
+            "matrix_neg_two" => NormKind::MatrixNegTwo,
+            "matrix_inf" => NormKind::MatrixInf,
+            "matrix_neg_inf" => NormKind::MatrixNegInf,
+            _ => {
+                return Err(to_napi(nmath_core::Error::new(
+                    nmath_core::ErrorCode::IndexInvalid,
+                    "Unknown norm order.",
+                )));
+            }
+        };
+        Ok(Self {
+            inner: Expr::linalg(LinalgOp::Norm(kind), &input.inner, None).map_err(to_napi)?,
+        })
+    }
+
     #[napi(factory)]
     pub fn polynomial(
         coefficients: &NativeExpr,

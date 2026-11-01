@@ -217,7 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions; binary math functions | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                            | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
 | NumPy indexing       | integers, slices, integer-array and mask selectors that broadcast together, `newaxis`, ellipsis, views for basic indexing, atomic assignment                                                                   | multidimensional index arrays, `newaxis` in writes                                                                                                       |
-| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | `eig`, `lstsq`, `pinv`, `norm`, `matrix_rank` and other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays     |
+| NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | `eig`, `lstsq`, other `cond` orders and other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays               |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                                   | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                                                              | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                            |
 | pandas               | Numeric Series/DataFrame, basic labels, nullable filtering/sorting, single-key inner/left joins, grouped aggregates and pivots; CSV, records JSON, Parquet and Feather adapters                                | Full label alignment, nullable arithmetic, richer join/group options, windows, time series, string/categorical APIs and full file option/metadata parity |
@@ -485,6 +485,22 @@ console.log((await eigenvalues.compute()).toArray()); // ascending
 ```
 
 Signs of `Q`, eigenvectors and singular vectors can differ from NumPy, as they can between LAPACK builds; the factorizations satisfy the same identities. Cholesky of a non-positive-definite matrix fails with `NMATH_LINALG_NOT_POSITIVE_DEFINITE`. GPU execution rejects factorizations.
+
+### Norms and derived matrix functions
+
+```ts
+import { linalg } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([[1, 2], [3, 4]], { dtype: "float64" });
+await linalg.norm(a).compute(); // Frobenius norm of the flattened input
+await linalg.norm(a, 1, 0).compute(); // column-wise 1-norms
+linalg.matrix_rank(a); // int64
+linalg.pinv(a);
+linalg.cond(a);
+linalg.matrix_power(a, 3);
+```
+
+`norm` supports every NumPy order, `axis` and `keepdims`. `cond` supports `p` of 2 and -2; other orders remain targets. GPU execution rejects these functions.
 
 ### newaxis and ellipsis
 

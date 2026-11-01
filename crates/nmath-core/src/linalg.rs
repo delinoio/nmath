@@ -51,6 +51,198 @@ pub enum LinalgOp {
     SlogdetSign,
     /// `slogdet` natural log of the absolute determinant.
     SlogdetLogabs,
+    /// Vector norm over the final axis or matrix norm over the final two.
+    Norm(NormKind),
+}
+
+/// NumPy `norm` orders. Vector kinds reduce the final axis; matrix kinds
+/// reduce the final two axes (rows, then columns).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NormKind {
+    VectorInf,
+    VectorNegInf,
+    VectorZero,
+    VectorOne,
+    VectorTwo,
+    /// Any other finite order, stored as `f64` bits.
+    VectorP(u64),
+    Fro,
+    Nuc,
+    MatrixOne,
+    MatrixNegOne,
+    MatrixTwo,
+    MatrixNegTwo,
+    MatrixInf,
+    MatrixNegInf,
+}
+
+impl NormKind {
+    fn is_vector(self) -> bool {
+        matches!(
+            self,
+            Self::VectorInf
+                | Self::VectorNegInf
+                | Self::VectorZero
+                | Self::VectorOne
+                | Self::VectorTwo
+                | Self::VectorP(_)
+        )
+    }
+}
+
+fn empty_reduction() -> Error {
+    Error::new(
+        ErrorCode::ShapeMismatch,
+        "The norm order takes a maximum or minimum over an empty axis.",
+    )
+}
+
+fn infer_norm(kind: NormKind, a: &[usize], ad: DType) -> Result<(Vec<usize>, DType)> {
+    let dtype = real_dtype(result_dtype(ad, None)?);
+    let r = a.len();
+    if kind.is_vector() {
+        if r < 1 {
+            return Err(invalid("A vector norm requires at least one dimension."));
+        }
+        if a[r - 1] == 0 && matches!(kind, NormKind::VectorInf | NormKind::VectorNegInf) {
+            return Err(empty_reduction());
+        }
+        return Ok((a[..r - 1].to_vec(), dtype));
+    }
+    if r < 2 {
+        return Err(invalid("A matrix norm requires at least two dimensions."));
+    }
+    let (m, n) = (a[r - 2], a[r - 1]);
+    let empty = match kind {
+        NormKind::MatrixOne | NormKind::MatrixNegOne => n == 0,
+        NormKind::MatrixInf | NormKind::MatrixNegInf => m == 0,
+        NormKind::MatrixTwo | NormKind::MatrixNegTwo => m.min(n) == 0,
+        _ => false,
+    };
+    if empty {
+        return Err(empty_reduction());
+    }
+    Ok((a[..r - 2].to_vec(), dtype))
+}
+
+fn vector_norm(kind: NormKind, x: &[C]) -> f64 {
+    let abs = x.iter().map(|z| z.norm());
+    match kind {
+        NormKind::VectorInf => abs.fold(
+            f64::NEG_INFINITY,
+            |a, b| if b > a || b.is_nan() { b } else { a },
+        ),
+        NormKind::VectorNegInf => abs.fold(
+            f64::INFINITY,
+            |a, b| if b < a || b.is_nan() { b } else { a },
+        ),
+        NormKind::VectorZero => x.iter().filter(|z| **z != C::new(0.0, 0.0)).count() as f64,
+        NormKind::VectorOne => abs.sum(),
+        NormKind::VectorTwo => x.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt(),
+        NormKind::VectorP(bits) => {
+            let p = f64::from_bits(bits);
+            abs.map(|v| v.powf(p)).sum::<f64>().powf(1.0 / p)
+        }
+        _ => unreachable!("matrix norm"),
+    }
+}
+
+fn matrix_norm(
+    kind: NormKind,
+    x: &[C],
+    m: usize,
+    n: usize,
+    token: &CancellationToken,
+) -> Result<f64> {
+    let pick = |values: Vec<f64>, max: bool| {
+        values.into_iter().fold(
+            if max {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            },
+            |a, b| {
+                if b.is_nan() || (max && b > a) || (!max && b < a) {
+                    b
+                } else {
+                    a
+                }
+            },
+        )
+    };
+    Ok(match kind {
+        NormKind::Fro => x.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt(),
+        NormKind::MatrixOne | NormKind::MatrixNegOne => {
+            let sums = (0..n)
+                .map(|j| (0..m).map(|i| x[i * n + j].norm()).sum())
+                .collect();
+            pick(sums, kind == NormKind::MatrixOne)
+        }
+        NormKind::MatrixInf | NormKind::MatrixNegInf => {
+            let sums = (0..m)
+                .map(|i| (0..n).map(|j| x[i * n + j].norm()).sum())
+                .collect();
+            pick(sums, kind == NormKind::MatrixInf)
+        }
+        NormKind::Nuc | NormKind::MatrixTwo | NormKind::MatrixNegTwo => {
+            let (_, s, _) = crate::decomp::svd(x, m, n, false, token)?;
+            match kind {
+                NormKind::Nuc => s.iter().sum(),
+                NormKind::MatrixTwo => pick(s, true),
+                _ => pick(s, false),
+            }
+        }
+        _ => unreachable!("vector norm"),
+    })
+}
+
+fn execute_norm(
+    kind: NormKind,
+    a: &DenseArray,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    let (shape, dtype) = infer_norm(kind, &a.shape, a.buffer.dtype())?;
+    let count = size(&shape)?;
+    let charge = budget.reserve(bytes(count, dtype.item_size())?)?;
+    let mut output = zeros(dtype, count)?;
+    let r = a.shape.len();
+    let (m, n) = if kind.is_vector() {
+        (1, a.shape[r - 1])
+    } else {
+        (a.shape[r - 2], a.shape[r - 1])
+    };
+    let block = m.checked_mul(n).ok_or_else(overflow)?;
+    let side = m.max(n);
+    let _workspace = budget.reserve(bytes(
+        block
+            .checked_add(
+                side.checked_mul(side)
+                    .ok_or_else(overflow)?
+                    .checked_mul(2)
+                    .ok_or_else(overflow)?,
+            )
+            .ok_or_else(overflow)?,
+        std::mem::size_of::<C>(),
+    )?)?;
+    let mut x = vec![C::new(0., 0.); block];
+    for out in 0..count {
+        token.check()?;
+        for (i, v) in x.iter_mut().enumerate() {
+            if i % 1024 == 0 {
+                token.check()?;
+            }
+            *v = read(&a.buffer, out * block + i);
+        }
+        let value = if kind.is_vector() {
+            vector_norm(kind, &x)
+        } else {
+            matrix_norm(kind, &x, m, n, token)?
+        };
+        write(&mut output, out, C::new(value, 0.0));
+    }
+    token.check()?;
+    DenseArray::new(shape, output, charge)
 }
 impl LinalgOp {
     pub fn id(self) -> &'static str {
@@ -65,11 +257,12 @@ impl LinalgOp {
             Self::SvdU { .. } | Self::SvdVh { .. } => "svd",
             Self::SvdS => "svdvals",
             Self::SlogdetSign | Self::SlogdetLogabs => "slogdet",
+            Self::Norm(_) => "norm",
         }
     }
 
     fn is_decomposition(self) -> bool {
-        !matches!(self, Self::Solve | Self::Inv | Self::Det)
+        !matches!(self, Self::Solve | Self::Inv | Self::Det | Self::Norm(_))
     }
 
     fn square(self) -> bool {
@@ -139,7 +332,9 @@ fn infer_decomposition(op: LinalgOp, a: &[usize], ad: DType) -> Result<(Vec<usiz
         }
         LinalgOp::SlogdetSign => dtype,
         LinalgOp::SlogdetLogabs => real_dtype(dtype),
-        LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det => unreachable!("not a factorization"),
+        LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det | LinalgOp::Norm(_) => {
+            unreachable!("not a factorization")
+        }
     };
     size(&shape)?;
     Ok((shape, dtype))
@@ -226,7 +421,9 @@ fn execute_decomposition(
                     C::new(log, 0.0)
                 }]
             }
-            LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det => unreachable!("not a factorization"),
+            LinalgOp::Solve | LinalgOp::Inv | LinalgOp::Det | LinalgOp::Norm(_) => {
+                unreachable!("not a factorization")
+            }
         };
         debug_assert_eq!(values.len(), per_batch);
         for (i, v) in values.into_iter().enumerate() {
@@ -266,6 +463,12 @@ pub fn infer(
     ad: DType,
     b: Option<(&[usize], DType)>,
 ) -> Result<(Vec<usize>, DType)> {
+    if let LinalgOp::Norm(kind) = op {
+        if b.is_some() {
+            return Err(invalid("Only solve accepts a right-hand side."));
+        }
+        return infer_norm(kind, a, ad);
+    }
     if op.is_decomposition() {
         if b.is_some() {
             return Err(invalid("Only solve accepts a right-hand side."));
@@ -332,6 +535,9 @@ pub fn execute(
     token: &CancellationToken,
 ) -> Result<DenseArray> {
     token.check()?;
+    if let LinalgOp::Norm(kind) = op {
+        return execute_norm(kind, a, budget, token);
+    }
     if op.is_decomposition() {
         return execute_decomposition(op, a, budget, token);
     }
