@@ -120,6 +120,9 @@ MATH_ALIASES = {"abs": "absolute", "conj": "conjugate", "asin": "arcsin", "acos"
 MATH_DTYPES = {op: REAL_NUMERIC for op in MATH_FLOAT + ["absolute", "square", "floor", "ceil", "trunc", "signbit"]}
 MATH_DTYPES.update({"reciprocal": ["float16", "float32", "float64"], "sign": REAL_NUMERIC[1:]})
 MATH_DTYPES.update({op: NUMERIC for op in ["conjugate", "isnan", "isinf", "isfinite", "logical_not"]})
+BITWISE_DTYPES = ["bool", "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64"]
+MATH_DTYPES.update({op: BITWISE_DTYPES for op in ["invert", "bitwise_not", "bitwise_invert"]})
+MATH_ALIASES.update({"bitwise_not": "invert", "bitwise_invert": "invert"})
 for alias, op in MATH_ALIASES.items():
     MATH_DTYPES[alias] = MATH_DTYPES[op]
 for op, dtype in MATH_DTYPES.items():
@@ -127,6 +130,13 @@ for op, dtype in MATH_DTYPES.items():
         NUMERIC_LIMITS + ["Result dtypes follow the NumPy loop tables. Transcendental functions are within NumPy's accuracy-suite ULP bound of a correctly rounded reference; other functions match NumPy exactly. Complex inputs are supported only by conjugate and the predicates. Integer reciprocal is rejected because NumPy's result for zero is platform-dependent. No out, where, casting or dtype arguments. GPU rejects the operation before admission."],
         CORE + ["packages/nmath/src/ufunc.ts", "crates/nmath-core/src/ufunc.rs"], ["packages/nmath/test/math.test.mjs", "packages/nmath/test/types/math.ts", "crates/nmath-core/tests/math.rs"],
         ["crates/nmath-core/tests/fixtures/math/oracle.json"])
+BINARY_UFUNCS = {op: BITWISE_DTYPES for op in ["bitwise_and", "bitwise_or", "bitwise_xor", "left_shift", "right_shift", "bitwise_left_shift", "bitwise_right_shift"]}
+BINARY_UFUNCS.update({op: NUMERIC for op in ["logical_and", "logical_or", "logical_xor"]})
+for op, dtype in BINARY_UFUNCS.items():
+    counterparts({"numpy." + op: "numpy." + op}, "elementwise", ["contextual operands", "broadcasting", "weak bigint/boolean scalars"], dtype,
+        NUMERIC_LIMITS + ["Bitwise and shift operators require a common bool or integer dtype; int64 with uint64 and JS number scalars are rejected. Shifts by a negative count or at least the bit width follow NumPy. Logical operators return bool by truthiness. No out, where, casting or dtype arguments. GPU rejects the operation before admission."],
+        CORE + ["packages/nmath/src/ufunc.ts", "crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/bitwise.test.mjs", "packages/nmath/test/types/bitwise.ts", "crates/nmath-core/tests/bitwise.rs"],
+        ["crates/nmath-core/tests/fixtures/bitwise/oracle.json"])
 counterparts({"numpy.where": "numpy.where"}, "elementwise", ["contextual operands", "three-way broadcasting", "weak scalar branches"], NUMERIC,
     NUMERIC_LIMITS + ["Three-argument form only; the one-argument nonzero form is not provided. The condition must be an NMath value and uses nonzero truthiness. Branches promote with NEP 50 weak scalars. String and temporal operands are rejected. GPU rejects the operation before admission."],
     CORE + ["crates/nmath-core/src/kernels.rs"], ["packages/nmath/test/where.test.mjs", "packages/nmath/test/types/where.ts", "crates/nmath-core/tests/where.rs"],

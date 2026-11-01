@@ -1,10 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 // NumPy elementwise math ufuncs. Result dtypes follow the NumPy 2.5.4 loop tables.
 
-import { Expr, Lazy } from "./core.js";
+import {
+  type BinaryOperator,
+  type Complex,
+  Expr,
+  Lazy,
+  type Operand,
+} from "./core.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
-import type { FloatDType, NumericDType, OrderedDType, Shape } from "./types.js";
+import type {
+  Broadcast,
+  BroadcastCheck,
+  FloatDType,
+  IntDType,
+  NumericDType,
+  OrderedDType,
+  Promote,
+  PromoteWeak,
+  Shape,
+} from "./types.js";
 
 /** NumPy's smallest floating-point loop that holds a real input exactly. */
 export type MathFloatDType<D extends OrderedDType> = D extends
@@ -51,6 +67,10 @@ export interface SignUfunc {
 /** `reciprocal`: floating-point inputs only. */
 export interface ReciprocalUfunc {
   <D extends FloatDType, S extends Shape>(x: Arg<D, S>): Expr<D, S>;
+}
+/** `invert`: bool and integer inputs keep their dtype. */
+export interface InvertUfunc {
+  <D extends BitwiseDType, S extends Shape>(x: Arg<D, S>): Expr<D, S>;
 }
 /** `conjugate`: bools use the int8 loop; complex values negate the imaginary part. */
 export interface ConjugateUfunc {
@@ -111,8 +131,100 @@ export const isinf = ufunc<PredicateUfunc>("isinf");
 export const isfinite = ufunc<PredicateUfunc>("isfinite");
 export const signbit = ufunc<RealPredicateUfunc>("signbit");
 export const logical_not = ufunc<PredicateUfunc>("logical_not");
+export const invert = ufunc<InvertUfunc>("invert");
+
+/** Dtypes with bitwise loops. */
+export type BitwiseDType = "bool" | IntDType;
+type Bitwise<D extends NumericDType> = [D] extends [BitwiseDType] ? D : never;
+/** Makes the second operand unassignable when no common integer loop exists. */
+type BitwiseCheck<A extends NumericDType, B extends NumericDType> = [
+  Bitwise<Promote<A, B>>,
+] extends [never]
+  ? { readonly "operands have no common integer dtype": [A, B] }
+  : unknown;
+type Shifted<D extends NumericDType> =
+  Bitwise<D> extends "bool" ? "int8" : Bitwise<D>;
+
+/**
+ * `bitwise_and`, `bitwise_or` and `bitwise_xor`. Scalars must be `bigint` or
+ * `boolean`: a JS `number` is a weak float and has no bitwise loop.
+ */
+export interface BitwiseFunction {
+  <
+    A extends BitwiseDType,
+    AS extends Shape,
+    B extends BitwiseDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS> & BitwiseCheck<A, B>,
+  ): Expr<Bitwise<Promote<A, B>>, Broadcast<AS, BS>>;
+  <A extends BitwiseDType, AS extends Shape, W extends bigint | boolean>(
+    a: Arg<A, AS>,
+    b: W,
+  ): Expr<Bitwise<PromoteWeak<A, W>>, AS>;
+}
+/** `left_shift` and `right_shift`; bools use the int8 loop. */
+export interface ShiftFunction {
+  <
+    A extends BitwiseDType,
+    AS extends Shape,
+    B extends BitwiseDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS> & BitwiseCheck<A, B>,
+  ): Expr<Shifted<Promote<A, B>>, Broadcast<AS, BS>>;
+  <A extends BitwiseDType, AS extends Shape, W extends bigint | boolean>(
+    a: Arg<A, AS>,
+    b: W,
+  ): Expr<Shifted<PromoteWeak<A, W>>, AS>;
+}
+/** `logical_and`, `logical_or` and `logical_xor` by truthiness. */
+export interface LogicalFunction {
+  <
+    A extends NumericDType,
+    AS extends Shape,
+    B extends NumericDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS>,
+  ): Expr<"bool", Broadcast<AS, BS>>;
+  <A extends NumericDType, AS extends Shape>(
+    a: Arg<A, AS>,
+    b: number | bigint | boolean | Complex,
+  ): Expr<"bool", AS>;
+}
+
+function binaryUfunc<F>(op: BinaryOperator): F {
+  return ((a: Operand, b: Operand) => {
+    if (a instanceof Lazy) {
+      return a.binaryOp(op, b);
+    }
+    if (b instanceof Lazy) {
+      return b.reversedBinaryOp(op, a);
+    }
+    throw new TypeError(
+      "At least one operand must be an NMath array or expression.",
+    );
+  }) as F;
+}
+
+export const bitwise_and = binaryUfunc<BitwiseFunction>("bitwise_and");
+export const bitwise_or = binaryUfunc<BitwiseFunction>("bitwise_or");
+export const bitwise_xor = binaryUfunc<BitwiseFunction>("bitwise_xor");
+export const left_shift = binaryUfunc<ShiftFunction>("left_shift");
+export const right_shift = binaryUfunc<ShiftFunction>("right_shift");
+export const logical_and = binaryUfunc<LogicalFunction>("logical_and");
+export const logical_or = binaryUfunc<LogicalFunction>("logical_or");
+export const logical_xor = binaryUfunc<LogicalFunction>("logical_xor");
 
 // NumPy 2 aliases.
+export const bitwise_not = invert;
+export const bitwise_invert = invert;
+export const bitwise_left_shift = left_shift;
+export const bitwise_right_shift = right_shift;
 export const abs = absolute;
 export const conj = conjugate;
 export const asin = arcsin;

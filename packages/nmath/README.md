@@ -214,7 +214,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | Area                 | Available now                                                                                                                                                                                            | Not yet available                                                                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                        | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
-| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs                                                 | string/temporal comparisons, bitwise, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                               |
+| NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions                  | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod`, `argmin`, `argmax` (all axes or one axis)                                                                                                                           | `std`, `var`, `cumsum`, `cumprod`, multi-axis lists, `keepdims`                                                                                          |
 | NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                          | several advanced selectors combined, `newaxis`, ellipsis                                                                                                 |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
@@ -469,6 +469,20 @@ console.log((await sqrt(a).compute()).toArray()); // [1, 2, 3]
 ```
 
 Result dtypes follow NumPy: small integers use float16 or float32 loops. Transcendental results stay within NumPy's own accuracy-test bounds; other functions match NumPy exactly. Complex inputs work with `conjugate` and the `is*`/`logical_not` predicates only. Integer `reciprocal` is rejected. `out`, `where` and the other ufunc keyword arguments remain targets. GPU execution rejects math functions before admission.
+
+### Bitwise and logical functions
+
+`bitwise_and`, `bitwise_or`, `bitwise_xor`, `left_shift`, `right_shift` and `invert` work on bool and integer arrays. `logical_and`, `logical_or`, `logical_xor` and `logical_not` accept any numeric array and return bool.
+
+```ts
+import { bitwise_and, left_shift } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([12, 5], { dtype: "int8" });
+console.log((await bitwise_and(a, 10n).compute()).toArray()); // [8, 0]
+console.log((await left_shift(a, 1n).compute()).toArray()); // [24, 10]
+```
+
+Use `bigint` scalars: a JS `number` is a weak float, and floats have no bitwise loop. int64 combined with uint64 is rejected, as in NumPy. Shifting by a negative count or by at least the bit width gives 0, or -1 when right-shifting a negative value. GPU execution rejects these functions before admission.
 
 ### Cumulative scans
 

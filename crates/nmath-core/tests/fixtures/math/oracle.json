@@ -8895,6 +8895,161 @@
    }
   },
   {
+   "op": "invert",
+   "input": {
+    "dtype": "bool",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "01000001"
+   },
+   "numpy": {
+    "dtype": "bool",
+    "shape": [
+     2,
+     2
+    ],
+    "hex": "00010100"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "int8",
+    "shape": [
+     11
+    ],
+    "hex": "00010207647f80fffef99c"
+   },
+   "numpy": {
+    "dtype": "int8",
+    "shape": [
+     11
+    ],
+    "hex": "fffefdf89b807f00010663"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "uint8",
+    "shape": [
+     7
+    ],
+    "hex": "0001020764ff00"
+   },
+   "numpy": {
+    "dtype": "uint8",
+    "shape": [
+     7
+    ],
+    "hex": "fffefdf89b00ff"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "int16",
+    "shape": [
+     11
+    ],
+    "hex": "00000100020007006400ff7f0080fffffefff9ff9cff"
+   },
+   "numpy": {
+    "dtype": "int16",
+    "shape": [
+     11
+    ],
+    "hex": "fffffefffdfff8ff9bff0080ff7f0000010006006300"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "uint16",
+    "shape": [
+     7
+    ],
+    "hex": "00000100020007006400ffff0000"
+   },
+   "numpy": {
+    "dtype": "uint16",
+    "shape": [
+     7
+    ],
+    "hex": "fffffefffdfff8ff9bff0000ffff"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "int32",
+    "shape": [
+     11
+    ],
+    "hex": "0000000001000000020000000700000064000000ffffff7f00000080fffffffffefffffff9ffffff9cffffff"
+   },
+   "numpy": {
+    "dtype": "int32",
+    "shape": [
+     11
+    ],
+    "hex": "fffffffffefffffffdfffffff8ffffff9bffffff00000080ffffff7f00000000010000000600000063000000"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "uint32",
+    "shape": [
+     7
+    ],
+    "hex": "0000000001000000020000000700000064000000ffffffff00000000"
+   },
+   "numpy": {
+    "dtype": "uint32",
+    "shape": [
+     7
+    ],
+    "hex": "fffffffffefffffffdfffffff8ffffff9bffffff00000000ffffffff"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "int64",
+    "shape": [
+     11
+    ],
+    "hex": "00000000000000000100000000000000020000000000000007000000000000006400000000000000ffffffffffffff7f0000000000000080fffffffffffffffffefffffffffffffff9ffffffffffffff9cffffffffffffff"
+   },
+   "numpy": {
+    "dtype": "int64",
+    "shape": [
+     11
+    ],
+    "hex": "fffffffffffffffffefffffffffffffffdfffffffffffffff8ffffffffffffff9bffffffffffffff0000000000000080ffffffffffffff7f0000000000000000010000000000000006000000000000006300000000000000"
+   }
+  },
+  {
+   "op": "invert",
+   "input": {
+    "dtype": "uint64",
+    "shape": [
+     7
+    ],
+    "hex": "00000000000000000100000000000000020000000000000007000000000000006400000000000000ffffffffffffffff0000000000000000"
+   },
+   "numpy": {
+    "dtype": "uint64",
+    "shape": [
+     7
+    ],
+    "hex": "fffffffffffffffffefffffffffffffffdfffffffffffffff8ffffffffffffff9bffffffffffffff0000000000000000ffffffffffffffff"
+   }
+  },
+  {
    "op": "isnan",
    "input": {
     "dtype": "bool",
