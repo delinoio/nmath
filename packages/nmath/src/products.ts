@@ -386,6 +386,11 @@ export function diagonal(
   );
   const rowStart = Math.max(0, -k);
   const colStart = Math.max(0, k);
+  if (length > 0 && rest.some((axis: number) => a.shape[axis] === 0)) {
+    // The result has no elements; a basic selection of the same shape avoids
+    // selectors proportional to the diagonal length.
+    return moved.get(ellipsis, slice(rowStart, rowStart + length), colStart);
+  }
   // Two adjacent array selectors form one advanced block that stays last.
   return moved.get(
     ellipsis,

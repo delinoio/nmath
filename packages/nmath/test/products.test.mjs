@@ -238,6 +238,25 @@ test("diff evaluates each difference input once", async () => {
   }
 });
 
+test("diagonal and trace of empty retained axes skip diagonal selectors", async () => {
+  const ctx = context();
+  try {
+    const a = ctx.zeros([0, 100000000, 100000000], "float64");
+    const d = diagonal(a, 0, 1, 2);
+    assert.deepEqual(d.shape, [0, 100000000]);
+    assert.deepEqual(diagonal(a, -3, 2, 1).shape, [0, 99999997]);
+    const t = trace(a, 0, 1, 2);
+    assert.deepEqual(t.shape, [0]);
+    const [dv, tv] = await Promise.all([d.compute(), t.compute()]);
+    assert.deepEqual(dv.shape, [0, 100000000]);
+    assert.deepEqual(tv.toArray(), []);
+    dv.dispose();
+    tv.dispose();
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("products are lazy and snapshot inputs at execution start", async () => {
   const ctx = context();
   try {
