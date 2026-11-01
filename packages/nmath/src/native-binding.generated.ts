@@ -81,6 +81,8 @@ export declare class NativeExpr {
   static reshape(input: NativeExpr, shape: Array<number>, copy?: boolean | undefined | null): NativeExpr
   static matmul(lhs: NativeExpr, rhs: NativeExpr): NativeExpr
   static linalg(op: string, input: NativeExpr, rhs?: NativeExpr | undefined | null): NativeExpr
+  /** NumPy `norm` over the final axis (`vector`) or final two axes. */
+  static norm(input: NativeExpr, kind: string, order?: number | undefined | null): NativeExpr
   static polynomial(coefficients: NativeExpr, points: NativeExpr, ascending: boolean, tensor: boolean): NativeExpr
   static polynomialDerivative(coefficients: NativeExpr, ascending: boolean, count: number, axis: number, scale: number | NativeComplex): NativeExpr
   static fft(op: string, input: NativeExpr, n: number | undefined | null, axis: number, norm: string): NativeExpr
