@@ -123,7 +123,12 @@ export type SqueezeShape<
 type SqueezeAllShape<S extends Shape> = number extends S[number]
   ? number[]
   : DropOnes<S>;
+// Each alternative of a union axis type is a separate selection.
 type SqueezeAxesShape<
+  S extends Shape,
+  A extends number | readonly number[] | undefined,
+> = A extends unknown ? SqueezeAxesOne<S, A> : never;
+type SqueezeAxesOne<
   S extends Shape,
   A extends number | readonly number[] | undefined,
 > = S extends readonly []
@@ -174,8 +179,15 @@ type ExpandRanks<S extends Shape, L extends readonly number[]> = [
   ...RankOf<L>,
 ];
 
-/** `np.expand_dims` result shape; axes normalize against the output rank. */
+/**
+ * `np.expand_dims` result shape; axes normalize against the output rank. Each
+ * alternative of a union axis type is a separate selection.
+ */
 export type ExpandDimsShape<
+  S extends Shape,
+  A extends number | readonly number[],
+> = A extends unknown ? ExpandDimsOne<S, A> : never;
+type ExpandDimsOne<
   S extends Shape,
   A extends number | readonly number[],
 > = number extends S["length"]
@@ -274,8 +286,17 @@ type MoveKnown<S extends Shape, Src extends number[], Dst extends number[]> = [
               ? Place<S, Src, Dst, KeepAxes<S, Src[number]>, RankOf<S>>
               : never;
 
-/** `np.moveaxis` result shape. */
+/** `np.moveaxis` result shape; union axis types distribute like the others. */
 export type MoveAxisShape<
+  S extends Shape,
+  Src extends number | readonly number[],
+  Dst extends number | readonly number[],
+> = Src extends unknown
+  ? Dst extends unknown
+    ? MoveAxisOne<S, Src, Dst>
+    : never
+  : never;
+type MoveAxisOne<
   S extends Shape,
   Src extends number | readonly number[],
   Dst extends number | readonly number[],
@@ -289,6 +310,10 @@ export type MoveAxisShape<
 
 /** Static axis validation for `np.flip`; the shape itself never changes. */
 export type FlipCheck<
+  S extends Shape,
+  A extends number | readonly number[] | undefined,
+> = A extends unknown ? FlipCheckOne<S, A> : never;
+type FlipCheckOne<
   S extends Shape,
   A extends number | readonly number[] | undefined,
 > = [A] extends [undefined]

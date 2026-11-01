@@ -13,6 +13,8 @@ import {
   ravel,
   squeeze,
   swapaxes,
+  type ExpandDimsShape,
+  type MoveAxisShape,
   type SqueezeShape,
 } from "../../src/numpy.js";
 
@@ -51,6 +53,23 @@ const squeezedMaybe = squeeze(a, maybeAxis);
 exact<Equal<typeof squeezedMaybe, Expr<"complex64", [3, 4] | [3, 1, 4]>>>();
 exact<Equal<SqueezeShape<[1, 1], 0 | undefined>, [] | [1]>>();
 exact<Equal<SqueezeShape<[1, 1], [0] | undefined>, [] | [1]>>();
+// Union axis types are alternative selections, not simultaneous ones.
+exact<Equal<SqueezeShape<[1, 1], readonly [0] | readonly [1]>, [1]>>();
+exact<
+  Equal<
+    ExpandDimsShape<[2, 3], readonly [0] | readonly [1]>,
+    [1, 2, 3] | [2, 1, 3]
+  >
+>();
+exact<
+  Equal<
+    MoveAxisShape<[2, 3, 4], readonly [0] | readonly [2], 0>,
+    [2, 3, 4] | [4, 2, 3]
+  >
+>();
+declare const tupleAxis: readonly [0] | readonly [1];
+const squeezedTuple = squeeze(c.zeros([1, 1], "bool"), tupleAxis);
+exact<Equal<typeof squeezedTuple, Expr<"bool", [1]>>>();
 // The scalar alternative must survive into the computed result type.
 exact<
   boolean extends ComputeResult<"bool", SqueezeShape<[1, 1], 0 | undefined>>
