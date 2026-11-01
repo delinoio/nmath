@@ -361,6 +361,21 @@ for name, arguments in [
         ["packages/nmath/test/polynomial-derivative.test.mjs", "packages/nmath/test/types/polynomial-derivative.ts", "crates/nmath-core/tests/polynomial.rs"],
         ["crates/nmath-core/tests/fixtures/polynomial/derivative-oracle.json"])
 
+for op, args in [("squeeze", ["a", "axis: integer, integer list or omitted"]),
+                 ("expand_dims", ["a", "axis: integer or integer list against the output rank"]),
+                 ("swapaxes", ["a", "axis1", "axis2"]),
+                 ("moveaxis", ["a", "source: integer or integer list", "destination: integer or integer list"]),
+                 ("ravel", ["a", "order: C only"]),
+                 ("flip", ["m", "axis: integer, integer list or omitted"]),
+                 ("fliplr", ["m: at least 2-D"]), ("flipud", ["m: at least 1-D"])]:
+    counterparts({"numpy." + op: "numpy." + op}, "shape-transform", args,
+        NUMERIC + ["str", "datetime64", "timedelta64"],
+        ["Lazy CPU composition of the existing C-order reshape, transpose and negative-step slice-read nodes; dtype, context, views and actual-start snapshots follow those nodes.",
+         "Negative and listed axes normalize like normalize_axis_tuple; out-of-range axes fail with NMATH_INDEX_OUT_OF_BOUNDS, repeated or non-integer axes with NMATH_INDEX_INVALID, and non-1 squeeze axes or too few fliplr/flipud dimensions with NMATH_SHAPE_MISMATCH.",
+         "Exact shape and C-order values against recorded NumPy 2.5.4 int32 cases; ravel orders F/A/K, ndarray method forms and GPU execution remain targets."],
+        ["packages/nmath/src/axes.ts"], ["packages/nmath/test/axes.test.mjs", "packages/nmath/test/types/axes.ts"],
+        ["packages/nmath/test/fixtures/axes.json"])
+
 TABLE_LIMITS = [
     "CPU numeric/bool columns with explicit validity masks; no string/temporal/complex/nested columns at the inspected revision.",
     "Completed Promise results; internal bounded row-local batches do not establish full streaming. Snapshots/results and sort/join/group boundaries materialize.",

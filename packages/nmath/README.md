@@ -516,6 +516,23 @@ linalg.matrix_power(a, 3);
 
 `norm` supports every NumPy order, `axis` and `keepdims`. `cond` supports `p` of 2 and -2; other orders remain targets. GPU execution rejects these functions.
 
+### Axis manipulation
+
+`squeeze`, `expand_dims`, `swapaxes`, `moveaxis`, `ravel`, `flip`, `fliplr` and `flipud` follow NumPy's axis rules and return lazy expressions with the input dtype.
+
+```ts
+import { expand_dims, flip, moveaxis, ravel, squeeze } from "@delinoio/nmath/numpy";
+
+const a = ctx.zeros([1, 3, 4], "float32");
+squeeze(a).shape; // [3, 4]
+expand_dims(a, [0, -1]).shape; // [1, 1, 3, 4, 1]
+moveaxis(a, 0, -1).shape; // [3, 4, 1]
+ravel(a).shape; // [12]
+flip(a, -1).shape; // [1, 3, 4], last axis reversed
+```
+
+Axes can be negative or a list. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`, and a repeated or non-integer axis fails with `NMATH_INDEX_INVALID`. Squeezing an axis whose length is not 1 fails with `NMATH_SHAPE_MISMATCH`. `ravel` supports C order only. With literal shapes and axes, TypeScript infers the result shape. GPU execution rejects these functions, as it does `reshape` and `transpose`.
+
 ### newaxis and ellipsis
 
 Reads accept `newaxis` (`null`) and `ellipsis`, like NumPy's `None` and `...`.
