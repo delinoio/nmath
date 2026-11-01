@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Expr, type Lazy } from "./core.js";
+import { Expr, type Lazy, type NMathArray, type NMathContext } from "./core.js";
 import { native } from "./errors.js";
 import { binding } from "./native.js";
-import type { ComputableDType, Shape } from "./types.js";
+import type { ComputableDType, MutableShape, Shape } from "./types.js";
 
 export type NumericalDType = Extract<
   ComputableDType,
@@ -167,4 +167,181 @@ export function irfft<
   options: O = {} as O,
 ): Expr<IrfftDType<D>, FftShape<S, O, true>> {
   return expression("irfft", a, options);
+}
+
+export interface MultiFftOptions {
+  s?: readonly number[];
+  axes?: readonly number[];
+  norm?: "backward" | "forward" | "ortho";
+}
+type MultiFftShape<S extends Shape, O extends MultiFftOptions> = O extends {
+  s: readonly number[];
+}
+  ? DynamicShape<S>
+  : MutableShape<S>;
+
+function multiExpression(
+  op: "fft" | "ifft",
+  a: Lazy<any, any>,
+  options: MultiFftOptions,
+  lastTwo: boolean,
+): Expr<any, any> {
+  for (const key of Object.keys(options))
+    if (!["s", "axes", "norm"].includes(key))
+      throw new TypeError(`Unsupported FFT option: ${key}`);
+  const rank = a.shape.length;
+  let axes: readonly number[];
+  if (options.axes) axes = [...options.axes];
+  else if (lastTwo) {
+    if (rank < 2)
+      throw new RangeError("fft2 and ifft2 require at least two dimensions.");
+    axes = [-2, -1];
+  } else axes = Array.from({ length: rank }, (_, axis) => axis);
+  const normalized = axes.map((axis) => (axis < 0 ? axis + rank : axis));
+  for (const axis of normalized)
+    if (!Number.isSafeInteger(axis) || axis < 0 || axis >= rank)
+      throw new RangeError(
+        "FFT axes must be safe integers inside the input rank.",
+      );
+  if (new Set(normalized).size !== normalized.length)
+    throw new RangeError("FFT axes must not repeat.");
+  if (options.s) {
+    if (options.s.length !== axes.length)
+      throw new RangeError(
+        "FFT s must provide one length per transformed axis.",
+      );
+    for (const length of options.s)
+      if (!Number.isSafeInteger(length) || length <= 0 || length > 0xffffffff)
+        throw new RangeError(
+          "FFT s lengths must be positive unsigned 32-bit integers.",
+        );
+  }
+  let out: any = a;
+  axes.forEach((axis, index) => {
+    const fftOptions = { n: options.s?.[index], axis, norm: options.norm };
+    out = op === "fft" ? fft(out, fftOptions) : ifft(out, fftOptions);
+  });
+  return out;
+}
+
+export function fft2<
+  D extends NumericalDType,
+  S extends Shape,
+  const O extends MultiFftOptions = {},
+>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: O = {} as O,
+): Expr<FftDType<D>, MultiFftShape<S, O>> {
+  return multiExpression("fft", a, options, true);
+}
+
+export function ifft2<
+  D extends NumericalDType,
+  S extends Shape,
+  const O extends MultiFftOptions = {},
+>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: O = {} as O,
+): Expr<FftDType<D>, MultiFftShape<S, O>> {
+  return multiExpression("ifft", a, options, true);
+}
+
+export function fftn<
+  D extends NumericalDType,
+  S extends Shape,
+  const O extends MultiFftOptions = {},
+>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: O = {} as O,
+): Expr<FftDType<D>, MultiFftShape<S, O>> {
+  return multiExpression("fft", a, options, false);
+}
+
+export function ifftn<
+  D extends NumericalDType,
+  S extends Shape,
+  const O extends MultiFftOptions = {},
+>(
+  a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  options: O = {} as O,
+): Expr<FftDType<D>, MultiFftShape<S, O>> {
+  return multiExpression("ifft", a, options, false);
+}
+
+function shiftExpression(
+  op: "fftshift" | "ifftshift",
+  x: Lazy<any, any>,
+  axes?: readonly number[],
+): Expr<any, any> {
+  if (axes) {
+    for (const axis of axes)
+      if (!Number.isSafeInteger(axis))
+        throw new RangeError("FFT shift axes must be safe integers.");
+    if (new Set(axes).size !== axes.length)
+      throw new RangeError("FFT shift axes must not repeat.");
+  }
+  return new Expr(
+    native(() =>
+      binding.NativeExpr.shift(
+        op,
+        x.nativeExpr(),
+        axes === undefined ? undefined : [...axes],
+      ),
+    ),
+    x.context,
+  );
+}
+
+export function fftshift<D extends ComputableDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axes?: readonly number[],
+): Expr<D, MutableShape<S>> {
+  return shiftExpression("fftshift", x, axes);
+}
+
+export function ifftshift<D extends ComputableDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axes?: readonly number[],
+): Expr<D, MutableShape<S>> {
+  return shiftExpression("ifftshift", x, axes);
+}
+
+function frequency(n: number, d: number): number {
+  if (!Number.isSafeInteger(n) || n <= 0 || n > 0xffffffff)
+    throw new RangeError(
+      "FFT frequency length must be a positive unsigned 32-bit integer.",
+    );
+  if (!Number.isFinite(d))
+    throw new RangeError("FFT sample spacing must be finite.");
+  return 1 / (n * d);
+}
+
+export function fftfreq(
+  ctx: NMathContext,
+  n: number,
+  d = 1,
+): NMathArray<"float64", [number]> {
+  const scale = frequency(n, d);
+  const values = new Float64Array(n);
+  const lastPositive = Math.floor((n - 1) / 2);
+  for (let i = 0; i < n; i++)
+    values[i] = (i <= lastPositive ? i : i - n) * scale;
+  return ctx.array(values, { dtype: "float64" }) as NMathArray<
+    "float64",
+    [number]
+  >;
+}
+
+export function rfftfreq(
+  ctx: NMathContext,
+  n: number,
+  d = 1,
+): NMathArray<"float64", [number]> {
+  const scale = frequency(n, d);
+  const values = new Float64Array(Math.floor(n / 2) + 1);
+  for (let i = 0; i < values.length; i++) values[i] = i * scale;
+  return ctx.array(values, { dtype: "float64" }) as NMathArray<
+    "float64",
+    [number]
+  >;
 }

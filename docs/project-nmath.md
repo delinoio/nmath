@@ -112,6 +112,8 @@ Broadcast-batched matrix products and vector promotion share native shape infere
 
 Polynomial power-series evaluation shares the lazy execution graph across native and NumPy APIs. The [runtime polynomial contract](crates-nmath-runtime-contract.md#polynomial-evaluation) owns coefficient ordering and execution, and the [package adaptation](packages-nmath-package-contract.md#polynomial-js-adaptation) owns tensor options, type inference and explicit-context operands.
 
+Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
+
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.
 
 Cumulative sum and product scans use their own lazy node. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns flattening, promotion and accumulator order, and the [package contract](packages-nmath-package-contract.md#typing) owns the one-dimensional result type.

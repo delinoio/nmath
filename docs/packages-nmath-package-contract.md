@@ -70,6 +70,8 @@ Complex array creation accepts nested `Complex` values or interleaved typed-arra
 
 Complex arithmetic, unary operations, reductions, indexing, writes, copies, explicit casts and 1-D/2-D matrix multiplication follow the runtime contract. Complex remainder is rejected by ordinary TypeScript declarations and by runtime expression validation. Complex GPU computation remains outside the GPU dtype subset.
 
+The FFT entry point adds `fft2`, `ifft2`, `fftn`, `ifftn`, `fftshift`, `ifftshift`, `fftfreq` and `rfftfreq`. Multi-axis transforms compose the existing one-axis lazy nodes, so they inherit dtype, snapshot, budget, cancellation and GPU-rejection behavior. `fft2`/`ifft2` default to the final two axes; `fftn`/`ifftn` default to every axis. `s` supplies one positive length per transformed axis and makes the declared shape dynamic. `fftshift`/`ifftshift` keep dtype and shape; they accept all dtypes and default to every axis. `fftfreq`/`rfftfreq` take an explicit context and return `float64` arrays; the length must be a positive unsigned 32-bit integer and the sample spacing must be finite. The context charges these arrays like any other input.
+
 ### Typing
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.

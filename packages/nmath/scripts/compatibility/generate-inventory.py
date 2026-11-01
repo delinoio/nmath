@@ -205,6 +205,25 @@ for family, ops in [("linalg", ["solve", "inv", "det"]), ("fft", ["fft", "ifft",
             ["packages/nmath/test/numerical.test.mjs", "crates/nmath-core/tests/numerical.rs"],
             ["crates/nmath-core/tests/fixtures/numerical/" + file for file in (["linalg.json"] if family == "linalg" else ["fft_adaptation.json", "fft_identity.json"])])
 
+for op in ["fft2", "ifft2", "fftn", "ifftn"]:
+    counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft",
+        ["a", "s", "axes", "norm"], NUMERIC,
+        ["CPU composition of one-axis lazy transforms; transforms execute as separate native nodes.",
+         "fft2/ifft2 default to the final two axes; fftn/ifftn default to every axis. s crops or zero-pads each selected axis.",
+         "Per-axis normalization composes to the NumPy total scale. Other FFT family members and cross-platform numerical acceptance remain pending."],
+        ["packages/nmath/src/fft.ts"], ["packages/nmath/test/fft-helpers.test.mjs", "packages/nmath/test/types/fft-helpers.ts"])
+for op in ["fftshift", "ifftshift"]:
+    counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft",
+        ["a", "axes"], NUMERIC + ["str", "datetime64", "timedelta64"],
+        ["CPU reindexing for every dtype. Default axes are all axes; repeated axes reject and out-of-range axes fail.",
+         "GPU execution rejects before admission. Cross-platform acceptance remains pending."],
+        ["packages/nmath/src/fft.ts", "crates/nmath-core/src/kernels.rs"],
+        ["packages/nmath/test/fft-helpers.test.mjs", "crates/nmath-core/tests/fft_helpers.rs"])
+for op in ["fftfreq", "rfftfreq"]:
+    counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft",
+        ["context", "n: positive uint32", "d: finite spacing"], ["float64"],
+        ["Returns a float64 array charged to the explicit context. The sample spacing must be finite. Cross-platform acceptance remains pending."],
+        ["packages/nmath/src/fft.ts"], ["packages/nmath/test/fft-helpers.test.mjs", "packages/nmath/test/types/fft-helpers.ts"])
 for name, target, arguments in [
     ("numpy.polyval", "numpy.polyval", ["coefficients: descending", "points"]),
     ("numpy.polynomial.polynomial.polyval", "numpy.polynomial.polynomial.polyval", ["points", "coefficients: ascending", "options: tensor boolean, default true"]),
