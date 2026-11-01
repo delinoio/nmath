@@ -555,16 +555,43 @@ export type MatMulCheck<A extends Shape, B extends Shape> = [
   : unknown;
 
 /** Shape after indexing: an integer drops an axis; other selectors keep a dynamic axis. */
+type HasEllipsis<Sel extends readonly unknown[]> = true extends {
+  [K in keyof Sel]: Sel[K] extends { readonly kind: "ellipsis" } ? true : false;
+}[number]
+  ? true
+  : false;
+type HasNewAxisWithArray<Sel extends readonly unknown[]> =
+  null extends Sel[number]
+    ? Extract<Sel[number], { readonly kind: "indices" | "mask" }> extends never
+      ? false
+      : true
+    : false;
+
+/**
+ * Indexing result shape. `newaxis` (`null`) inserts a length-1 axis. An
+ * ellipsis, or `newaxis` combined with an array selector, whose advanced-block
+ * placement depends on adjacency, produces a dynamic shape.
+ */
 export type IndexShape<
   S extends Shape,
   Sel extends readonly unknown[],
 > = number[] extends S
   ? number[]
+  : HasEllipsis<Sel> extends true
+    ? number[]
+    : HasNewAxisWithArray<Sel> extends true
+      ? number[]
+      : BasicIndexShape<S, Sel>;
+type BasicIndexShape<
+  S extends Shape,
+  Sel extends readonly unknown[],
+> = Sel extends readonly [null, ...infer R]
+  ? [1, ...BasicIndexShape<S, R>]
   : Sel extends readonly [infer H, ...infer R]
     ? S extends readonly [number, ...infer SR extends number[]]
       ? H extends number
-        ? IndexShape<SR, R>
-        : [number, ...IndexShape<SR, R>]
+        ? BasicIndexShape<SR, R>
+        : [number, ...BasicIndexShape<SR, R>]
       : never
     : S extends readonly number[]
       ? [...S]

@@ -238,3 +238,27 @@ a.dispose(); result.dispose(); await ctx.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("nts bracket indexing accepts newaxis and ellipsis", async () => {
+  const source = `import { createContext, ellipsis, newaxis } from "@delinoio/nmath";
+const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 1, cpuMemoryBudget: 4096, gpuMemoryBudget: 0 });
+const a = ctx.zeros([2, 3], "int32");
+a[[ellipsis, 1]] = 5n;
+const view = a[[newaxis, ellipsis, 1]];
+console.log(JSON.stringify([view.shape, (await view.compute()).toArray(), a[newaxis].shape]));
+await ctx.close();
+`;
+  const dir = project({ "main.nts": source });
+  try {
+    const result = await build({ tsconfig: join(dir, "tsconfig.json") });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    assert.equal(
+      execFileSync(process.execPath, [join(dir, "out", "main.js")], {
+        encoding: "utf8",
+      }).trim(),
+      "[[1,2],[[5,5]],[1,2,3]]",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

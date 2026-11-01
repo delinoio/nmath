@@ -7,7 +7,8 @@ import {
   type NMathArray,
   type NMathValue,
   type Operand,
-  type Selector,
+  type ReadSelector,
+  type WriteSelector,
 } from "./core.js";
 import type {
   ComputableDType,
@@ -18,7 +19,7 @@ import type {
 
 // Reuse the public signatures, including dtype promotion and shape checks.
 export { add, sub, mul, div, mod, pow } from "./index.js";
-export { indices, mask, slice } from "./core.js";
+export { ellipsis, indices, mask, newaxis, slice } from "./core.js";
 
 export function neg<
   D extends Exclude<ComputableDType, "bool">,
@@ -42,10 +43,10 @@ export function pos<
   >;
 }
 
-type Key = Selector | readonly Selector[];
-type Axes<K extends Key> = K extends readonly Selector[]
+type Key = ReadSelector | readonly ReadSelector[];
+type Axes<K extends Key> = K extends readonly ReadSelector[]
   ? K
-  : K extends Selector
+  : K extends ReadSelector
     ? readonly [K]
     : never;
 function axes<K extends Key>(key: K): Axes<K> {
@@ -60,7 +61,9 @@ export function get<
   a: Lazy<NoInfer<D>, S> & { readonly dtype: D },
   key: K,
 ): Expr<D, IndexShape<S, Axes<K>>> {
-  return a.get(...axes(key));
+  // TypeScript cannot relate the spread tuple [...Axes<K>] to Axes<K> inside
+  // the deferred IndexShape conditional; both denote the same selectors.
+  return a.get(...axes(key)) as unknown as Expr<D, IndexShape<S, Axes<K>>>;
 }
 
 /** The assignment expression resolves to its original right-hand value. */
@@ -68,11 +71,15 @@ export async function set<
   D extends ComputableDType,
   S extends Shape,
   V extends NMathValue | WeakScalar,
->(a: NMathArray<D, S>, key: Key, value: V): Promise<V> {
+>(
+  a: NMathArray<D, S>,
+  key: WriteSelector | readonly WriteSelector[],
+  value: V,
+): Promise<V> {
   // The public Operand alias currently uses Lazy<any, any>, which rejects
   // some scalar Expr instantiations through method variance. The nominal
   // NMathValue constraint accepts those values without erasing V. Remove the
   // assertion when Operand accepts every branded array/expression shape.
-  await a.set(axes(key), value as Operand);
+  await a.set(axes(key) as readonly WriteSelector[], value as Operand);
   return value;
 }
