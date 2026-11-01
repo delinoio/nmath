@@ -718,7 +718,7 @@ eye(ctx, 2, 3, { k: 1, dtype: "int32" }).toArray(); // [[0, 1, 0], [0, 0, 1]]
 zeros_like(samples, "int64").shape; // [5]
 ```
 
-`linspace` and `eye` produce the same values as NumPy 2.5.4. `logspace` uses JS `Math.pow`, which can differ from NumPy's platform `pow` by a few ULP. Integer dtypes floor `linspace` samples and truncate `logspace` samples; values outside the integer range fail with `RangeError`. `empty` and `empty_like` return zero-filled arrays. Array-valued endpoints, `axis`, `device` and `order` remain compatibility targets.
+`linspace` and `eye` produce the same values as NumPy 2.5.4. `logspace` uses JS `Math.pow` with C `pow` results for a base of 1 and for -1 raised to an infinite power. Other values can differ from NumPy's platform `pow` by a few ULP. Integer dtypes floor `linspace` samples and truncate `logspace` samples; values outside the integer range fail with `RangeError`. `empty` and `empty_like` return zero-filled arrays. Array-valued endpoints, `axis`, `device` and `order` remain compatibility targets.
 
 ## Evaluate polynomials
 

@@ -149,6 +149,16 @@ logspace(0.0, 2.0, 9, dtype=np.float32)
 logspace(0.0, 3.0, 4, dtype=np.int32)
 logspace(0.0, 18.0, 7, dtype=np.int64)
 logspace(0.0, 10.0, 11, base=2.0, dtype=np.uint16)
+# C pow returns 1 for a base of 1 with any exponent and for -1 ** +-inf, where JS
+# Math.pow returns NaN; non-finite endpoints and an overflowing span produce them.
+logspace(0.0, INF, 3, base=1.0)
+logspace(0.0, -INF, 3, base=1.0)
+logspace(0.0, INF, 3, base=-1.0)
+logspace(0.0, -INF, 3, base=-1.0)
+logspace(-1e308, 1e308, 3, base=1.0)
+logspace(math.nan, 1.0, 3, base=1.0)
+logspace(0.0, INF, 3, base=1.0, dtype=np.int32)
+logspace(0.0, INF, 3, base=math.nan)
 
 # eye and identity: square, non-square, and every diagonal offset class.
 for k in [0, 1, -1, 2, -2, 3, -3, 5, -5]:

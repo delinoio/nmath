@@ -275,8 +275,20 @@ export function logspace<
   const dtype = checkRangeDType("logspace", options.dtype ?? "float64") as D;
   context.ensureCpuBudget(count, dtype);
   const { values } = linspaceValues(start, stop, count, endpoint);
-  for (let i = 0; i < count; i++) values[i] = Math.pow(base, values[i]);
+  for (let i = 0; i < count; i++) values[i] = cPow(base, values[i]);
   return fromFloat64(context, dtype, [count] as [N], values, Math.trunc);
+}
+
+/**
+ * NumPy's float64 power is C99 `pow`, which returns 1 for a base of 1 with any
+ * exponent (including NaN) and for a base of -1 with an infinite exponent.
+ * ECMAScript `Math.pow` returns NaN in those cases and agrees elsewhere.
+ */
+function cPow(base: number, exponent: number): number {
+  if (base === 1) return 1;
+  if (base === -1 && (exponent === Infinity || exponent === -Infinity))
+    return 1;
+  return Math.pow(base, exponent);
 }
 
 /** `np.eye(N, M=None, k=0, dtype=float)`: ones on the `k`-th diagonal, zeros elsewhere. */
