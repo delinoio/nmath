@@ -149,3 +149,5 @@ Axis-manipulation helpers (`squeeze`, `expand_dims`, `swapaxes`, `moveaxis`, `ra
 Range, identity and `_like` constructors compute their values in the package layer and create ordinary context arrays; the [package contract](packages-nmath-package-contract.md#typing) owns the NumPy algorithms, the logspace tolerance and the zero-filled `empty` adaptation.
 
 NumPy products, diagonals, clip and diff compose matmul, transpose, reshape, indexing, elementwise and sum nodes in the package layer and add no native node; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy semantics, error codes and oracle criterion.
+
+Truth reductions and closeness tests compose comparisons and the lazy sum reduction in the package layer; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy semantics and result types.
