@@ -201,12 +201,15 @@ counterparts({"numpy.transpose": "numpy.transpose", "numpy.ndarray.transpose": "
     ["packages/nmath/test/layout.test.mjs", "packages/nmath/test/types/layout.ts", "crates/nmath-core/tests/layout.rs", "packages/nmath/test/compiler.test.mjs"],
     ["packages/nmath/test/fixtures/layout.json"])
 for op, target, args, limit in [
-    ("__getitem__", "get", ["integer", "slice", "indices", "mask"], "Basic indexing shares storage; advanced selections copy. Full upstream mixed indexing remains pending."),
-    ("__setitem__", "set", ["selectors", "value", "signal"], "Asynchronous atomic writes; complex-to-real writes require explicit casts; failed writes preserve storage."),
+    ("__getitem__", "get", ["integer", "slice", "indices", "mask", "newaxis", "ellipsis"], "Basic indexing shares storage; advanced selections copy. newaxis and ellipsis follow NumPy advanced-block placement. More than one integer-array or mask selector remains pending."),
+    ("__setitem__", "set", ["selectors", "ellipsis", "value", "signal"], "Asynchronous atomic writes; complex-to-real writes require explicit casts; failed writes preserve storage; newaxis in writes remains a target."),
     ("astype", "astype", ["dtype"], "Lazy cast; explicit complex-to-real cast can discard imaginary components; casting/order/copy/subok options remain targets."),
 ]:
     counterparts({"numpy.ndarray." + op: "core.NMathArray." + target}, "indexing-casting", args, NUMERIC,
-        NUMERIC_LIMITS + [limit], CORE, DTYPE_TESTS + ["packages/nmath/test/core.test.mjs"], DTYPE_FIXTURES)
+        NUMERIC_LIMITS + [limit], CORE, DTYPE_TESTS + ["packages/nmath/test/core.test.mjs"] + (["packages/nmath/test/newaxis.test.mjs"] if op != "astype" else []), DTYPE_FIXTURES + (["packages/nmath/test/fixtures/newaxis.json"] if op != "astype" else []))
+counterparts({"numpy.newaxis": "numpy.newaxis"}, "indexing-casting", ["read selector"], NUMERIC,
+    NUMERIC_LIMITS + ["JS null inserts a length-1 axis in reads; NumPy advanced-block placement is preserved; writes reject newaxis."],
+    CORE, ["packages/nmath/test/newaxis.test.mjs"], ["packages/nmath/test/fixtures/newaxis.json"])
 for op in ["save", "load", "savez", "savez_compressed"]:
     counterparts({"numpy." + op: "numpy." + op}, "numpy-io", ["local path", "explicit context/owned arrays", "signal", "overwrite for writes"], NUMERIC,
         ["Writes reject existing files unless overwrite is explicit; scheduled atomic publication.",

@@ -216,7 +216,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | Dtypes               | bool, signed/unsigned 8/16/32/64-bit integers, float16/32/64, complex64/128, fixed-width str, unit-bearing datetime64/timedelta64                                                                              | extended precision, byte/variable strings, categorical, structured and full scalar-class APIs                                                            |
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions; binary math functions | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                            | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
-| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                                | several advanced selectors combined, `newaxis`, ellipsis                                                                                                 |
+| NumPy indexing       | integers, slices, one integer-array or mask selector per operation, views for basic indexing, atomic assignment                                                                                                | several advanced selectors combined, `newaxis` in writes                                                                                                 |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                                                       |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                                   | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                                                              | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                            |
@@ -469,6 +469,20 @@ console.log((await sqrt(a).compute()).toArray()); // [1, 2, 3]
 ```
 
 Result dtypes follow NumPy: small integers use float16 or float32 loops. Transcendental results stay within NumPy's own accuracy-test bounds; other functions match NumPy exactly. Complex inputs work with `conjugate` and the `is*`/`logical_not` predicates only. Integer `reciprocal` is rejected. `out`, `where` and the other ufunc keyword arguments remain targets. GPU execution rejects math functions before admission.
+
+### newaxis and ellipsis
+
+Reads accept `newaxis` (`null`) and `ellipsis`, like NumPy's `None` and `...`.
+
+```ts
+import { ellipsis, newaxis } from "@delinoio/nmath";
+
+const a = ctx.zeros([2, 3, 4], "float32");
+console.log(a.get(newaxis, ellipsis, 0).shape); // [1, 2, 3]
+console.log(a.get(ellipsis, newaxis).shape); // [2, 3, 4, 1]
+```
+
+In `.nts`, write `a[[newaxis, ellipsis, 0]]`. Writes accept `ellipsis` but not `newaxis`. Combining several integer-array or mask selectors remains a target.
 
 ### Binary math functions
 

@@ -35,8 +35,10 @@ export {
   NMathContext,
   NMathGenerator,
   createContext,
+  ellipsis,
   indices,
   mask,
+  newaxis,
   slice,
 } from "./core.js";
 export type {
@@ -59,6 +61,9 @@ export type {
   Operand,
   ReduceOperator,
   Selector,
+  ReadSelector,
+  WriteSelector,
+  Ellipsis,
   SignalOptions,
   Slice,
 } from "./core.js";

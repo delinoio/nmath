@@ -49,7 +49,7 @@ import type {
 } from "./types.js";
 
 export { equal, greater, greater_equal, less, less_equal, not_equal, where };
-export { indices, mask, slice } from "./core.js";
+export { ellipsis, indices, mask, newaxis, slice } from "./core.js";
 import type {
   ReshapeShape,
   ReshapeCheck,

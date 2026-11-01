@@ -217,6 +217,125 @@ export interface Mask {
 
 export type Selector = number | Slice | Indices | Mask;
 
+/** NumPy `...`: expands to full slices over the axes no other selector consumes. */
+export interface Ellipsis {
+  readonly kind: "ellipsis";
+}
+/** The ellipsis selector. */
+export const ellipsis: Ellipsis = Object.freeze({ kind: "ellipsis" });
+/** NumPy `newaxis` (`None`): inserts a new axis of length 1 in a read. */
+export const newaxis = null;
+/** Selectors accepted by reads. */
+export type ReadSelector = Selector | Ellipsis | null;
+/** Selectors accepted by writes. `newaxis` is not supported in writes. */
+export type WriteSelector = Selector | Ellipsis;
+
+function isEllipsis(s: unknown): s is Ellipsis {
+  return (
+    typeof s === "object" && s !== null && (s as Ellipsis).kind === "ellipsis"
+  );
+}
+
+/** Replaces one ellipsis with full slices for the axes it stands for. */
+function expandEllipsis<T extends ReadSelector>(
+  selectors: readonly T[],
+  rank: number,
+): Exclude<T, Ellipsis>[] {
+  const count = selectors.filter(isEllipsis).length;
+  if (count > 1) {
+    throw new NMathError(
+      "NMATH_INDEX_INVALID",
+      "NMATH_INDEX_INVALID: An index can contain at most one ellipsis.",
+    );
+  }
+  const consuming = selectors.filter(
+    (s) => s !== null && !isEllipsis(s),
+  ).length;
+  const fill = Math.max(rank - consuming, 0);
+  return selectors.flatMap((s) =>
+    isEllipsis(s)
+      ? Array.from({ length: fill }, () => slice() as Exclude<T, Ellipsis>)
+      : [s as Exclude<T, Ellipsis>],
+  );
+}
+
+type Token = "new" | "int" | "array" | "slice";
+function token(s: Selector | null): Token {
+  if (s === null) return "new";
+  if (typeof s === "number") return "int";
+  return s.kind === "slice" ? "slice" : "array";
+}
+
+/**
+ * Output axis labels in NumPy order. Integer and array selectors form one
+ * advanced block when an array selector is present; the block stays in place
+ * when its selectors are adjacent and moves to the front otherwise. A
+ * `newaxis` between advanced selectors breaks adjacency, as in NumPy.
+ */
+function outputLabels(tokens: readonly Token[], rank: number): string[] {
+  const hasArray = tokens.includes("array");
+  const advanced = tokens.flatMap((t, i) =>
+    hasArray && (t === "int" || t === "array") ? [i] : [],
+  );
+  const front =
+    advanced.length > 0 &&
+    advanced[advanced.length - 1] - advanced[0] + 1 !== advanced.length;
+  const labels: string[] = [];
+  let axis = 0;
+  for (const t of tokens) {
+    if (t === "new") {
+      labels.push("new");
+      continue;
+    }
+    if (t === "slice") labels.push(`axis${axis}`);
+    if (t === "array" && !front) labels.push("block");
+    axis += 1;
+  }
+  for (; axis < rank; axis += 1) labels.push(`axis${axis}`);
+  return front ? ["block", ...labels] : labels;
+}
+
+/** Lazy read with `newaxis` and ellipsis support over the native selectors. */
+function readIndex(
+  source: Lazy<any, any>,
+  selectors: readonly ReadSelector[],
+): Expr<any, any> {
+  const rank = source.shape.length;
+  const expanded = expandEllipsis(selectors, rank);
+  const nativeSelectors = expanded.filter((s): s is Selector => s !== null);
+  const result = new Expr(
+    native(() =>
+      binding.NativeExpr.index(
+        source.nativeExpr(),
+        nativeSelectors.map(toNativeSelector),
+      ),
+    ),
+    source.context,
+  );
+  if (nativeSelectors.length === expanded.length) {
+    return result;
+  }
+  const have = outputLabels(nativeSelectors.map(token), rank);
+  const want = outputLabels(expanded.map(token), rank);
+  const order = want
+    .filter((label) => label !== "new")
+    .map((label) => have.indexOf(label));
+  const moved = order.some((axis, i) => axis !== i)
+    ? new Expr(
+        native(() => binding.NativeExpr.transpose(result.nativeExpr(), order)),
+        source.context,
+      )
+    : result;
+  const sizes = [...moved.shape];
+  const shape = want.map((label) => (label === "new" ? 1 : sizes.shift()!));
+  return new Expr(
+    native(() =>
+      binding.NativeExpr.reshape(moved.nativeExpr(), shape, undefined),
+    ),
+    source.context,
+  );
+}
+
 /** `slice(start, stop, step)`: `stop` is excluded; `undefined` omits a bound. */
 export function slice(start?: number, stop?: number, step?: number): Slice {
   return { kind: "slice", start, stop, step };
@@ -817,19 +936,14 @@ export abstract class Lazy<
     );
   }
 
-  /** Lazy read. Integers drop an axis; slices, `indices` and `mask` keep one. */
-  get<const Sel extends readonly Selector[]>(
+  /**
+   * Lazy read. Integers drop an axis; slices, `indices` and `mask` keep one;
+   * `newaxis` inserts a length-1 axis; `ellipsis` stands for the remaining axes.
+   */
+  get<const Sel extends readonly ReadSelector[]>(
     ...selectors: Sel
   ): Expr<D, IndexShape<S, Sel>> {
-    return new Expr(
-      native(() =>
-        binding.NativeExpr.index(
-          this.nativeExpr(),
-          selectors.map(toNativeSelector),
-        ),
-      ),
-      this.context,
-    );
+    return readIndex(this, selectors);
   }
 
   /** Lazy C-order reshape; compatible layouts share storage unless copy is true. */
@@ -1086,12 +1200,20 @@ export class NMathArray<
    * failure leaves the previous values.
    */
   set(
-    selectors: readonly Selector[],
+    selectors: readonly WriteSelector[],
     value: Operand,
     options: SignalOptions = {},
   ): Promise<void> {
     const target = this.#array;
-    const nativeSelectors = selectors.map(toNativeSelector);
+    if ((selectors as readonly unknown[]).includes(null)) {
+      throw new NMathError(
+        "NMATH_INDEX_INVALID",
+        "NMATH_INDEX_INVALID: newaxis is supported in reads only. Remove it from the write selectors.",
+      );
+    }
+    const nativeSelectors = expandEllipsis(selectors, this.shape.length).map(
+      toNativeSelector,
+    );
     const valueExpr = operandExpr(value);
     return withSignal(options.signal, (cancel) =>
       this.context.nativeContext.assign(
