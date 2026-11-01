@@ -131,6 +131,25 @@ impl ReduceOp {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ScanOp {
+    CumSum,
+    CumProd,
+}
+
+impl ScanOp {
+    pub fn id(self) -> &'static str {
+        match self {
+            ScanOp::CumSum => "cumsum",
+            ScanOp::CumProd => "cumprod",
+        }
+    }
+
+    pub fn result_dtype(self, input: DType) -> DType {
+        input.sum_dtype()
+    }
+}
+
 /// Elements processed between cancellation checks.
 const CHUNK: usize = 1 << 14;
 
@@ -1185,6 +1204,138 @@ fn arg_reduce<T: Num>(
         }
     }
     Ok(index)
+}
+
+fn scan_loop<T: Num>(
+    op: ScanOp,
+    values: &[T],
+    shape: &[usize],
+    axis: Option<usize>,
+    token: &CancellationToken,
+) -> Result<Vec<T>> {
+    let mut out = vec![T::default(); values.len()];
+    if values.is_empty() {
+        return Ok(out);
+    }
+    let accumulate = |left: T, right: T| -> T {
+        match op {
+            ScanOp::CumSum => T::add(left, right),
+            ScanOp::CumProd => T::mul(left, right),
+        }
+    };
+    match axis {
+        None => {
+            let mut accumulator = values[0];
+            out[0] = accumulator;
+            for (i, &value) in values.iter().enumerate().skip(1) {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                accumulator = accumulate(accumulator, value);
+                out[i] = accumulator;
+            }
+        }
+        Some(axis) => {
+            let length = shape[axis];
+            if length == 0 {
+                return Ok(out);
+            }
+            let inner: usize = shape[axis + 1..].iter().product();
+            let outer: usize = shape[..axis].iter().product();
+            for batch in 0..outer {
+                for lane in 0..inner {
+                    let base = batch * length * inner + lane;
+                    let mut accumulator = values[base];
+                    out[base] = accumulator;
+                    for step in 1..length {
+                        let i = base + step * inner;
+                        if i % CHUNK == 0 {
+                            token.check()?;
+                        }
+                        accumulator = accumulate(accumulator, values[i]);
+                        out[i] = accumulator;
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Cumulative sum or product over the flattened input or one axis.
+pub fn scan(
+    op: ScanOp,
+    input: &DenseArray,
+    axis: Option<i64>,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    validate_scan(input.dtype())?;
+    let rank = input.shape.len();
+    let axis = match axis {
+        None => None,
+        Some(raw) => {
+            let normalized = if raw < 0 { raw + rank as i64 } else { raw };
+            if normalized < 0 || normalized >= rank as i64 {
+                return Err(Error::new(
+                    ErrorCode::IndexOutOfBounds,
+                    format!("Axis {raw} is out of bounds for an array of dimension {rank}."),
+                ));
+            }
+            Some(normalized as usize)
+        }
+    };
+    let out_shape = match axis {
+        None => vec![input.size()],
+        Some(_) => input.shape.clone(),
+    };
+    let dtype = op.result_dtype(input.dtype());
+    let count = crate::numerical::size(&out_shape)?;
+    let data_bytes = checked_reduction_bytes(count, dtype.item_size())?;
+    let shape_bytes = checked_reduction_bytes(out_shape.len(), std::mem::size_of::<usize>())?;
+    let reservation = budget.reserve(
+        data_bytes
+            .checked_add(shape_bytes)
+            .ok_or_else(|| crate::numerical::overflow())?,
+    )?;
+    let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
+    macro_rules! run {
+        ($values:expr) => {
+            scan_loop(op, $values, &input.shape, axis, token)?
+        };
+    }
+    let buffer = match values.as_ref() {
+        Buffer::I8(x) => run!(x).into(),
+        Buffer::I16(x) => run!(x).into(),
+        Buffer::I32(x) => run!(x).into(),
+        Buffer::I64(x) => run!(x).into(),
+        Buffer::U8(x) => run!(x).into(),
+        Buffer::U16(x) => run!(x).into(),
+        Buffer::U32(x) => run!(x).into(),
+        Buffer::U64(x) => run!(x).into(),
+        Buffer::F16(x) => run!(x).into(),
+        Buffer::F32(x) => run!(x).into(),
+        Buffer::F64(x) => run!(x).into(),
+        Buffer::C64(x) => run!(x).into(),
+        Buffer::C128(x) => run!(x).into(),
+        Buffer::Bool(_) | Buffer::Temporal { .. } | Buffer::Unicode { .. } => {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Cumulative scans require a numeric or boolean dtype. Cast explicitly.",
+            ));
+        }
+    };
+    DenseArray::new(out_shape, buffer, reservation)
+}
+
+pub fn validate_scan(dtype: DType) -> Result<()> {
+    if matches!(dtype, DType::Str(_)) || dtype.temporal_unit().is_some() {
+        return Err(Error::new(
+            ErrorCode::DTypeUnsupported,
+            "Cumulative scans do not support string or temporal arrays.",
+        ));
+    }
+    Ok(())
 }
 
 pub fn reduce(

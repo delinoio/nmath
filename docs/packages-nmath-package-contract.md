@@ -78,6 +78,8 @@ The NumPy `sum`, `mean`, `min`, `max`, `prod`, `argmin` and `argmax` wrappers pr
 
 Index reductions return the first equal value's position, keep the first NaN position, and compare complex values lexicographically. They accept one axis or no axis. A zero-length reduced axis fails with `NMATH_SHAPE_MISMATCH`; with a nonempty reduced axis and an empty retained shape the result is empty. Product reductions use the multiplicative identity for zero-length reduced axes. GPU requests reject product and index reductions before admission with `NMATH_GPU_UNSUPPORTED_OPERATION`.
 
+The NumPy `cumsum` and `cumprod` wrappers return the sum-promoted dtype. Without an axis the result type is a one-dimensional dynamic shape, because the flattened length is not part of the tuple type. A literal or dynamic axis keeps the input shape. The declarations reject string and temporal operands, and runtime validation rejects them again with `NMATH_DTYPE_UNSUPPORTED`. GPU requests reject scans before admission with `NMATH_GPU_UNSUPPORTED_OPERATION`.
+
 ### Errors
 
 `NMathError` has a `code` property whose values are the error codes in the [runtime crates contract](crates-nmath-runtime-contract.md#error-codes). Messages are English.

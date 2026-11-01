@@ -7,8 +7,8 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use nmath_core::{
     BinaryOp, Buffer as CoreBuffer, CancellationToken, Context, ContextOptions, DType, Device,
-    Error as CoreError, ErrorCode, Expr, Generator, NdArray, ReduceOp, Scalar, Selector, UnaryOp,
-    Value, context::JobOutput, io::WriteMode,
+    Error as CoreError, ErrorCode, Expr, Generator, NdArray, ReduceOp, Scalar, ScanOp, Selector,
+    UnaryOp, Value, context::JobOutput, io::WriteMode,
 };
 
 static LOGGING: Once = Once::new();
@@ -478,6 +478,23 @@ impl NativeExpr {
         };
         Ok(Self {
             inner: Expr::reduce(op, &input.inner, axes).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn scan(op: String, input: &NativeExpr, axis: Option<i64>) -> Result<Self> {
+        let op = match op.as_str() {
+            "cumsum" => ScanOp::CumSum,
+            "cumprod" => ScanOp::CumProd,
+            other => {
+                return Err(core_err(
+                    ErrorCode::IndexInvalid,
+                    format!("Unknown cumulative scan '{other}'."),
+                ));
+            }
+        };
+        Ok(Self {
+            inner: Expr::scan(op, &input.inner, axis).map_err(to_napi)?,
         })
     }
 

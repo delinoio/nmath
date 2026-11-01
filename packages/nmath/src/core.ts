@@ -37,6 +37,7 @@ import type {
   IndexShape,
   MatMulCheck,
   MatMulShape,
+  MutableShape,
   Promote,
   PromoteWeak,
   ReduceShape,
@@ -339,6 +340,7 @@ function pickContext(
 export type BinaryOperator = "add" | "sub" | "mul" | "div" | "mod" | "pow";
 export type ReduceOperator =
   "sum" | "mean" | "min" | "max" | "prod" | "argmin" | "argmax";
+export type ScanOperator = "cumsum" | "cumprod";
 
 /** Type-only brand that identifies NMath values regardless of dtype and shape. */
 export declare const lazyBrand: unique symbol;
@@ -564,6 +566,46 @@ export abstract class Lazy<
     axis?: A,
   ): Expr<"int64", ReduceShape<S, A>> {
     return this.reduceOp("argmin", axis);
+  }
+
+  /** @internal */
+  scanOp(op: ScanOperator, axis: number | undefined): Expr<any, any> {
+    return new Expr(
+      native(() =>
+        binding.NativeExpr.scan(
+          op,
+          this.nativeExpr(),
+          axis === undefined
+            ? undefined
+            : (checkInt(axis, "An axis") as number),
+        ),
+      ),
+      this.context,
+    );
+  }
+
+  /** Cumulative sum over the flattened input or one axis. */
+  cumsum<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+  ): Expr<SumDType<D>, [A] extends [undefined] ? [number] : MutableShape<S>> {
+    return this.scanOp("cumsum", axis);
+  }
+
+  /** Cumulative product over the flattened input or one axis. */
+  cumprod<A extends number | undefined = undefined>(
+    this: [D] extends ["str" | TemporalDType]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: A,
+  ): Expr<SumDType<D>, [A] extends [undefined] ? [number] : MutableShape<S>> {
+    return this.scanOp("cumprod", axis);
   }
 
   /** First index of the maximum value. The result uses dtype `int64`. */
