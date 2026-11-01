@@ -220,7 +220,87 @@ export const logical_and = binaryUfunc<LogicalFunction>("logical_and");
 export const logical_or = binaryUfunc<LogicalFunction>("logical_or");
 export const logical_xor = binaryUfunc<LogicalFunction>("logical_xor");
 
+/** `maximum`, `minimum`, `fmax` and `fmin`: same promotion as arithmetic. */
+export interface ExtremumFunction {
+  <
+    A extends NumericDType,
+    AS extends Shape,
+    B extends NumericDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS>,
+  ): Expr<Promote<A, B>, Broadcast<AS, BS>>;
+  <
+    A extends NumericDType,
+    AS extends Shape,
+    W extends number | bigint | boolean | Complex,
+  >(
+    a: Arg<A, AS>,
+    b: W,
+  ): Expr<PromoteWeak<A, W>, AS>;
+}
+type IntLoop<D extends NumericDType> = D extends "bool" ? "int8" : D;
+/** `fmod` and `floor_divide` on real operands; bools use the int8 loop. */
+export interface DivisionFunction {
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    B extends OrderedDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS>,
+  ): Expr<IntLoop<Promote<A, B>>, Broadcast<AS, BS>>;
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    W extends number | bigint | boolean,
+  >(
+    a: Arg<A, AS>,
+    b: W,
+  ): Expr<IntLoop<PromoteWeak<A, W>>, AS>;
+}
+type FloatLoop<D extends NumericDType> = D extends OrderedDType
+  ? MathFloatDType<D>
+  : never;
+/** Float-valued binary functions of real operands. Each operand selects its float loop. */
+export interface FloatBinaryFunction {
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    B extends OrderedDType,
+    BS extends Shape,
+  >(
+    a: Arg<A, AS>,
+    b: Arg<B, BS> & BroadcastCheck<AS, BS>,
+  ): Expr<Promote<MathFloatDType<A>, MathFloatDType<B>>, Broadcast<AS, BS>>;
+  <
+    A extends OrderedDType,
+    AS extends Shape,
+    W extends number | bigint | boolean,
+  >(
+    a: Arg<A, AS>,
+    b: W,
+  ): Expr<FloatLoop<PromoteWeak<A, W>>, AS>;
+}
+
+export const maximum = binaryUfunc<ExtremumFunction>("maximum");
+export const minimum = binaryUfunc<ExtremumFunction>("minimum");
+export const fmax = binaryUfunc<ExtremumFunction>("fmax");
+export const fmin = binaryUfunc<ExtremumFunction>("fmin");
+export const fmod = binaryUfunc<DivisionFunction>("fmod");
+export const floor_divide = binaryUfunc<DivisionFunction>("floor_divide");
+export const copysign = binaryUfunc<FloatBinaryFunction>("copysign");
+export const nextafter = binaryUfunc<FloatBinaryFunction>("nextafter");
+export const arctan2 = binaryUfunc<FloatBinaryFunction>("arctan2");
+export const hypot = binaryUfunc<FloatBinaryFunction>("hypot");
+export const heaviside = binaryUfunc<FloatBinaryFunction>("heaviside");
+export const logaddexp = binaryUfunc<FloatBinaryFunction>("logaddexp");
+export const logaddexp2 = binaryUfunc<FloatBinaryFunction>("logaddexp2");
+
 // NumPy 2 aliases.
+export const atan2 = arctan2;
 export const bitwise_not = invert;
 export const bitwise_invert = invert;
 export const bitwise_left_shift = left_shift;

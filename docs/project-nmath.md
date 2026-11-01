@@ -124,6 +124,8 @@ Bitwise, shift and logical operators extend the lazy binary node, and `invert` u
 
 Reduction axis lists use the native multi-axis reduce node, and `keepdims` reshapes its result in the package layer. The [package contract](packages-nmath-package-contract.md#typing) owns the option surface and shape inference.
 
+Binary math ufuncs extend the lazy binary node and run in the runtime ufunc module. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns loop selection, NaN handling and pending libm criteria, and the [package contract](packages-nmath-package-contract.md#typing) owns the declarations.
+
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.
 
 Variance and standard deviation use their own lazy node with a two-pass computation. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns result dtypes, degrees-of-freedom clamping and GPU admission, and the [package contract](packages-nmath-package-contract.md#typing) owns the declaration surface.
