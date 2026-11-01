@@ -26340,7 +26340,350 @@
    }
   },
   {
-   "id": "diff/504",
+   "id": "clip/504",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "int8",
+     "shape": [
+      5
+     ],
+     "values": [
+      -128,
+      -5,
+      0,
+      100,
+      127
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "int",
+     "value": "1000"
+    },
+    "a_max": {
+     "kind": "float",
+     "value": 2000.0
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     5
+    ],
+    "values": [
+     1000.0,
+     1000.0,
+     1000.0,
+     1000.0,
+     1000.0
+    ]
+   }
+  },
+  {
+   "id": "clip/505",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "int8",
+     "shape": [
+      5
+     ],
+     "values": [
+      -128,
+      -5,
+      0,
+      100,
+      127
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "float",
+     "value": -1000.5
+    },
+    "a_max": {
+     "kind": "int",
+     "value": "50"
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     5
+    ],
+    "values": [
+     -128.0,
+     -5.0,
+     0.0,
+     50.0,
+     50.0
+    ]
+   }
+  },
+  {
+   "id": "clip/506",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "int32",
+     "shape": [
+      2,
+      4
+     ],
+     "values": [
+      -3,
+      -2,
+      -1,
+      0,
+      1,
+      2,
+      3,
+      -3
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "int",
+     "value": "2"
+    },
+    "a_max": {
+     "kind": "float",
+     "value": 2.5
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     2,
+     4
+    ],
+    "values": [
+     2.0,
+     2.0,
+     2.0,
+     2.0,
+     2.0,
+     2.0,
+     2.5,
+     2.0
+    ]
+   }
+  },
+  {
+   "id": "clip/507",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "float32",
+     "shape": [
+      8
+     ],
+     "values": [
+      null,
+      "-inf",
+      -2.5,
+      -0.5,
+      0.0,
+      0.5,
+      1.5,
+      "inf"
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "float",
+     "value": 1.00000001
+    },
+    "a_max": {
+     "kind": "array",
+     "dtype": "float64",
+     "shape": [
+      1
+     ],
+     "values": [
+      2.0
+     ]
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     8
+    ],
+    "values": [
+     null,
+     1.00000001,
+     1.00000001,
+     1.00000001,
+     1.00000001,
+     1.00000001,
+     1.5,
+     2.0
+    ]
+   }
+  },
+  {
+   "id": "clip/508",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "float32",
+     "shape": [
+      8
+     ],
+     "values": [
+      null,
+      "-inf",
+      -2.5,
+      -0.5,
+      0.0,
+      0.5,
+      1.5,
+      "inf"
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "array",
+     "dtype": "float64",
+     "shape": [
+      1
+     ],
+     "values": [
+      0.1
+     ]
+    },
+    "a_max": {
+     "kind": "float",
+     "value": 0.30000001
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     8
+    ],
+    "values": [
+     null,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.30000001,
+     0.30000001,
+     0.30000001
+    ]
+   }
+  },
+  {
+   "id": "clip/509",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "float32",
+     "shape": [
+      4
+     ],
+     "values": [
+      -1.5,
+      -1.0,
+      -0.5,
+      0.0
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "float",
+     "value": 0.5
+    },
+    "a_max": {
+     "kind": "complex",
+     "value": [
+      1.0,
+      0.0
+     ]
+    }
+   },
+   "expected": {
+    "dtype": "complex64",
+    "shape": [
+     4
+    ],
+    "values": [
+     [
+      0.5,
+      0.0
+     ],
+     [
+      0.5,
+      0.0
+     ],
+     [
+      0.5,
+      0.0
+     ],
+     [
+      0.5,
+      0.0
+     ]
+    ]
+   }
+  },
+  {
+   "id": "clip/510",
+   "fn": "clip",
+   "operands": [
+    {
+     "dtype": "int16",
+     "shape": [
+      3
+     ],
+     "values": [
+      -3,
+      -2,
+      -1
+     ]
+    }
+   ],
+   "kwargs": {
+    "a_min": {
+     "kind": "array",
+     "dtype": "int8",
+     "shape": [
+      3
+     ],
+     "values": [
+      1,
+      2,
+      3
+     ]
+    },
+    "a_max": {
+     "kind": "float",
+     "value": 10000000000.0
+    }
+   },
+   "expected": {
+    "dtype": "float64",
+    "shape": [
+     3
+    ],
+    "values": [
+     1.0,
+     2.0,
+     3.0
+    ]
+   }
+  },
+  {
+   "id": "diff/511",
    "fn": "diff",
    "operands": [
     {
@@ -26377,7 +26720,7 @@
    }
   },
   {
-   "id": "diff/505",
+   "id": "diff/512",
    "fn": "diff",
    "operands": [
     {
@@ -26413,7 +26756,7 @@
    }
   },
   {
-   "id": "diff/506",
+   "id": "diff/513",
    "fn": "diff",
    "operands": [
     {
@@ -26446,7 +26789,7 @@
    }
   },
   {
-   "id": "diff/507",
+   "id": "diff/514",
    "fn": "diff",
    "operands": [
     {
@@ -26477,7 +26820,7 @@
    }
   },
   {
-   "id": "diff/508",
+   "id": "diff/515",
    "fn": "diff",
    "operands": [
     {
@@ -26515,7 +26858,7 @@
    }
   },
   {
-   "id": "diff/509",
+   "id": "diff/516",
    "fn": "diff",
    "operands": [
     {
@@ -26563,7 +26906,7 @@
    }
   },
   {
-   "id": "diff/510",
+   "id": "diff/517",
    "fn": "diff",
    "operands": [
     {
@@ -26609,7 +26952,7 @@
    }
   },
   {
-   "id": "diff/511",
+   "id": "diff/518",
    "fn": "diff",
    "operands": [
     {
@@ -26653,7 +26996,7 @@
    }
   },
   {
-   "id": "diff/512",
+   "id": "diff/519",
    "fn": "diff",
    "operands": [
     {
@@ -26723,7 +27066,7 @@
    }
   },
   {
-   "id": "diff/513",
+   "id": "diff/520",
    "fn": "diff",
    "operands": [
     {
@@ -26783,7 +27126,7 @@
    }
   },
   {
-   "id": "diff/514",
+   "id": "diff/521",
    "fn": "diff",
    "operands": [
     {
@@ -26822,7 +27165,7 @@
    }
   },
   {
-   "id": "diff/515",
+   "id": "diff/522",
    "fn": "diff",
    "operands": [
     {
@@ -26860,7 +27203,7 @@
    }
   },
   {
-   "id": "diff/516",
+   "id": "diff/523",
    "fn": "diff",
    "operands": [
     {
@@ -26903,7 +27246,7 @@
    }
   },
   {
-   "id": "diff/517",
+   "id": "diff/524",
    "fn": "diff",
    "operands": [
     {
@@ -26936,7 +27279,7 @@
    }
   },
   {
-   "id": "diff/518",
+   "id": "diff/525",
    "fn": "diff",
    "operands": [
     {
@@ -26968,7 +27311,7 @@
    }
   },
   {
-   "id": "diff/519",
+   "id": "diff/526",
    "fn": "diff",
    "operands": [
     {
@@ -27009,7 +27352,7 @@
    }
   },
   {
-   "id": "diff/520",
+   "id": "diff/527",
    "fn": "diff",
    "operands": [
     {
@@ -27059,7 +27402,7 @@
    }
   },
   {
-   "id": "diff/521",
+   "id": "diff/528",
    "fn": "diff",
    "operands": [
     {
@@ -27085,7 +27428,7 @@
    }
   },
   {
-   "id": "diff/522",
+   "id": "diff/529",
    "fn": "diff",
    "operands": [
     {
@@ -27111,7 +27454,7 @@
    }
   },
   {
-   "id": "diff/523",
+   "id": "diff/530",
    "fn": "diff",
    "operands": [
     {

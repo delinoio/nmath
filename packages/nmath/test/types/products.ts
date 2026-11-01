@@ -49,6 +49,8 @@ const clipped: Expr<"float32", readonly [2, 3]> = clip(m, 0, 1);
 const intClip: Expr<"int32", readonly [3, 4]> = clip(n, 0n, null);
 const floatClip: Expr<"float64", readonly [3, 4]> = clip(n, undefined, 2.5);
 const arrayClip: Expr<"float64", [2, 3]> = clip(m, v, null);
+// Both bounds resolve one dtype with the array before either comparison.
+const mixedClip: Expr<"float64", readonly [3, 4]> = clip(n, 1000n, 2000.5);
 const difference: Expr<"float32", [number, number]> = diff(m);
 const unchanged: Expr<"float32", readonly [2, 3]> = diff(m, 0);
 const boolDiff: Expr<"bool", [number, number]> = diff(flags, 2, 0);
@@ -93,6 +95,7 @@ void [
   batchTotal,
   floatTotal,
   clipped,
+  mixedClip,
   intClip,
   floatClip,
   arrayClip,

@@ -139,22 +139,27 @@ export type ClipBound =
   | Complex
   | null
   | undefined;
-type BoundDType<D extends NumericDType, B> = [B] extends [null | undefined]
-  ? D
-  : B extends { readonly dtype: infer D2 extends NumericDType }
-    ? Promote<D, D2>
-    : B extends number | bigint | boolean | Complex
-      ? PromoteWeak<D, B>
-      : never;
+type StrongBound<D extends NumericDType, B> = B extends {
+  readonly dtype: infer D2 extends NumericDType;
+}
+  ? Promote<D, D2>
+  : D;
+type WeakBound<D extends NumericDType, B> = B extends
+  number | bigint | boolean | Complex
+  ? PromoteWeak<D, B>
+  : D;
 type BoundShape<S extends Shape, B> = B extends {
   readonly shape: infer S2 extends Shape;
 }
   ? Broadcast<S, S2>
   : Dims<S>;
-/** `np.clip` dtype: the bounds promote with the array in turn, as `maximum`/`minimum` do. */
+/**
+ * `np.clip` dtype: like the three-input `um.clip`, array bounds promote with
+ * the array first and weak scalar bounds then apply together.
+ */
 export type ClipDType<D extends NumericDType, Lo, Hi> =
-  BoundDType<D, Lo> extends infer M extends NumericDType
-    ? BoundDType<M, Hi>
+  StrongBound<StrongBound<D, Lo>, Hi> extends infer M extends NumericDType
+    ? WeakBound<WeakBound<M, Lo>, Hi>
     : never;
 /** `np.clip` shape: array bounds broadcast with the input. */
 export type ClipShape<S extends Shape, Lo, Hi> =
@@ -425,11 +430,12 @@ const INTEGER_RANGE: Record<string, readonly [bigint, bigint]> = {
 };
 
 /**
- * `np.clip(a, a_min, a_max)`. `null` or `undefined` means no bound. Bounds
- * apply as `minimum(maximum(a, a_min), a_max)`, so NaN propagates and
- * `a_min > a_max` yields `a_max`. Weak JS scalars keep the array dtype where
- * NEP 50 allows; a `number` is a Python float and makes integer input
- * float64. As in NumPy, a `bigint` bound at or beyond the integer dtype's
+ * `np.clip(a, a_min, a_max)`. `null` or `undefined` means no bound. With both
+ * bounds, the array and bounds first resolve one dtype as NumPy's three-input
+ * `um.clip` does, then apply as `minimum(maximum(a, a_min), a_max)`, so NaN
+ * propagates and `a_min > a_max` yields `a_max`. Weak JS scalars keep the
+ * array dtype where NEP 50 allows; a `number` is a Python float and makes
+ * integer input float64. As in NumPy, a `bigint` bound at or beyond the integer dtype's
  * limit is dropped; without bounds the result is `positive(a)`, which fails
  * for bool input.
  */
@@ -466,8 +472,42 @@ export function clip(
   if (lo === undefined) {
     return minimum(a, hi as never) as Expr<any, any>;
   }
-  const lower = maximum(a, lo as never) as Expr<any, any>;
-  return hi === undefined ? lower : (minimum(lower, hi as never) as never);
+  if (hi === undefined) {
+    return maximum(a, lo as never) as Expr<any, any>;
+  }
+  const dtype = clipDType(a, lo, hi);
+  const x = a.dtype === dtype ? a : a.astype(dtype);
+  const lower = maximum(x, lo as never) as Expr<any, any>;
+  return minimum(lower, hi as never) as never;
+}
+
+const WEAK_RANK: Record<string, number> = {
+  boolean: 0,
+  bigint: 1,
+  number: 2,
+};
+
+/**
+ * The common dtype of the three-input `um.clip`: array bounds promote with
+ * the array, then weak scalar bounds apply from the highest kind down, so a
+ * float bound widens an integer array before an integer bound is checked
+ * against it. The probe expressions only carry dtypes and are never computed.
+ */
+function clipDType(
+  a: Lazy<any, any>,
+  lo: Exclude<ClipBound, null | undefined>,
+  hi: Exclude<ClipBound, null | undefined>,
+): ComputableDType {
+  let probe: Lazy<any, any> = a;
+  const scalars: Exclude<ClipBound, Lazy<any, any> | null | undefined>[] = [];
+  for (const bound of [lo, hi]) {
+    if (bound instanceof Lazy) probe = maximum(probe, bound as never);
+    else scalars.push(bound);
+  }
+  const rank = (s: (typeof scalars)[number]) => WEAK_RANK[typeof s] ?? 3;
+  scalars.sort((x, y) => rank(y) - rank(x));
+  for (const scalar of scalars) probe = maximum(probe, scalar as never);
+  return probe.dtype;
 }
 
 /**

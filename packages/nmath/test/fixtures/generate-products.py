@@ -141,6 +141,14 @@ clip_cases = [
     (operand([2, 3], "int32"), np.array([0, 1, -5], np.int8), 2),
     (operand([3], "float32"), np.array([0.0, nan, -1.0], np.float32), np.array([0.5], np.float64)),
     (operand([4], "complex128"), 0 + 0j, 1 + 0.5j), (operand([4], "complex64"), -1 - 1j, None),
+    # With both bounds, um.clip resolves one dtype for the array and both bounds first.
+    (np.array([-128, -5, 0, 100, 127], np.int8), 1000, 2000.0),
+    (np.array([-128, -5, 0, 100, 127], np.int8), -1000.5, 50),
+    (operand([2, 4], "int32"), 2, 2.5),
+    (special.astype(np.float32), 1.00000001, np.array([2.0], np.float64)),
+    (special.astype(np.float32), np.array([0.1], np.float64), 0.30000001),
+    (operand([4], "float32"), 0.5, 1 + 0j),
+    (operand([3], "int16"), np.array([1, 2, 3], np.int8), 1e10),
 ]
 for a, lo, hi in clip_cases:
     cases.append({"id": f"clip/{len(cases)}", "fn": "clip", "operands": [pack(a)],
