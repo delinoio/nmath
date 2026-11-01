@@ -112,6 +112,8 @@ Broadcast-batched matrix products and vector promotion share native shape infere
 
 Polynomial power-series evaluation shares the lazy execution graph across native and NumPy APIs. The [runtime polynomial contract](crates-nmath-runtime-contract.md#polynomial-evaluation) owns coefficient ordering and execution, and the [package adaptation](packages-nmath-package-contract.md#polynomial-js-adaptation) owns tensor options, type inference and explicit-context operands.
 
+Pivot plans extend the table engine with row/column key reshaping and grouped cell aggregation. The [runtime contract](crates-nmath-runtime-contract.md#tables) owns key ordering, null exclusion, aggregate dtypes and missing-cell rules, and the [package contract](packages-nmath-package-contract.md#tables) owns the pandas and Polars adapter surfaces.
+
 Elementwise comparisons extend the lazy binary node with bool results and broadcast shape inference. The [runtime contract](crates-nmath-runtime-contract.md#lazy-expressions) owns promotion, complex restrictions and NaN behavior, and the [package contract](packages-nmath-package-contract.md#typing) owns the function declarations.
 
 Multi-axis and shifted FFT helpers extend the existing transform path. The [runtime contract](crates-nmath-runtime-contract.md#square-linear-algebra-and-one-axis-transforms) owns roll directions, axis validation and composition, and the [package contract](packages-nmath-package-contract.md#typing) owns the typed options and frequency constructors.

@@ -211,6 +211,24 @@ for family, ops in [("linalg", ["solve", "inv", "det"]), ("fft", ["fft", "ifft",
             ["packages/nmath/test/numerical.test.mjs", "crates/nmath-core/tests/numerical.rs"],
             ["crates/nmath-core/tests/fixtures/numerical/" + file for file in (["linalg.json"] if family == "linalg" else ["fft_adaptation.json", "fft_identity.json"])])
 
+for name, target in {"pandas.DataFrame.pivot":"pandas.DataFrame.pivot", "pandas.DataFrame.pivot_table":"pandas.DataFrame.pivotTable"}.items():
+    counterparts({name: target}, "tables",
+        ["index column", "columns column", "values column", "pivot_table aggregation"], REAL,
+        ["CPU-only table plan with explicit context and nullable generated columns.",
+         "Keys and values must be numeric or boolean; invalid keys are excluded.",
+         "pivot requires unique pairs; pivot_table defaults to mean. Pandas sorts both axes and reports zero for an all-null sum cell.",
+         "The row key remains a regular column and generated names are stringified keys; this is a JS adaptation. Multiple keys, string/temporal pivots and full upstream options remain targets."],
+        ["packages/nmath/src/frame.ts", "packages/nmath/src/pandas.ts", "crates/nmath-core/src/table.rs"],
+        ["packages/nmath/test/pivots.test.mjs", "packages/nmath/test/types/pivots.ts", "crates/nmath-core/src/table_tests.rs"])
+for name in ["polars.DataFrame.pivot", "polars.LazyFrame.pivot"]:
+    counterparts({name: name}, "tables",
+        ["on column", "index column", "values column", "aggregate function"], REAL,
+        ["CPU-only table plan with explicit context and nullable generated columns.",
+         "Keys and values must be numeric or boolean; invalid keys are excluded.",
+         "Unique pairs are the default; sum/mean/min/max/count aggregate duplicates. First-appearance order is retained.",
+         "Generated names are stringified keys and the index remains a regular column. Multiple keys, string/temporal pivots and full upstream options remain targets."],
+        ["packages/nmath/src/frame.ts", "packages/nmath/src/polars.ts", "crates/nmath-core/src/table.rs"],
+        ["packages/nmath/test/pivots.test.mjs", "packages/nmath/test/types/pivots.ts", "crates/nmath-core/src/table_tests.rs"])
 for op in ["fft2", "ifft2", "fftn", "ifftn"]:
     counterparts({"numpy.fft." + op: "numpy.fft." + op}, "fft",
         ["a", "s", "axes", "norm"], NUMERIC,

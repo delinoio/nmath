@@ -33,11 +33,21 @@ pub enum Plan {
     Sort(Box<Plan>, usize, bool, bool),
     Join(Box<Plan>, Box<Plan>, usize, usize, bool, bool),
     Group(Box<Plan>, usize, usize, Aggregate, bool, Flavor),
+    Pivot(Box<Plan>, usize, usize, usize, PivotMode, Flavor),
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Flavor {
     Pandas,
     Polars,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PivotMode {
+    Unique,
+    Sum,
+    Mean,
+    Min,
+    Max,
+    Count,
 }
 #[derive(Clone, Copy)]
 pub enum Aggregate {
@@ -50,6 +60,8 @@ pub enum Aggregate {
 pub struct Table {
     pub columns: Vec<MaterializedColumn>,
     pub rows: usize,
+    /// Generated value-column names for a pivot plan. Other plans return None.
+    pub pivot_columns: Option<Vec<String>>,
 }
 pub struct MaterializedColumn {
     pub values: DenseArray,
@@ -140,6 +152,13 @@ impl Plan {
                     return Err(invalid());
                 }
                 2
+            }
+            Self::Pivot(p, row, column, value, ..) => {
+                let n = p.validate(context)?;
+                if *row >= n || *column >= n || *value >= n {
+                    return Err(invalid());
+                }
+                n
             }
         })
     }
@@ -347,6 +366,7 @@ fn take(table: &Table, rows: &[Option<usize>], env: &JobEnv) -> Result<Table> {
     Ok(Table {
         columns,
         rows: rows.len(),
+        pivot_columns: None,
     })
 }
 fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<Table> {
@@ -367,7 +387,11 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
                 };
                 columns.push(MaterializedColumn { values, valid });
             }
-            Ok(Table { columns, rows })
+            Ok(Table {
+                columns,
+                rows,
+                pivot_columns: None,
+            })
         }
         Plan::Select(p, indices) => {
             let t = execute(p, env, frozen)?;
@@ -384,6 +408,7 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
             Ok(Table {
                 columns,
                 rows: t.rows,
+                pivot_columns: None,
             })
         }
         Plan::Filter(p, k) => {
@@ -511,8 +536,292 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
             *flavor,
             env,
         ),
+        Plan::Pivot(p, row, column, value, mode, flavor) => pivot(
+            execute(p, env, frozen)?,
+            *row,
+            *column,
+            *value,
+            *mode,
+            *flavor,
+            env,
+        ),
     }
 }
+#[derive(Clone)]
+struct PivotCell {
+    occurrences: usize,
+    count: usize,
+    signed: i64,
+    unsigned: u64,
+    float: f64,
+    extreme: Option<Scalar>,
+    single: Option<usize>,
+}
+
+fn key_name(value: Scalar) -> String {
+    match value {
+        Scalar::Int(n) => n.to_string(),
+        Scalar::UInt(n) => n.to_string(),
+        Scalar::Bool(n) => n.to_string(),
+        Scalar::Float(n) => format!("{n}"),
+        Scalar::Complex(_) | Scalar::Text(_) | Scalar::Temporal(..) => String::new(),
+    }
+}
+
+fn distinct_rows(index: &KeyIndex, key: &MaterializedColumn, env: &JobEnv) -> Result<Vec<usize>> {
+    let _charge = reserve(env, key.values.size(), std::mem::size_of::<usize>())?;
+    let mut reps = Vec::new();
+    for i in 0..key.values.size() {
+        env.token.check()?;
+        if index.find(key, key, i, false, false, env)? == i {
+            reps.push(i);
+        }
+    }
+    Ok(reps)
+}
+
+fn pivot(
+    t: Table,
+    row_key: usize,
+    column_key: usize,
+    value: usize,
+    mode: PivotMode,
+    flavor: Flavor,
+    env: &JobEnv,
+) -> Result<Table> {
+    let rows = &t.columns[row_key];
+    let columns = &t.columns[column_key];
+    let values = &t.columns[value];
+    for key in [rows, columns] {
+        if matches!(key.values.dtype().kind(), crate::dtype::DTypeKind::Other) {
+            return Err(Error::new(
+                ErrorCode::DTypeUnsupported,
+                "Pivot keys must be numeric or boolean. Cast keys explicitly.",
+            ));
+        }
+    }
+    let input_dtype = values.values.dtype();
+    if matches!(
+        input_dtype,
+        DType::Complex64 | DType::Complex128 | DType::Str(_)
+    ) || input_dtype.temporal_unit().is_some()
+    {
+        return Err(Error::new(
+            ErrorCode::DTypeUnsupported,
+            "Pivot values must be numeric or boolean. Cast values explicitly.",
+        ));
+    }
+    let row_index = KeyIndex::new(rows, false, false, env)?;
+    let column_index = KeyIndex::new(columns, false, false, env)?;
+    let mut row_reps = distinct_rows(&row_index, rows, env)?;
+    let mut column_reps = distinct_rows(&column_index, columns, env)?;
+    let key = |value: &MaterializedColumn, row: usize| value.values.buffer.get(row);
+    if flavor == Flavor::Pandas {
+        row_reps.sort_by(|&a, &b| cmp(key(rows, a), key(rows, b)));
+        column_reps.sort_by(|&a, &b| cmp(key(columns, a), key(columns, b)));
+    }
+    let _maps_charge = reserve(env, t.rows, 2 * (2 * std::mem::size_of::<usize>() + 32))?;
+    let row_ids: std::collections::HashMap<usize, usize> = row_reps
+        .iter()
+        .enumerate()
+        .map(|(id, &row)| (row, id))
+        .collect();
+    let column_ids: std::collections::HashMap<usize, usize> = column_reps
+        .iter()
+        .enumerate()
+        .map(|(id, &row)| (row, id))
+        .collect();
+    let _cells_charge = reserve(
+        env,
+        t.rows,
+        std::mem::size_of::<PivotCell>() + std::mem::size_of::<((usize, usize), usize)>() + 64,
+    )?;
+    let mut cells: Vec<PivotCell> = Vec::new();
+    let mut cell_ids: std::collections::HashMap<(usize, usize), usize> =
+        std::collections::HashMap::new();
+    for i in 0..t.rows {
+        env.token.check()?;
+        let row_head = row_index.find(rows, rows, i, false, false, env)?;
+        let column_head = column_index.find(columns, columns, i, false, false, env)?;
+        if row_head == NO_ROW || column_head == NO_ROW {
+            continue;
+        }
+        let cell_key = (row_ids[&row_head], column_ids[&column_head]);
+        let cell_id = match cell_ids.get(&cell_key) {
+            Some(&id) => id,
+            None => {
+                let id = cells.len();
+                cells.push(PivotCell {
+                    occurrences: 0,
+                    count: 0,
+                    signed: 0,
+                    unsigned: 0,
+                    float: 0.0,
+                    extreme: None,
+                    single: None,
+                });
+                cell_ids.insert(cell_key, id);
+                id
+            }
+        };
+        let cell = &mut cells[cell_id];
+        cell.occurrences += 1;
+        if mode == PivotMode::Unique {
+            if cell.occurrences > 1 {
+                return Err(Error::new(
+                    ErrorCode::IndexInvalid,
+                    "Pivot requires unique index and column pairs. Use an aggregate mode.",
+                ));
+            }
+            cell.single = Some(i);
+            continue;
+        }
+        if !values.valid(i) {
+            continue;
+        }
+        let sample = values.values.buffer.get(i);
+        if flavor == Flavor::Pandas
+            && matches!(sample, Scalar::Float(n) if n.is_nan())
+            && mode != PivotMode::Count
+        {
+            continue;
+        }
+        cell.count += 1;
+        match sample {
+            Scalar::Int(n) => cell.signed = cell.signed.wrapping_add(n),
+            Scalar::UInt(n) => cell.unsigned = cell.unsigned.wrapping_add(n),
+            Scalar::Bool(n) => cell.signed += i64::from(n),
+            Scalar::Float(n) => cell.float += n,
+            _ => return Err(invalid()),
+        }
+        if !matches!(sample, Scalar::Float(_)) {
+            cell.float += sample.as_f64();
+        }
+        if mode == PivotMode::Min || mode == PivotMode::Max {
+            if cell.extreme.as_ref().is_none_or(|old: &Scalar| {
+                let ordering = cmp(sample.clone(), old.clone());
+                if mode == PivotMode::Min {
+                    ordering == Ordering::Less
+                } else {
+                    ordering == Ordering::Greater
+                }
+            }) {
+                cell.extreme = Some(sample);
+            }
+        }
+    }
+    let dtype = match mode {
+        PivotMode::Unique | PivotMode::Min | PivotMode::Max => input_dtype,
+        PivotMode::Count => {
+            if flavor == Flavor::Pandas {
+                DType::Int64
+            } else {
+                DType::UInt32
+            }
+        }
+        PivotMode::Mean => {
+            if flavor == Flavor::Polars && input_dtype == DType::Float32 {
+                DType::Float32
+            } else {
+                DType::Float64
+            }
+        }
+        PivotMode::Sum if flavor == Flavor::Pandas => {
+            if input_dtype == DType::Bool {
+                DType::Int64
+            } else {
+                input_dtype
+            }
+        }
+        PivotMode::Sum => match input_dtype {
+            DType::Bool => DType::UInt32,
+            DType::Int8 | DType::Int16 | DType::UInt8 | DType::UInt16 => DType::Int64,
+            d => d,
+        },
+    };
+    let out_rows = row_reps.len();
+    let out_columns = column_reps.len();
+    let mut key_values = allocate(env, rows.values.buffer.dtype(), out_rows)?;
+    let mut key_valid = allocate(env, DType::Bool, out_rows)?;
+    for (i, &row) in row_reps.iter().enumerate() {
+        env.token.check()?;
+        key_values.buffer.set_from(i, &rows.values.buffer, row);
+        key_valid.buffer.set_from(i, &rows.valid.buffer, row);
+    }
+    let mut output = Vec::with_capacity(out_columns + 1);
+    output.push(MaterializedColumn {
+        values: key_values,
+        valid: key_valid,
+    });
+    let mut names = Vec::with_capacity(out_columns);
+    for (column_id, &column) in column_reps.iter().enumerate() {
+        names.push(key_name(key(columns, column)));
+        let mut data = allocate(env, dtype, out_rows)?;
+        let mut valid = allocate(env, DType::Bool, out_rows)?;
+        for row_id in 0..out_rows {
+            env.token.check()?;
+            let Some(&cell_id) = cell_ids.get(&(row_id, column_id)) else {
+                continue;
+            };
+            let cell = &cells[cell_id];
+            let (result, is_valid) = match mode {
+                PivotMode::Unique => match cell.single {
+                    Some(row) if values.valid(row) => (values.values.buffer.get(row), true),
+                    _ => (Scalar::Int(0), false),
+                },
+                PivotMode::Count => (
+                    if flavor == Flavor::Pandas {
+                        Scalar::Int(cell.count as i64)
+                    } else {
+                        Scalar::UInt(cell.count as u64)
+                    },
+                    true,
+                ),
+                PivotMode::Mean if cell.count > 0 => {
+                    (Scalar::Float(cell.float / cell.count as f64), true)
+                }
+                PivotMode::Sum => {
+                    let result = match input_dtype {
+                        DType::Bool | DType::Int8 | DType::Int16 | DType::Int32 | DType::Int64 => {
+                            Scalar::Int(cell.signed)
+                        }
+                        DType::UInt8 | DType::UInt16 | DType::UInt32 | DType::UInt64 => {
+                            Scalar::UInt(cell.unsigned)
+                        }
+                        _ => Scalar::Float(cell.float),
+                    };
+                    (result, flavor == Flavor::Pandas || cell.count > 0)
+                }
+                PivotMode::Min | PivotMode::Max if cell.count > 0 => {
+                    (cell.extreme.clone().unwrap_or(Scalar::Int(0)), true)
+                }
+                _ => (Scalar::Int(0), false),
+            };
+            if is_valid {
+                data.buffer.set_from(
+                    row_id,
+                    &Buffer::filled(dtype, 1, result).map_err(|_| invalid())?,
+                    0,
+                );
+                valid.buffer.set_from(
+                    row_id,
+                    &Buffer::filled(DType::Bool, 1, Scalar::Bool(true)).map_err(|_| invalid())?,
+                    0,
+                );
+            }
+        }
+        output.push(MaterializedColumn {
+            values: data,
+            valid,
+        });
+    }
+    Ok(Table {
+        columns: output,
+        rows: out_rows,
+        pivot_columns: Some(names),
+    })
+}
+
 fn group(
     t: Table,
     k: usize,
@@ -674,6 +983,7 @@ fn group(
                 valid,
             },
         ],
+        pivot_columns: None,
     })
 }
 

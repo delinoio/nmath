@@ -61,9 +61,11 @@ impl Frozen {
                 self.freeze_plan(a, env)?;
                 self.freeze_plan(b, env)?;
             }
-            Plan::Select(p, ..) | Plan::Filter(p, ..) | Plan::Sort(p, ..) | Plan::Group(p, ..) => {
-                self.freeze_plan(p, env)?
-            }
+            Plan::Select(p, ..)
+            | Plan::Filter(p, ..)
+            | Plan::Sort(p, ..)
+            | Plan::Group(p, ..)
+            | Plan::Pivot(p, ..) => self.freeze_plan(p, env)?,
         }
         Ok(())
     }
@@ -163,7 +165,11 @@ impl Frozen {
             };
             columns.push(MaterializedColumn { values, valid });
         }
-        Ok(Table { columns, rows: len })
+        Ok(Table {
+            columns,
+            rows: len,
+            pivot_columns: None,
+        })
     }
 
     fn collect(
@@ -231,6 +237,7 @@ impl Frozen {
         Ok(Table {
             columns,
             rows: count,
+            pivot_columns: None,
         })
     }
 }

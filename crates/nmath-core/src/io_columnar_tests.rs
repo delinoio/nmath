@@ -40,7 +40,14 @@ fn fixture(rows: usize, b: &MemoryBudget) -> (SchemaRef, Table) {
         .unwrap();
         columns.push(MaterializedColumn { values, valid });
     }
-    (Arc::new(Schema::new(fields)), Table { columns, rows })
+    (
+        Arc::new(Schema::new(fields)),
+        Table {
+            columns,
+            rows,
+            pivot_columns: None,
+        },
+    )
 }
 #[test]
 fn roundtrip_all_numeric_types_nulls_empty_and_multiple_batches() {
@@ -437,6 +444,7 @@ fn writer_rejects_unreadable_schema_before_publication() {
                 &Table {
                     columns: vec![],
                     rows: 0,
+                    pivot_columns: None,
                 },
                 WriteMode::Overwrite,
                 &b,

@@ -387,6 +387,7 @@ fn read_with(
         table: Table {
             columns,
             rows: rows.len(),
+            pivot_columns: None,
         },
         metadata,
     })
@@ -624,6 +625,7 @@ impl Context {
                 &Table {
                     columns: materialized,
                     rows,
+                    pivot_columns: None,
                 },
                 mode,
                 &env.budget,

@@ -519,6 +519,28 @@ export class DataFrame {
       .compute(options);
     return new DataFrame(out.columns, { validity: out.validity });
   }
+  async pivot(
+    index: string,
+    columns: string,
+    values: string,
+    options: ComputeOptions = {},
+  ): Promise<DataFrame> {
+    const out = await TablePlan.source(this.#columns, this.validity)
+      .pivot(index, columns, values, "unique", true)
+      .compute(options);
+    return new DataFrame(out.columns, { validity: out.validity });
+  }
+  async pivotTable(
+    index: string,
+    columns: string,
+    values: string,
+    options: ComputeOptions & { aggfunc?: Aggregate } = {},
+  ): Promise<DataFrame> {
+    const out = await TablePlan.source(this.#columns, this.validity)
+      .pivot(index, columns, values, options.aggfunc ?? "mean", true)
+      .compute(options);
+    return new DataFrame(out.columns, { validity: out.validity });
+  }
   async groupBy(
     key: string,
     value: string,
