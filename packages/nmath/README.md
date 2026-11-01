@@ -488,6 +488,18 @@ console.log((await eigenvalues.compute()).toArray()); // ascending
 
 Signs of `Q`, eigenvectors and singular vectors can differ from NumPy, as they can between LAPACK builds; the factorizations satisfy the same identities. Cholesky of a non-positive-definite matrix fails with `NMATH_LINALG_NOT_POSITIVE_DEFINITE`. GPU execution rejects factorizations.
 
+### Real and Hermitian transforms
+
+`fft.rfft2`, `fft.irfft2`, `fft.rfftn`, `fft.irfftn`, `fft.hfft` and `fft.ihfft` follow NumPy's definitions and axis order.
+
+```ts
+import { fft } from "@delinoio/nmath/numpy";
+
+const x = ctx.zeros([30, 20], "float64");
+fft.rfft2(x).shape; // [30, 11]
+fft.irfft2(fft.rfft2(x)).shape; // [30, 20]
+```
+
 ### Norms and derived matrix functions
 
 ```ts
