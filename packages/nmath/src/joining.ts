@@ -79,15 +79,63 @@ type Join2<
   A extends ComputableDType,
   B extends ComputableDType,
 > = A extends TemporalDType ? (B extends A ? A : never) : Promote<A, B>;
-/** The NumPy `result_type` of every operand, `never` when they cannot join. */
-export type JoinDType<P extends readonly Part[]> = P extends readonly [
+/**
+ * NumPy's legacy type-number order, highest first. Pairwise promotion is not
+ * associative, so NumPy promotes every operand with the highest-ordered
+ * ("main") dtype and combines those results.
+ */
+type MainOrder = [
+  "float16",
+  "timedelta64",
+  "datetime64",
+  "str",
+  "complex128",
+  "complex64",
+  "float64",
+  "float32",
+  "uint64",
+  "int64",
+  "uint32",
+  "int32",
+  "uint16",
+  "int16",
+  "uint8",
+  "int8",
+  "bool",
+];
+type MainDType<D, O = MainOrder> = O extends readonly [infer H, ...infer R]
+  ? H extends D
+    ? H
+    : MainDType<D, R>
+  : never;
+/** One tuple of single dtypes per combination of union operand dtypes. */
+type DTypeAlternatives<P extends readonly Part[]> = P extends readonly [
   infer H,
   ...infer R extends Part[],
 ]
-  ? R extends readonly []
-    ? DTypeOf<H>
-    : Join2<DTypeOf<H>, JoinDType<R>>
-  : DTypeOf<P[number]>;
+  ? DTypeOf<H> extends infer D
+    ? D extends ComputableDType
+      ? [D, ...DTypeAlternatives<R>]
+      : never
+    : never
+  : [];
+type JoinFold<
+  T extends readonly ComputableDType[],
+  M extends ComputableDType,
+  Acc extends ComputableDType = M,
+> = T extends readonly [
+  infer H extends ComputableDType,
+  ...infer R extends ComputableDType[],
+]
+  ? JoinFold<R, M, Join2<Acc, Join2<M, H>>>
+  : Acc;
+type JoinAlternative<T> = T extends readonly ComputableDType[]
+  ? JoinFold<T, MainDType<T[number]>>
+  : never;
+/** The NumPy `result_type` of every operand, `never` when they cannot join. */
+export type JoinDType<P extends readonly Part[]> = number extends P["length"]
+  ? DTypeOf<P[number]>
+  : JoinAlternative<DTypeAlternatives<P>>;
 type JoinCheck<P extends readonly Part[]> = [JoinDType<P>] extends [never]
   ? { readonly "operand dtypes cannot be joined": P }
   : unknown;

@@ -99,6 +99,9 @@ MIXED = [
     ["int16", "float16"], ["int32", "float32"], ["float16", "float32"], ["float32", "complex64"],
     ["float64", "complex64"], ["int64", "complex64"], ["bool", "uint16", "int8"],
     ["uint8", "int8", "float32", "complex64"], ["bool", "bool"],
+    # Pairwise promotion is not associative; NumPy resolves these in any order.
+    ["int8", "uint8", "float16"], ["float16", "uint8", "int8"], ["int16", "uint16", "float16"],
+    ["uint64", "int8", "float16"],
 ]
 for dtypes in MIXED:
     arrays = [operand([2, 2], d, i) for i, d in enumerate(dtypes)]

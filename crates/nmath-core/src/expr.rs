@@ -309,7 +309,6 @@ impl Expr {
         }
         let axis = normalized as usize;
         let mut shape = first.shape().to_vec();
-        let mut dtype = first.dtype().ensure_computable()?;
         let mut context_id = first.context_id();
         for (i, part) in parts.iter().enumerate().skip(1) {
             context_id = join_context(context_id, part.context_id())?;
@@ -339,8 +338,9 @@ impl Expr {
             shape[axis] = shape[axis]
                 .checked_add(part.shape()[axis])
                 .ok_or_else(crate::numerical::overflow)?;
-            dtype = DType::promote(dtype, part.dtype())?;
         }
+        let dtypes: Vec<DType> = parts.iter().map(Expr::dtype).collect();
+        let dtype = DType::promote_all(&dtypes)?;
         crate::numerical::size(&shape)?;
         Ok(Expr::node(
             ExprKind::Concat(parts.to_vec(), axis),

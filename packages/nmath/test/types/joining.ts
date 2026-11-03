@@ -12,6 +12,7 @@ import {
   stack,
   vstack,
   type ConcatenateShape,
+  type JoinDType,
   type StackShape,
 } from "../../src/numpy.js";
 
@@ -53,6 +54,20 @@ const dates: Expr<"datetime64", [number]> = concatenate([when, when]);
 exact<Equal<ConcatenateShape<[typeof m], 1>, [2, number]>>();
 exact<Equal<ConcatenateShape<[typeof m], 2>, never>>();
 exact<Equal<ConcatenateShape<[typeof m], -3>, never>>();
+
+// Promotion follows NumPy's main-dtype sequence, not a pairwise fold.
+const i8 = c.zeros([2], "int8");
+const u8 = c.zeros([2], "uint8");
+const i16 = c.zeros([2], "int16");
+const u16 = c.zeros([2], "uint16");
+const half = c.zeros([2], "float16");
+declare const either: Expr<"int8" | "float16", [2]>;
+exact<Equal<JoinDType<[typeof i8, typeof u8, typeof half]>, "float16">>();
+exact<Equal<JoinDType<[typeof half, typeof u8, typeof i8]>, "float16">>();
+exact<Equal<JoinDType<[typeof i16, typeof u16, typeof half]>, "float32">>();
+exact<Equal<JoinDType<[typeof either, typeof u8]>, "int16" | "float16">>();
+exact<Equal<JoinDType<[typeof when, typeof i8]>, never>>();
+const mainHalf: Expr<"float16", [number]> = concatenate([i8, u8, half]);
 
 const stacked: Expr<"int32", [2, 2, 3]> = stack([m, m]);
 const stackedLast: Expr<"int32", [2, 3, 3]> = stack([m, m, m], -1);
@@ -104,6 +119,7 @@ append(text, v);
 concatenate([m, [1, 2, 3]]);
 
 void [
+  mainHalf,
   rows,
   cols,
   last,

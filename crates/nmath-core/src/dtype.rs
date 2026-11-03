@@ -232,6 +232,47 @@ impl DType {
         }
     }
 
+    /// NumPy `np.result_type` for any number of array dtypes.
+    ///
+    /// Pairwise promotion is not associative (`int8`, `uint8` and `float16`
+    /// fold to `float32` but resolve to `float16`), so this follows NumPy's
+    /// `PyArray_PromoteDTypeSequence`: the dtype with the highest legacy type
+    /// number promotes every operand, and those results are combined.
+    pub fn promote_all(dtypes: &[DType]) -> Result<DType> {
+        let main = *dtypes
+            .iter()
+            .max_by_key(|d| d.legacy_type_number())
+            .ok_or_else(unsupported)?;
+        dtypes
+            .iter()
+            .try_fold(main.ensure_computable()?, |result, &d| {
+                DType::promote(result, DType::promote(main, d)?)
+            })
+    }
+
+    /// NumPy's legacy type number, which orders the main dtype of a sequence.
+    fn legacy_type_number(self) -> u8 {
+        match self {
+            DType::Bool => 0,
+            DType::Int8 => 1,
+            DType::UInt8 => 2,
+            DType::Int16 => 3,
+            DType::UInt16 => 4,
+            DType::Int32 => 5,
+            DType::UInt32 => 6,
+            DType::Int64 => 7,
+            DType::UInt64 => 8,
+            DType::Float32 => 11,
+            DType::Float64 => 12,
+            DType::Complex64 => 14,
+            DType::Complex128 => 15,
+            DType::Str(_) => 19,
+            DType::Datetime64(_) => 21,
+            DType::Timedelta64(_) => 22,
+            DType::Float16 => 23,
+        }
+    }
+
     /// Result dtype of combining an array dtype with a weak JS number scalar
     /// (NEP 50).
     pub fn promote_weak(array: DType, scalar: ScalarKind) -> Result<DType> {
@@ -333,6 +374,33 @@ mod tests {
             assert_eq!(DType::promote(a, b).unwrap(), want, "{a:?} + {b:?}");
             assert_eq!(DType::promote(b, a).unwrap(), want, "{b:?} + {a:?}");
         }
+    }
+
+    // Expected values were recorded from NumPy 2.5.4 `np.result_type`.
+    #[test]
+    fn sequence_promotion_is_order_independent() {
+        let cases: [(&[DType], DType); 4] = [
+            (&[DType::Int8, DType::UInt8, DType::Float16], DType::Float16),
+            (
+                &[DType::Int16, DType::UInt16, DType::Float16],
+                DType::Float32,
+            ),
+            (
+                &[DType::UInt64, DType::Int8, DType::Float16],
+                DType::Float64,
+            ),
+            (
+                &[DType::UInt8, DType::Int8, DType::Float16, DType::Complex64],
+                DType::Complex64,
+            ),
+        ];
+        for (dtypes, want) in cases {
+            let mut reversed = dtypes.to_vec();
+            reversed.reverse();
+            assert_eq!(DType::promote_all(dtypes).unwrap(), want, "{dtypes:?}");
+            assert_eq!(DType::promote_all(&reversed).unwrap(), want, "{reversed:?}");
+        }
+        assert!(DType::promote_all(&[]).is_err());
     }
 
     #[test]
