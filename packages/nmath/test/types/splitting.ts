@@ -58,6 +58,8 @@ const flatRepeat: Expr<"int16", [number]> = repeat(v, 2);
 const rowRepeat: Expr<"float32", [number, 6]> = repeat(m, [1, 2, 0, 1], 0);
 const columnRepeat: Expr<"float32", [4, number]> = repeat(m, 3, -1);
 const scalarRepeat: Expr<"bool", [number]> = repeat(s, 4);
+const scalarAxisRepeat: Expr<"bool", [number]> = repeat(s, 4, 0);
+const scalarLastRepeat: Expr<"bool", [number]> = repeat(s, [2], -1);
 
 const tiled: Expr<"int16", [number]> = tile(v, 2);
 const tiledUp: Expr<"int16", [number, number]> = tile(v, [2, 2]);
@@ -94,6 +96,8 @@ vsplit(v, 2);
 dsplit(m, 2);
 // @ts-expect-error the repeat axis is out of range
 repeat(m, 2, -3);
+// @ts-expect-error a 0-d input repeats as 1-D, so axis 1 is out of range
+repeat(s, 2, 1);
 // @ts-expect-error the roll axis is out of range
 roll(m, 1, [0, 2]);
 // @ts-expect-error a number edge cannot join datetimes
@@ -116,6 +120,8 @@ void [
   rowRepeat,
   columnRepeat,
   scalarRepeat,
+  scalarAxisRepeat,
+  scalarLastRepeat,
   tiled,
   tiledUp,
   tiledKeep,

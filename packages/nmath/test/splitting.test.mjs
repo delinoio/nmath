@@ -179,6 +179,7 @@ test("splitting and repetition reject invalid arguments like NumPy", async () =>
       code: "NMATH_SHAPE_BROADCAST",
     });
     assert.throws(() => repeat(m, 1, 2), bounds);
+    assert.throws(() => repeat(s, 1, 1), bounds);
     assert.throws(() => tile(v, -2), invalid);
     assert.throws(() => tile(v, [1, 0.5]), invalid);
     assert.throws(() => roll(m, 1, 2), bounds);

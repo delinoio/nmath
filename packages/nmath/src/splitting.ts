@@ -57,11 +57,16 @@ type MinRank<S extends Shape, N extends 2 | 3> = number extends S["length"]
       ? unknown
       : never;
 
-/** `np.repeat` shape: flattened without an axis, otherwise the axis is dynamic. */
+/**
+ * `np.repeat` shape: flattened without an axis, otherwise the axis is
+ * dynamic. A 0-d input repeats as a 1-D array, so it accepts axis 0 or -1.
+ */
 export type RepeatShape<
   S extends Shape,
   A extends number | null,
-> = A extends null ? [number] : SplitShape<S, A & number>;
+> = A extends null
+  ? [number]
+  : SplitShape<S extends readonly [] ? [number] : S, A & number>;
 /** `np.tile` shape: the rank is the larger of the input rank and the repetition count. */
 export type TileShape<
   S extends Shape,
@@ -338,7 +343,8 @@ export function repeat(
   if (counts.some((count) => count < 0)) {
     throw invalid("Repeat counts must be non-negative.");
   }
-  const x = axis === null ? flatten(source) : source;
+  // NumPy checks the axis of a 0-d input against its 1-D form.
+  const x = axis === null || source.ndim === 0 ? flatten(source) : source;
   const ax = axis === null ? 0 : normalizeAxis(axis, x.ndim);
   if (counts.length !== 1 && counts.length !== x.shape[ax]) {
     throw new NMathError(

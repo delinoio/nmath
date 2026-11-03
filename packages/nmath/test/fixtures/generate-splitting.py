@@ -123,6 +123,11 @@ for dtype in DTYPES:
     for shape, repeats, axis in repeat_cases:
         a = operand(shape, dtype)
         add("repeat", a, np.repeat(a, repeats, axis), repeats=repeats, axis=axis)
+# A 0-d input with an axis repeats as its 1-D form.
+for dtype in ["int64", "str"]:
+    for repeats, axis in [(3, 0), ([2], -1), (0, 0)]:
+        a = operand([], dtype)
+        add("repeat", a, np.repeat(a, repeats, axis), repeats=repeats, axis=axis)
 
 tile_cases = [
     ([3], 2), ([3], [2, 2]), ([2, 3], 2), ([2, 3], [2, 1]), ([2, 3], [1, 1]), ([2, 3], [3, 1, 2]),
