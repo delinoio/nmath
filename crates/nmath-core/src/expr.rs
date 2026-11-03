@@ -339,6 +339,13 @@ impl Expr {
                 .checked_add(part.shape()[axis])
                 .ok_or_else(crate::numerical::overflow)?;
         }
+        // Public shape transport uses unsigned 32-bit dimensions.
+        if shape[axis] > u32::MAX as usize {
+            return Err(Error::new(
+                ErrorCode::ShapeMismatch,
+                "The joined dimension exceeds the supported range.",
+            ));
+        }
         let dtypes: Vec<DType> = parts.iter().map(Expr::dtype).collect();
         let dtype = DType::promote_all(&dtypes)?;
         crate::numerical::size(&shape)?;
@@ -1261,6 +1268,18 @@ mod tests {
             ErrorCode::ContextMismatch
         );
         assert!(Expr::concat(&[a], 0).unwrap().check_gpu_support().is_err());
+        // An empty result needs no allocation, but its shape must still fit
+        // the 32-bit public transport.
+        let half = Expr::input(&arr(1, vec![0, 1 << 31], Buffer::I8(vec![])));
+        assert_eq!(
+            code(Expr::concat(&[half.clone(), half.clone()], 1)),
+            ErrorCode::ShapeMismatch
+        );
+        let fits = Expr::input(&arr(1, vec![0, (1 << 31) - 1], Buffer::I8(vec![])));
+        assert_eq!(
+            Expr::concat(&[half, fits], 1).unwrap().shape(),
+            &[0, u32::MAX as usize]
+        );
     }
 
     #[test]

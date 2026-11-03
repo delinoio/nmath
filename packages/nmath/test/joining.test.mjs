@@ -166,6 +166,9 @@ test("joining rejects invalid operands like NumPy", async () => {
       () => concatenate([m, ctx.zeros([2, 2], "float64")]),
       mismatch,
     );
+    // An empty joined dimension above 2^32 - 1 cannot cross the shape transport.
+    const half = ctx.zeros([0, 2 ** 31], "int8");
+    assert.throws(() => concatenate([half, half], 1), mismatch);
     assert.throws(() => concatenate([m, m], 2), {
       code: "NMATH_INDEX_OUT_OF_BOUNDS",
     });
