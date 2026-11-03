@@ -148,6 +148,10 @@ for dtype in DTYPES:
     for shape, shift, axis in roll_cases:
         a = operand(shape, dtype)
         add("roll", a, np.roll(a, shift, axis), shift=shift, axis=axis)
+# Shifts reduce exactly even when their sum is not a safe integer.
+for shift in [[2**53 - 1, 2], [-(2**53 - 1), -(2**53 - 1)]]:
+    a = operand([3], "int64")
+    add("roll", a, np.roll(a, shift, [0, 0]), shift=shift, axis=[0, 0])
 # Empty shift or axis lists broadcast to zero pairs and roll nothing.
 for dtype in ["int64", "str"]:
     for shape, shift, axis in [([5], [], 0), ([5], 1, []), ([2, 3], [], []), ([5], [], None)]:

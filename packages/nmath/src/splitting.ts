@@ -434,14 +434,16 @@ export function roll(
   // Broadcasting a length-1 list takes the other length, which can be 0.
   const count = shifts.length === 1 ? axes.length : shifts.length;
   for (let i = 0; i < count; i += 1) {
-    offsets[axes[axes.length === 1 ? 0 : i]] +=
-      shifts[shifts.length === 1 ? 0 : i];
+    const ax = axes[axes.length === 1 ? 0 : i];
+    const length = source.shape[ax] as number;
+    // Python's modulo is non-negative; an empty axis never rolls. Reducing
+    // each shift first keeps the sum of safe-integer shifts exact.
+    if (length === 0) continue;
+    const shift = shifts[shifts.length === 1 ? 0 : i] % length;
+    offsets[ax] = (offsets[ax] + shift + length) % length;
   }
   let result: Lazy<any, any> = source;
-  offsets.forEach((offset, ax) => {
-    const length = source.shape[ax] as number;
-    // Python's modulo is non-negative; an empty axis never rolls.
-    const k = length === 0 ? 0 : ((offset % length) + length) % length;
+  offsets.forEach((k, ax) => {
     if (k === 0) return;
     result = concatenate(
       [select(result, ax, slice(-k)), select(result, ax, slice(undefined, -k))],

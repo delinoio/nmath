@@ -36481,6 +36481,78 @@
    "operand": {
     "dtype": "int64",
     "shape": [
+     3
+    ],
+    "values": [
+     "-5",
+     "-2",
+     "1"
+    ]
+   },
+   "kwargs": {
+    "shift": [
+     9007199254740991,
+     2
+    ],
+    "axis": [
+     0,
+     0
+    ]
+   },
+   "expected": {
+    "dtype": "int64",
+    "shape": [
+     3
+    ],
+    "values": [
+     "-5",
+     "-2",
+     "1"
+    ]
+   }
+  },
+  {
+   "id": "roll/683",
+   "fn": "roll",
+   "operand": {
+    "dtype": "int64",
+    "shape": [
+     3
+    ],
+    "values": [
+     "-5",
+     "-2",
+     "1"
+    ]
+   },
+   "kwargs": {
+    "shift": [
+     -9007199254740991,
+     -9007199254740991
+    ],
+    "axis": [
+     0,
+     0
+    ]
+   },
+   "expected": {
+    "dtype": "int64",
+    "shape": [
+     3
+    ],
+    "values": [
+     "1",
+     "-5",
+     "-2"
+    ]
+   }
+  },
+  {
+   "id": "roll/684",
+   "fn": "roll",
+   "operand": {
+    "dtype": "int64",
+    "shape": [
      5
     ],
     "values": [
@@ -36510,7 +36582,7 @@
    }
   },
   {
-   "id": "roll/683",
+   "id": "roll/685",
    "fn": "roll",
    "operand": {
     "dtype": "int64",
@@ -36544,7 +36616,7 @@
    }
   },
   {
-   "id": "roll/684",
+   "id": "roll/686",
    "fn": "roll",
    "operand": {
     "dtype": "int64",
@@ -36582,7 +36654,7 @@
    }
   },
   {
-   "id": "roll/685",
+   "id": "roll/687",
    "fn": "roll",
    "operand": {
     "dtype": "int64",
@@ -36616,7 +36688,7 @@
    }
   },
   {
-   "id": "roll/686",
+   "id": "roll/688",
    "fn": "roll",
    "operand": {
     "dtype": "str",
@@ -36647,82 +36719,6 @@
      "abc",
      "d",
      "ae"
-    ],
-    "width": 3
-   }
-  },
-  {
-   "id": "roll/687",
-   "fn": "roll",
-   "operand": {
-    "dtype": "str",
-    "shape": [
-     5
-    ],
-    "values": [
-     "a",
-     "ab",
-     "abc",
-     "d",
-     "ae"
-    ],
-    "width": 3
-   },
-   "kwargs": {
-    "shift": 1,
-    "axis": []
-   },
-   "expected": {
-    "dtype": "str",
-    "shape": [
-     5
-    ],
-    "values": [
-     "a",
-     "ab",
-     "abc",
-     "d",
-     "ae"
-    ],
-    "width": 3
-   }
-  },
-  {
-   "id": "roll/688",
-   "fn": "roll",
-   "operand": {
-    "dtype": "str",
-    "shape": [
-     2,
-     3
-    ],
-    "values": [
-     "a",
-     "ab",
-     "abc",
-     "d",
-     "ae",
-     "abf"
-    ],
-    "width": 3
-   },
-   "kwargs": {
-    "shift": [],
-    "axis": []
-   },
-   "expected": {
-    "dtype": "str",
-    "shape": [
-     2,
-     3
-    ],
-    "values": [
-     "a",
-     "ab",
-     "abc",
-     "d",
-     "ae",
-     "abf"
     ],
     "width": 3
    }
@@ -36745,6 +36741,82 @@
     "width": 3
    },
    "kwargs": {
+    "shift": 1,
+    "axis": []
+   },
+   "expected": {
+    "dtype": "str",
+    "shape": [
+     5
+    ],
+    "values": [
+     "a",
+     "ab",
+     "abc",
+     "d",
+     "ae"
+    ],
+    "width": 3
+   }
+  },
+  {
+   "id": "roll/690",
+   "fn": "roll",
+   "operand": {
+    "dtype": "str",
+    "shape": [
+     2,
+     3
+    ],
+    "values": [
+     "a",
+     "ab",
+     "abc",
+     "d",
+     "ae",
+     "abf"
+    ],
+    "width": 3
+   },
+   "kwargs": {
+    "shift": [],
+    "axis": []
+   },
+   "expected": {
+    "dtype": "str",
+    "shape": [
+     2,
+     3
+    ],
+    "values": [
+     "a",
+     "ab",
+     "abc",
+     "d",
+     "ae",
+     "abf"
+    ],
+    "width": 3
+   }
+  },
+  {
+   "id": "roll/691",
+   "fn": "roll",
+   "operand": {
+    "dtype": "str",
+    "shape": [
+     5
+    ],
+    "values": [
+     "a",
+     "ab",
+     "abc",
+     "d",
+     "ae"
+    ],
+    "width": 3
+   },
+   "kwargs": {
     "shift": [],
     "axis": null
    },
@@ -36764,7 +36836,7 @@
    }
   },
   {
-   "id": "diff/690",
+   "id": "diff/692",
    "fn": "diff",
    "operand": {
     "dtype": "int32",
@@ -36800,7 +36872,7 @@
    }
   },
   {
-   "id": "diff/691",
+   "id": "diff/693",
    "fn": "diff",
    "operand": {
     "dtype": "int32",
@@ -36836,7 +36908,7 @@
    }
   },
   {
-   "id": "diff/692",
+   "id": "diff/694",
    "fn": "diff",
    "operand": {
     "dtype": "int32",
@@ -36876,7 +36948,7 @@
    }
   },
   {
-   "id": "diff/693",
+   "id": "diff/695",
    "fn": "diff",
    "operand": {
     "dtype": "int8",
@@ -36912,7 +36984,7 @@
    }
   },
   {
-   "id": "diff/694",
+   "id": "diff/696",
    "fn": "diff",
    "operand": {
     "dtype": "uint8",
@@ -36948,7 +37020,7 @@
    }
   },
   {
-   "id": "diff/695",
+   "id": "diff/697",
    "fn": "diff",
    "operand": {
     "dtype": "int16",
@@ -36984,7 +37056,7 @@
    }
   },
   {
-   "id": "diff/696",
+   "id": "diff/698",
    "fn": "diff",
    "operand": {
     "dtype": "float32",
@@ -37026,7 +37098,7 @@
    }
   },
   {
-   "id": "diff/697",
+   "id": "diff/699",
    "fn": "diff",
    "operand": {
     "dtype": "float32",
@@ -37068,7 +37140,7 @@
    }
   },
   {
-   "id": "diff/698",
+   "id": "diff/700",
    "fn": "diff",
    "operand": {
     "dtype": "float64",
@@ -37114,7 +37186,7 @@
    }
   },
   {
-   "id": "diff/699",
+   "id": "diff/701",
    "fn": "diff",
    "operand": {
     "dtype": "bool",
@@ -37150,7 +37222,7 @@
    }
   },
   {
-   "id": "diff/700",
+   "id": "diff/702",
    "fn": "diff",
    "operand": {
     "dtype": "bool",
@@ -37186,7 +37258,7 @@
    }
   },
   {
-   "id": "diff/701",
+   "id": "diff/703",
    "fn": "diff",
    "operand": {
     "dtype": "bool",
@@ -37222,7 +37294,7 @@
    }
   },
   {
-   "id": "diff/702",
+   "id": "diff/704",
    "fn": "diff",
    "operand": {
     "dtype": "complex128",
@@ -37277,7 +37349,7 @@
    }
   },
   {
-   "id": "diff/703",
+   "id": "diff/705",
    "fn": "diff",
    "operand": {
     "dtype": "float32",
@@ -37323,7 +37395,7 @@
    }
   },
   {
-   "id": "diff/704",
+   "id": "diff/706",
    "fn": "diff",
    "operand": {
     "dtype": "int64",
@@ -37372,7 +37444,7 @@
    }
   },
   {
-   "id": "diff/705",
+   "id": "diff/707",
    "fn": "diff",
    "operand": {
     "dtype": "uint64",
@@ -37406,7 +37478,7 @@
    }
   },
   {
-   "id": "diff/706",
+   "id": "diff/708",
    "fn": "diff",
    "operand": {
     "dtype": "int32",
@@ -37474,7 +37546,7 @@
    }
   },
   {
-   "id": "diff/707",
+   "id": "diff/709",
    "fn": "diff",
    "operand": {
     "dtype": "float64",
@@ -37525,7 +37597,7 @@
    }
   },
   {
-   "id": "diff/708",
+   "id": "diff/710",
    "fn": "diff",
    "operand": {
     "dtype": "int16",
@@ -37576,7 +37648,7 @@
    }
   },
   {
-   "id": "diff/709",
+   "id": "diff/711",
    "fn": "diff",
    "operand": {
     "dtype": "float32",
@@ -37632,7 +37704,7 @@
    }
   },
   {
-   "id": "diff/710",
+   "id": "diff/712",
    "fn": "diff",
    "operand": {
     "dtype": "uint8",
@@ -37715,7 +37787,7 @@
    }
   },
   {
-   "id": "diff/711",
+   "id": "diff/713",
    "fn": "diff",
    "operand": {
     "dtype": "datetime64",
@@ -37758,7 +37830,7 @@
    }
   },
   {
-   "id": "diff/712",
+   "id": "diff/714",
    "fn": "diff",
    "operand": {
     "dtype": "int32",
