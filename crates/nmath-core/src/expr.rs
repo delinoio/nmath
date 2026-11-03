@@ -38,6 +38,9 @@ pub enum ExprKind {
     Scan(ScanOp, Expr, Option<i64>),
     Variance(VarianceOp, Expr, Option<i64>, f64),
     Shift(ShiftOp, Expr, Vec<usize>),
+    /// NumPy `concatenate` along a normalized axis; every part is cast to the
+    /// node dtype.
+    Concat(Vec<Expr>, usize),
     MatMul(Expr, Expr),
     Linalg(crate::linalg::LinalgOp, Expr, Option<Expr>),
     Fft(crate::fft::FftOptions, Expr),
@@ -278,6 +281,72 @@ impl Expr {
             input.dtype(),
             input.shape().to_vec(),
             input.context_id(),
+        ))
+    }
+
+    /// NumPy `concatenate(parts, axis)`: the parts promote to one dtype, keep
+    /// one rank and match every dimension except `axis`.
+    pub fn concat(parts: &[Expr], axis: i64) -> Result<Expr> {
+        let first = parts.first().ok_or_else(|| {
+            Error::new(
+                ErrorCode::ShapeMismatch,
+                "Concatenation needs at least one array.",
+            )
+        })?;
+        let rank = first.shape().len();
+        if rank == 0 {
+            return Err(Error::new(
+                ErrorCode::ShapeMismatch,
+                "Zero-dimensional arrays cannot be concatenated.",
+            ));
+        }
+        let normalized = if axis < 0 { axis + rank as i64 } else { axis };
+        if normalized < 0 || normalized >= rank as i64 {
+            return Err(Error::new(
+                ErrorCode::IndexOutOfBounds,
+                format!("Axis {axis} is out of bounds for an array of dimension {rank}."),
+            ));
+        }
+        let axis = normalized as usize;
+        let mut shape = first.shape().to_vec();
+        let mut dtype = first.dtype().ensure_computable()?;
+        let mut context_id = first.context_id();
+        for (i, part) in parts.iter().enumerate().skip(1) {
+            context_id = join_context(context_id, part.context_id())?;
+            if part.shape().len() != rank {
+                return Err(Error::new(
+                    ErrorCode::ShapeMismatch,
+                    format!(
+                        "All input arrays must have the same number of dimensions, but the array \
+                         at index 0 has {rank} dimension(s) and the array at index {i} has {} \
+                         dimension(s).",
+                        part.shape().len()
+                    ),
+                ));
+            }
+            for (dim, (&expected, &actual)) in first.shape().iter().zip(part.shape()).enumerate() {
+                if dim != axis && expected != actual {
+                    return Err(Error::new(
+                        ErrorCode::ShapeMismatch,
+                        format!(
+                            "All input array dimensions except for the concatenation axis must \
+                             match exactly, but along dimension {dim}, the array at index 0 has \
+                             size {expected} and the array at index {i} has size {actual}."
+                        ),
+                    ));
+                }
+            }
+            shape[axis] = shape[axis]
+                .checked_add(part.shape()[axis])
+                .ok_or_else(crate::numerical::overflow)?;
+            dtype = DType::promote(dtype, part.dtype())?;
+        }
+        crate::numerical::size(&shape)?;
+        Ok(Expr::node(
+            ExprKind::Concat(parts.to_vec(), axis),
+            dtype,
+            shape,
+            context_id,
         ))
     }
 
@@ -546,6 +615,7 @@ impl Expr {
             ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::Variance(op, ..) => op.id(),
             ExprKind::Shift(op, ..) => op.id(),
+            ExprKind::Concat(..) => "concatenate",
             ExprKind::MatMul(..) => "matmul",
             ExprKind::Linalg(op, ..) => op.id(),
             ExprKind::Fft(options, ..) => options.op.id(),
@@ -575,6 +645,7 @@ impl Expr {
             | ExprKind::Transpose(e, _)
             | ExprKind::Reshape(e, _) => vec![e],
             ExprKind::Where(c, x, y) => vec![c, x, y],
+            ExprKind::Concat(parts, _) => parts.iter().collect(),
             ExprKind::Binary { lhs, rhs, .. }
             | ExprKind::MatMul(lhs, rhs)
             | ExprKind::Polynomial(_, lhs, rhs) => vec![lhs, rhs],
@@ -954,6 +1025,25 @@ impl JobEnv {
                 let v = self.eval_node(e)?;
                 kernels::shift(*op, &v, axes, &budget, &token)
             }
+            ExprKind::Concat(parts, axis) => {
+                let dtype = expr.dtype();
+                let mut values = Vec::with_capacity(parts.len());
+                for part in parts {
+                    let value = self.eval_node(part)?;
+                    values.push(if value.dtype() == dtype {
+                        value
+                    } else {
+                        let reservation =
+                            budget.reserve(checked_byte_len(value.size(), dtype)? as u64)?;
+                        DenseArray::new(
+                            value.shape.clone(),
+                            value.buffer.cast_cancellable(dtype, &token)?,
+                            reservation,
+                        )?
+                    });
+                }
+                kernels::concat(&values, *axis, expr.shape(), dtype, &budget, &token)
+            }
             ExprKind::MatMul(l, r) => {
                 let a = self.eval_node(l)?;
                 let b = self.eval_node(r)?;
@@ -1093,6 +1183,84 @@ mod tests {
         let moved = Expr::transpose(&random, Some(&[0])).unwrap();
         let both = Expr::binary(BinaryOp::Sub, &moved, &random).unwrap();
         assert_eq!(eval(&both).buffer, Buffer::F64(vec![0.0; 5]));
+    }
+
+    #[test]
+    fn concat_promotes_and_interleaves_blocks() {
+        let a = Expr::input(&arr(1, vec![2, 2], Buffer::I32(vec![1, 2, 3, 4])));
+        let b = Expr::input(&arr(1, vec![2, 1], Buffer::F32(vec![0.5, 1.5])));
+        let joined = Expr::concat(&[a.clone(), b.clone()], -1).unwrap();
+        assert_eq!(joined.shape(), &[2, 3]);
+        assert_eq!(joined.dtype(), DType::Float64);
+        assert_eq!(
+            eval(&joined).buffer,
+            Buffer::F64(vec![1.0, 2.0, 0.5, 3.0, 4.0, 1.5])
+        );
+        let rows = Expr::concat(&[a.clone(), a.clone()], 0).unwrap();
+        assert_eq!(rows.shape(), &[4, 2]);
+        assert_eq!(
+            eval(&rows).buffer,
+            Buffer::I32(vec![1, 2, 3, 4, 1, 2, 3, 4])
+        );
+        let empty = Expr::input(&arr(1, vec![0, 2], Buffer::I32(vec![])));
+        let with_empty = Expr::concat(&[empty, a.clone()], 0).unwrap();
+        assert_eq!(eval(&with_empty).buffer, Buffer::I32(vec![1, 2, 3, 4]));
+
+        let text = |width, values: &[&str]| {
+            let mut storage = vec![0u32; width * values.len()];
+            for (row, value) in storage.chunks_exact_mut(width).zip(values) {
+                for (slot, c) in row.iter_mut().zip(value.chars()) {
+                    *slot = c as u32;
+                }
+            }
+            Expr::input(&arr(
+                1,
+                vec![values.len()],
+                Buffer::Unicode {
+                    width,
+                    values: storage,
+                },
+            ))
+        };
+        let words = Expr::concat(&[text(1, &["a"]), text(3, &["bcd", "e"])], 0).unwrap();
+        assert_eq!(words.dtype(), DType::Str(3));
+        let joined = eval(&words);
+        assert_eq!(joined.buffer.get(0), Scalar::Text("a".into()));
+        assert_eq!(joined.buffer.get(1), Scalar::Text("bcd".into()));
+        assert_eq!(joined.buffer.get(2), Scalar::Text("e".into()));
+    }
+
+    #[test]
+    fn concat_rejects_invalid_parts() {
+        let a = Expr::input(&arr(1, vec![2, 2], Buffer::I32(vec![1, 2, 3, 4])));
+        let code = |result: Result<Expr>| result.unwrap_err().code;
+        assert_eq!(code(Expr::concat(&[], 0)), ErrorCode::ShapeMismatch);
+        let scalar = Expr::input(&arr(1, vec![], Buffer::I32(vec![1])));
+        assert_eq!(code(Expr::concat(&[scalar], 0)), ErrorCode::ShapeMismatch);
+        assert_eq!(
+            code(Expr::concat(&[a.clone()], 2)),
+            ErrorCode::IndexOutOfBounds
+        );
+        assert_eq!(
+            code(Expr::concat(&[a.clone()], -3)),
+            ErrorCode::IndexOutOfBounds
+        );
+        let vector = Expr::input(&arr(1, vec![2], Buffer::I32(vec![1, 2])));
+        assert_eq!(
+            code(Expr::concat(&[a.clone(), vector], 0)),
+            ErrorCode::ShapeMismatch
+        );
+        let wide = Expr::input(&arr(1, vec![1, 3], Buffer::I32(vec![1, 2, 3])));
+        assert_eq!(
+            code(Expr::concat(&[a.clone(), wide], 0)),
+            ErrorCode::ShapeMismatch
+        );
+        let other = Expr::input(&arr(2, vec![2, 2], Buffer::I32(vec![1, 2, 3, 4])));
+        assert_eq!(
+            code(Expr::concat(&[a.clone(), other], 0)),
+            ErrorCode::ContextMismatch
+        );
+        assert!(Expr::concat(&[a], 0).unwrap().check_gpu_support().is_err());
     }
 
     #[test]

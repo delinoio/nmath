@@ -428,6 +428,27 @@ for op, args in [("squeeze", ["a", "axis: integer, integer list or omitted"]),
          "Exact shape and C-order values against recorded NumPy 2.5.4 int32 cases; ravel orders F/A/K, ndarray method forms and GPU execution remain targets."],
         ["packages/nmath/src/axes.ts"], ["packages/nmath/test/axes.test.mjs", "packages/nmath/test/types/axes.ts"],
         ["packages/nmath/test/fixtures/axes.json"])
+JOINING = ["packages/nmath/src/joining.ts", "packages/nmath/src/numpy.ts", "crates/nmath-core/src/expr.rs", "crates/nmath-core/src/kernels.rs"]
+JOINING_TESTS = ["packages/nmath/test/joining.test.mjs", "packages/nmath/test/types/joining.ts"]
+JOINING_FIXTURES = ["packages/nmath/test/fixtures/joining.json"]
+JOINING_LIMITS = [
+    "Lazy CPU copy through the native concatenate node: operands promote like result_type, share one explicit context and are read at actual job start; the result is a new array, never a view.",
+    "Strings widen to the longest width. Datetimes and timedeltas join only within one dtype and unit; NumPy's conversion to the finer unit is pending.",
+    "Zero-dimensional concatenation, rank or non-axis dimension mismatches and an empty operand list fail with NMATH_SHAPE_MISMATCH; out-of-range axes with NMATH_INDEX_OUT_OF_BOUNDS. GPU rejects the node before admission.",
+    "out, dtype and casting remain targets. Exact NumPy 2.5.4 oracle results for the recorded cases.",
+]
+for op, args in [("concatenate", ["arrays: NMath values", "axis: integer, default 0, or null to flatten"]),
+                 ("stack", ["arrays: NMath values of one shape", "axis: integer against the output rank, default 0"]),
+                 ("vstack", ["tup: NMath values"]), ("hstack", ["tup: NMath values"]),
+                 ("dstack", ["tup: NMath values"]), ("column_stack", ["tup: NMath values"]),
+                 ("append", ["arr", "values: NMath value", "axis: integer or null, default null"])]:
+    counterparts({"numpy." + op: "numpy." + op}, "joining", args, NUMERIC + ["str", "datetime64", "timedelta64"],
+        JOINING_LIMITS, JOINING, JOINING_TESTS, JOINING_FIXTURES)
+for op in ["atleast_1d", "atleast_2d", "atleast_3d"]:
+    counterparts({"numpy." + op: "numpy." + op}, "shape-transform", ["*arys: NMath values"], NUMERIC + ["str", "datetime64", "timedelta64"],
+        ["Lazy reshape views in NumPy 2.5.4 shape_base order; one operand returns one expression and several (or none) return a frozen tuple.",
+         "Exact shapes and values against recorded NumPy 2.5.4 cases; GPU execution of layout-only results remains a target."],
+        ["packages/nmath/src/joining.ts"], JOINING_TESTS, JOINING_FIXTURES)
 CREATION = ["packages/nmath/src/creation.ts", "packages/nmath/src/numpy.ts"]
 CREATION_TESTS = ["packages/nmath/test/creation.test.mjs", "packages/nmath/test/types/creation.ts"]
 for op, args, limits in [

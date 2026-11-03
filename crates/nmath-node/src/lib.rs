@@ -514,6 +514,14 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn concat(parts: Vec<&NativeExpr>, axis: i64) -> Result<Self> {
+        let parts: Vec<Expr> = parts.into_iter().map(|part| part.inner.clone()).collect();
+        Ok(Self {
+            inner: Expr::concat(&parts, axis).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn variance(op: String, input: &NativeExpr, axis: Option<i64>, ddof: f64) -> Result<Self> {
         let op = match op.as_str() {
             "var" => VarianceOp::Var,

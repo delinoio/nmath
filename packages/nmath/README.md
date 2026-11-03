@@ -217,6 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions; binary math functions | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                            | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
 | NumPy indexing       | integers, slices, integer-array and mask selectors that broadcast together, `newaxis`, ellipsis, views for basic indexing, atomic assignment                                                                   | multidimensional index arrays, `newaxis` in writes                                                                                                       |
+| NumPy joining        | `concatenate`, `stack`, `vstack`, `hstack`, `dstack`, `column_stack`, `append`, `atleast_1d`/`2d`/`3d`                                                                                                         | `out`/`dtype`/`casting` arguments, `block`, mixed datetime units                                                                                         |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | `lstsq`, other `cond` orders and other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                      |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                                   | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                                                              | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                            |
@@ -753,6 +754,26 @@ zeros_like(samples, "int64").shape; // [5]
 ```
 
 `linspace` and `eye` produce the same values as NumPy 2.5.4. `logspace` uses JS `Math.pow` with C `pow` results for a base of 1 and for -1 raised to an infinite power. Other values can differ from NumPy's platform `pow` by a few ULP. Integer dtypes floor `linspace` samples and truncate `logspace` samples; values outside the integer range fail with `RangeError`. `empty` and `empty_like` return zero-filled arrays. Array-valued endpoints, `axis`, `device` and `order` remain compatibility targets.
+
+### Joining arrays
+
+`concatenate`, `stack`, `vstack`, `hstack`, `dstack`, `column_stack` and `append` join NMath values from one context. `atleast_1d`, `atleast_2d` and `atleast_3d` add length-1 axes the way NumPy does.
+
+```ts
+import { append, atleast_2d, concatenate, hstack, stack, vstack } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([[1, 2], [3, 4]], { dtype: "int32" });
+const b = ctx.array([0.5, 1.5], { dtype: "float32" });
+concatenate([a, a], 1).shape; // [2, 4]
+await concatenate([a, b], null).compute(); // [1, 2, 3, 4, 0.5, 1.5], float64
+stack([b, b], -1).shape; // [2, 2]
+vstack([a, b]).shape; // [3, 2]
+hstack([b, b]).shape; // [4]
+append(a, b).shape; // [6]
+atleast_2d(b).shape; // [1, 2]
+```
+
+The operands promote to one dtype like NumPy's `result_type`, and strings widen to the longest width. Datetime and timedelta operands must have the same dtype and unit. The result is a new array, so later writes to an operand do not change it. Zero-dimensional operands, an empty operand list and dimensions that differ outside the joined axis fail with `NMATH_SHAPE_MISMATCH`. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`. Operands from different contexts fail with `NMATH_CONTEXT_MISMATCH`. With literal shapes and axes, TypeScript keeps every dimension except the joined one and rejects dtypes that cannot join. One `atleast_*` operand returns one expression, and several return a frozen tuple. The `out`, `dtype` and `casting` arguments remain targets, and GPU execution rejects joining.
 
 ## Evaluate polynomials
 

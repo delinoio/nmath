@@ -319,6 +319,55 @@ impl Buffer {
         }
     }
 
+    /// Copies `len` elements from `src[j..]` into `self[i..]`; both buffers
+    /// have the same dtype.
+    pub fn copy_range(&mut self, i: usize, src: &Buffer, j: usize, len: usize) {
+        macro_rules! copy {
+            ($a:expr, $b:expr) => {
+                $a[i..i + len].copy_from_slice(&$b[j..j + len])
+            };
+        }
+        match (self, src) {
+            (Buffer::Bool(a), Buffer::Bool(b)) => copy!(a, b),
+            (Buffer::I8(a), Buffer::I8(b)) => copy!(a, b),
+            (Buffer::I16(a), Buffer::I16(b)) => copy!(a, b),
+            (Buffer::I32(a), Buffer::I32(b)) => copy!(a, b),
+            (Buffer::I64(a), Buffer::I64(b)) => copy!(a, b),
+            (Buffer::U8(a), Buffer::U8(b)) => copy!(a, b),
+            (Buffer::U16(a), Buffer::U16(b)) => copy!(a, b),
+            (Buffer::U32(a), Buffer::U32(b)) => copy!(a, b),
+            (Buffer::U64(a), Buffer::U64(b)) => copy!(a, b),
+            (Buffer::F16(a), Buffer::F16(b)) => copy!(a, b),
+            (Buffer::F32(a), Buffer::F32(b)) => copy!(a, b),
+            (Buffer::F64(a), Buffer::F64(b)) => copy!(a, b),
+            (Buffer::C64(a), Buffer::C64(b)) => copy!(a, b),
+            (Buffer::C128(a), Buffer::C128(b)) => copy!(a, b),
+            (
+                Buffer::Temporal {
+                    ticks: a,
+                    dtype: da,
+                },
+                Buffer::Temporal {
+                    ticks: b,
+                    dtype: db,
+                },
+            ) if da == db => copy!(a, b),
+            (
+                Buffer::Unicode {
+                    width: a,
+                    values: av,
+                },
+                Buffer::Unicode {
+                    width: b,
+                    values: bv,
+                },
+            ) if a == b => {
+                av[i * *a..(i + len) * *a].copy_from_slice(&bv[j * *b..(j + len) * *b]);
+            }
+            _ => panic!("copy_range requires matching dtypes"),
+        }
+    }
+
     /// Gathers `indices` into a new buffer.
     pub fn gather(&self, indices: &[usize]) -> Buffer {
         match self {

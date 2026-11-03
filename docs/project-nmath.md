@@ -151,3 +151,5 @@ Range, identity and `_like` constructors compute their values in the package lay
 NumPy products, diagonals, clip and diff compose matmul, transpose, reshape, indexing, elementwise and sum nodes in the package layer and add no native node; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy semantics, error codes and oracle criterion.
 
 Truth reductions and closeness tests compose comparisons and the lazy sum reduction in the package layer; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy semantics and result types.
+
+NumPy joining functions use the native concatenate node, and the `atleast_*` helpers compose the reshape node. The [runtime contract](crates-nmath-runtime-contract.md#shape-transformations) owns the node's promotion, validation and copy behavior, and the [package contract](packages-nmath-package-contract.md#typing) owns the NumPy composition order and declarations.
