@@ -1962,6 +1962,39 @@ pub fn shift(
     DenseArray::new(input.shape.clone(), out, reservation)
 }
 
+/// NumPy `concatenate`: for each index before `axis`, copies the contiguous
+/// block of every part in order. Every part already has `dtype` and matches
+/// `shape` except along `axis`.
+pub fn concat(
+    parts: &[DenseArray],
+    axis: usize,
+    shape: &[usize],
+    dtype: DType,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
+    let count = crate::numerical::size(shape)?;
+    let reservation = reserve_for(budget, dtype, count)?;
+    let mut out = Buffer::filled(dtype, count, crate::buffer::Scalar::Int(0))?;
+    if count > 0 {
+        let outer: usize = shape[..axis].iter().product();
+        let blocks: Vec<usize> = parts
+            .iter()
+            .map(|part| part.shape[axis..].iter().product())
+            .collect();
+        let mut offset = 0;
+        for row in 0..outer {
+            token.check()?;
+            for (part, &block) in parts.iter().zip(&blocks) {
+                out.copy_range(offset, &part.buffer, row * block, block);
+                offset += block;
+            }
+        }
+    }
+    token.check()?;
+    DenseArray::new(shape.to_vec(), out, reservation)
+}
+
 fn scan_loop<T: Num>(
     op: ScanOp,
     values: &[T],
