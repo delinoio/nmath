@@ -187,6 +187,9 @@ test("splitting and repetition reject invalid arguments like NumPy", async () =>
       code: "NMATH_SHAPE_BROADCAST",
     });
     assert.throws(() => roll(m, 0.5, 0), invalid);
+    assert.throws(() => roll(m, [], [0, 1]), {
+      code: "NMATH_SHAPE_BROADCAST",
+    });
     assert.throws(() => diff(v, 1, -1, { prepend: "a" }), TypeError);
     assert.throws(() => diff(v, 1, -1, { prepended: 1 }), invalid);
     assert.throws(

@@ -431,7 +431,8 @@ export function roll(
     );
   }
   const offsets = Array<number>(source.ndim).fill(0);
-  const count = Math.max(shifts.length, axes.length);
+  // Broadcasting a length-1 list takes the other length, which can be 0.
+  const count = shifts.length === 1 ? axes.length : shifts.length;
   for (let i = 0; i < count; i += 1) {
     offsets[axes[axes.length === 1 ? 0 : i]] +=
       shifts[shifts.length === 1 ? 0 : i];

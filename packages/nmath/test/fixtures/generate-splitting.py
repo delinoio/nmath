@@ -148,6 +148,11 @@ for dtype in DTYPES:
     for shape, shift, axis in roll_cases:
         a = operand(shape, dtype)
         add("roll", a, np.roll(a, shift, axis), shift=shift, axis=axis)
+# Empty shift or axis lists broadcast to zero pairs and roll nothing.
+for dtype in ["int64", "str"]:
+    for shape, shift, axis in [([5], [], 0), ([5], 1, []), ([2, 3], [], []), ([5], [], None)]:
+        a = operand(shape, dtype)
+        add("roll", a, np.roll(a, shift, axis), shift=shift, axis=axis)
 
 diff_cases = [
     ("int32", [4], 1, -1, 0, None), ("int32", [4], 1, -1, None, 5), ("int32", [4], 2, -1, 1, 1),
