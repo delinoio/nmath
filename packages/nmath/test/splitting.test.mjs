@@ -180,6 +180,13 @@ test("splitting and repetition reject invalid arguments like NumPy", async () =>
     });
     assert.throws(() => repeat(m, 1, 2), bounds);
     assert.throws(() => repeat(s, 1, 1), bounds);
+    // Expanded index lists are checked against the CPU budget before they are built.
+    const budget = { code: "NMATH_MEMORY_BUDGET_EXCEEDED" };
+    const one = ctx.zeros([1], "float64");
+    assert.throws(() => repeat(one, 1e12), budget);
+    assert.throws(() => repeat(one, [1e12], 0), budget);
+    assert.throws(() => tile(one, 1e12), budget);
+    assert.throws(() => tile(ctx.zeros([0, 1], "int8"), [1, 1e12]), budget);
     assert.throws(() => tile(v, -2), invalid);
     assert.throws(() => tile(v, [1, 0.5]), invalid);
     assert.throws(() => roll(m, 1, 2), bounds);

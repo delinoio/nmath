@@ -195,6 +195,14 @@ function parts(
   return Object.freeze(result);
 }
 
+/**
+ * Fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before building `count` read
+ * positions that could not fit the CPU budget as int64 indexes.
+ */
+function ensureIndexBudget(x: Lazy<any, any>, count: number): void {
+  x.context?.ensureCpuBudget(count, "int64");
+}
+
 /** Repeats every position along `axis` by its count with one index-array read. */
 function repeatAxis(
   x: Lazy<any, any>,
@@ -202,6 +210,12 @@ function repeatAxis(
   axis: number,
 ): Expr<any, any> {
   const length = x.shape[axis] as number;
+  ensureIndexBudget(
+    x,
+    counts.length === 1
+      ? counts[0] * length
+      : counts.reduce((sum, count) => sum + count, 0),
+  );
   const positions: number[] = [];
   for (let i = 0; i < length; i += 1) {
     const count = counts.length === 1 ? counts[0] : counts[i];
@@ -377,6 +391,9 @@ export function tile(
   const rank = Math.max(source.ndim, counts.length);
   const shape = [...Array<number>(rank - source.ndim).fill(1), ...source.shape];
   const full = [...Array<number>(rank - counts.length).fill(1), ...counts];
+  full.forEach((count, axis) => {
+    if (count !== 1) ensureIndexBudget(source, count * shape[axis]);
+  });
   // NumPy copies even when every repetition is 1.
   let result = source.reshape(shape as never, { copy: true }) as Expr<any, any>;
   full.forEach((count, axis) => {
