@@ -164,9 +164,15 @@ export type ConcatenateShape<
           : never
     : never;
 
-/** `np.stack` shape: inserts the operand count at the normalized axis. */
-export type StackShape<P extends readonly Part[], A extends number> =
-  ShapeOf<P[0]> extends infer S extends Shape
+/**
+ * `np.stack` shape: inserts the operand count at the normalized axis. A union
+ * axis gives the union of each alternative's shape.
+ */
+export type StackShape<
+  P extends readonly Part[],
+  A extends number,
+> = A extends unknown
+  ? ShapeOf<P[0]> extends infer S extends Shape
     ? number extends S["length"]
       ? number[]
       : AxisOf<[...S, number], A> extends infer I extends number
@@ -176,7 +182,8 @@ export type StackShape<P extends readonly Part[], A extends number> =
             ? [number, ...Dyn<S>]
             : Insert<S, I, Count<P>>
         : never
-    : never;
+    : never
+  : never;
 
 /** `np.atleast_1d` shape. */
 export type Atleast1DShape<S extends Shape> = number extends S["length"]

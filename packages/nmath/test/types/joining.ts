@@ -76,6 +76,16 @@ const stackedDynamic: Expr<"int8", [number, number]> = stack([v, v], n);
 const stackedList: Expr<"float32", [number, 2, 3]> = stack(list);
 const stackedScalars: Expr<"bool", [3]> = stack([s, s, s]);
 exact<Equal<StackShape<[typeof v], 2>, never>>();
+declare const frontOrBack: 0 | 1;
+declare const backOrFront: -1 | -2;
+exact<Equal<StackShape<[typeof v, typeof v], 0 | 1>, [2, 3] | [3, 2]>>();
+exact<Equal<StackShape<[typeof v, typeof v], -1 | -2>, [3, 2] | [2, 3]>>();
+exact<Equal<StackShape<[typeof v], 0 | 2>, [1, 3]>>();
+const stackedEither: Expr<"int8", [2, 3] | [3, 2]> = stack([v, v], frontOrBack);
+const stackedEitherBack: Expr<"int8", [2, 3] | [3, 2]> = stack(
+  [v, v],
+  backOrFront,
+);
 
 const vertical: Expr<"int32", [number, 3]> = vstack([v, m]);
 const verticalScalars: Expr<"bool", [number, 1]> = vstack([s, s]);
@@ -119,6 +129,8 @@ append(text, v);
 concatenate([m, [1, 2, 3]]);
 
 void [
+  stackedEither,
+  stackedEitherBack,
   mainHalf,
   rows,
   cols,
