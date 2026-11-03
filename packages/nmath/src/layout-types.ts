@@ -283,7 +283,8 @@ type Reverse<S extends Shape> = S extends readonly [
 ]
   ? [...Reverse<T>, H]
   : [];
-type DynamicDims<S extends Shape> = { -readonly [K in keyof S]: number };
+/** Every dimension of `S` becomes dynamic; the rank is kept. */
+export type DynamicDims<S extends Shape> = { -readonly [K in keyof S]: number };
 export type TransposeShape<
   S extends Shape,
   A extends Shape | undefined = undefined,
@@ -409,3 +410,35 @@ export type DerivativeActive<
     ? ActiveDerivative<S extends readonly [] ? [1] : S, M, A>
     : never
   : never;
+
+// Axis normalization shared by the joining and splitting declarations.
+/** Dimension `I` of `S` becomes dynamic. */
+export type ReplaceDim<S extends Shape, I extends number> = {
+  -readonly [K in keyof S]: K extends `${I}` ? number : S[K];
+};
+type DropLast<
+  T extends readonly unknown[],
+  P extends number,
+  C extends 0[] = [],
+> = C["length"] extends P
+  ? T
+  : T extends readonly [...infer H, unknown]
+    ? DropLast<H, P, [...C, 0]>
+    : never;
+/** The normalized literal axis, `never` when out of range, `number` when dynamic. */
+export type AxisOf<
+  S extends readonly unknown[],
+  A extends number,
+> = number extends A
+  ? number
+  : `${A}` extends `-${infer P extends number}`
+    ? DropLast<S, P> extends infer H extends readonly unknown[]
+      ? [H] extends [never]
+        ? never
+        : H["length"] extends S["length"]
+          ? never
+          : H["length"]
+      : never
+    : `${A}` extends keyof S & `${number}`
+      ? A
+      : never;

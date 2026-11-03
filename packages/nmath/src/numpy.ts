@@ -438,6 +438,7 @@ export * from "./creation.js";
 export * from "./products.js";
 export * from "./logic.js";
 export * from "./joining.js";
+export * from "./splitting.js";
 export * as linalg from "./linalg.js";
 export * as fft from "./fft.js";
 

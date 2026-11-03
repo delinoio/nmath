@@ -153,3 +153,5 @@ NumPy products, diagonals, clip and diff compose matmul, transpose, reshape, ind
 Truth reductions and closeness tests compose comparisons and the lazy sum reduction in the package layer; the [package contract](packages-nmath-package-contract.md#typing) owns their NumPy semantics and result types.
 
 NumPy joining functions use the native concatenate node, and the `atleast_*` helpers compose the reshape node. The [runtime contract](crates-nmath-runtime-contract.md#shape-transformations) owns the node's promotion, validation and copy behavior, and the [package contract](packages-nmath-package-contract.md#typing) owns the NumPy composition order and declarations.
+
+Splitting returns slice views; `repeat` and `tile` compose integer-array reads, and `roll` and the `diff` edges compose the concatenate node. The [package contract](packages-nmath-package-contract.md#typing) owns their NumPy composition order, view and copy behavior and declarations.
