@@ -6,6 +6,7 @@
 import { Expr, Lazy, type NMathValue } from "./core.js";
 import { NMathError, native } from "./errors.js";
 import { binding } from "./native.js";
+import type { AxisOf, DynamicDims, ReplaceDim } from "./layout-types.js";
 import type {
   ComputableDType,
   MutableShape,
@@ -33,33 +34,6 @@ type DTypeOf<P> = P extends { readonly dtype: infer D extends ComputableDType }
 type ShapeOf<P> = P extends { readonly shape: infer S extends Shape }
   ? S
   : never;
-type Dyn<S extends Shape> = { -readonly [K in keyof S]: number };
-type Replace<S extends Shape, I extends number> = {
-  -readonly [K in keyof S]: K extends `${I}` ? number : S[K];
-};
-type DropLast<
-  T extends readonly unknown[],
-  P extends number,
-  C extends 0[] = [],
-> = C["length"] extends P
-  ? T
-  : T extends readonly [...infer H, unknown]
-    ? DropLast<H, P, [...C, 0]>
-    : never;
-/** The normalized literal axis, `never` when out of range, `number` when dynamic. */
-type AxisOf<S extends readonly unknown[], A extends number> = number extends A
-  ? number
-  : `${A}` extends `-${infer P extends number}`
-    ? DropLast<S, P> extends infer H extends readonly unknown[]
-      ? [H] extends [never]
-        ? never
-        : H["length"] extends S["length"]
-          ? never
-          : H["length"]
-      : never
-    : `${A}` extends keyof S & `${number}`
-      ? A
-      : never;
 type Insert<
   S extends Shape,
   I extends number,
@@ -159,8 +133,8 @@ export type ConcatenateShape<
           ? [I] extends [never]
             ? never
             : number extends I
-              ? Dyn<S>
-              : Replace<S, I>
+              ? DynamicDims<S>
+              : ReplaceDim<S, I>
           : never
     : never;
 
@@ -179,7 +153,7 @@ export type StackShape<
         ? [I] extends [never]
           ? never
           : number extends I
-            ? [number, ...Dyn<S>]
+            ? [number, ...DynamicDims<S>]
             : Insert<S, I, Count<P>>
         : never
     : never
@@ -219,7 +193,7 @@ type ColumnShape<S extends Shape> = number extends S["length"]
 
 type JoinedAt<S extends Shape, I extends number> = number extends S["length"]
   ? number[]
-  : Replace<S, I> extends infer R extends Shape
+  : ReplaceDim<S, I> extends infer R extends Shape
     ? R
     : never;
 /** `np.vstack` shape: operands become at least 2-D and join along axis 0. */

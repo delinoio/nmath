@@ -3,7 +3,8 @@
 // nodes (matmul, transpose, reshape, indexing, elementwise ufuncs and the sum
 // reduction) in the order NumPy 2.5.4 defines them.
 
-import { type Complex, Expr, Lazy, ellipsis, indices, slice } from "./core.js";
+import { Complex, Expr, Lazy, ellipsis, indices, slice } from "./core.js";
+import { concatenate } from "./joining.js";
 import { NMathError } from "./errors.js";
 import { conjugate, maximum, minimum } from "./ufunc.js";
 import type {
@@ -14,6 +15,7 @@ import type {
   PromoteWeak,
   Shape,
   SumDType,
+  TemporalDType,
 } from "./types.js";
 
 type Arg<D extends ComputableDType, S extends Shape> = Lazy<NoInfer<D>, S> & {
@@ -544,24 +546,112 @@ function clipDType(
   return probe.dtype;
 }
 
+/** A `diff` edge value: an NMath value or a JS scalar NumPy would convert to an array. */
+export type DiffEdge =
+  Lazy<any, any> | number | bigint | boolean | Complex | undefined;
+/** `np.diff` `prepend` and `append` values. */
+export interface DiffOptions<P extends DiffEdge, E extends DiffEdge> {
+  prepend?: P;
+  append?: E;
+}
+/** The dtype after joining an edge value: JS scalars are strong float64, int64, bool or complex128 arrays. */
+type EdgeDType<D extends ComputableDType, V> = [V] extends [undefined]
+  ? D
+  : V extends { readonly dtype: infer D2 extends ComputableDType }
+    ? D extends TemporalDType
+      ? D2 extends D
+        ? D
+        : never
+      : Promote<D, D2>
+    : V extends number
+      ? Promote<D, "float64">
+      : V extends bigint
+        ? Promote<D, "int64">
+        : V extends boolean
+          ? Promote<D, "bool">
+          : V extends Complex
+            ? Promote<D, "complex128">
+            : never;
+type Valid<R> = [R] extends [never]
+  ? { readonly "diff edge dtypes cannot be joined": true }
+  : unknown;
+
+/** NumPy `asanyarray` of an edge value, broadcast to `a` with length 1 along `axis`. */
+function diffEdge(
+  a: Lazy<any, any>,
+  value: DiffEdge,
+  axis: number,
+): Lazy<any, any> {
+  const shape = a.shape.map((n: number, i: number) => (i === axis ? 1 : n));
+  if (value instanceof Lazy) {
+    if (value.ndim !== 0) return value;
+    // `broadcast_to` the 0-d value: one zero-index read per other axis.
+    let edge = reshape(
+      value,
+      shape.map(() => 1),
+    );
+    shape.forEach((n: number, i: number) => {
+      if (n === 1) return;
+      edge = edge.get(
+        ...shape.map((_: number, j: number) =>
+          j === i ? indices(Array<number>(n).fill(0)) : slice(),
+        ),
+      ) as Expr<any, any>;
+    });
+    return edge;
+  }
+  const dtype =
+    typeof value === "number"
+      ? "float64"
+      : typeof value === "bigint"
+        ? "int64"
+        : typeof value === "boolean"
+          ? "bool"
+          : value instanceof Complex
+            ? "complex128"
+            : undefined;
+  if (dtype === undefined || a.context === undefined) {
+    throw new TypeError(
+      "diff prepend and append values must be NMath values, numbers, bigints, booleans or Complex values.",
+    );
+  }
+  return a.context.full(shape as never, value as never, dtype);
+}
+
 /**
  * `np.diff(a, n, axis)`: the `n`-th discrete difference along `axis` by
  * repeated slicing. Bool input uses `not_equal`, datetimes subtract to
  * timedeltas, and `n = 0` returns the input unchanged as a view. A negative
  * or non-integer `n` fails with `NMATH_INDEX_INVALID`; 0-d input fails with
- * `NMATH_SHAPE_MISMATCH` unless `n` is 0. `prepend` and `append` remain
- * targets.
+ * `NMATH_SHAPE_MISMATCH` unless `n` is 0.
+ *
+ * `prepend` and `append` join values before and after `a` along `axis` first.
+ * A 0-d value repeats across the other axes. A JS `number` is a float64
+ * array, a `bigint` an int64 array, a `boolean` a bool array and a `Complex`
+ * a complex128 array, as NumPy converts Python scalars with `asanyarray`;
+ * they are created in the context of `a` when the expression is built.
  */
 export function diff<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
   const N extends number = 1,
+  P extends DiffEdge = undefined,
+  E extends DiffEdge = undefined,
 >(
   a: Arg<D, S>,
   n?: N,
   axis?: number,
-): Expr<N extends 0 ? D : DiffDType<D>, DiffShape<S, N>>;
-export function diff(a: Lazy<any, any>, n = 1, axis = -1): Expr<any, any> {
+  options?: DiffOptions<P, E> & Valid<EdgeDType<EdgeDType<D, P>, E>>,
+): Expr<
+  N extends 0 ? D : DiffDType<EdgeDType<EdgeDType<D, P>, E>>,
+  DiffShape<S, N>
+>;
+export function diff(
+  a: Lazy<any, any>,
+  n = 1,
+  axis = -1,
+  options: DiffOptions<DiffEdge, DiffEdge> = {},
+): Expr<any, any> {
   requireLazy(a);
   const order = integer(n, "The difference order n");
   if (order < 0) {
@@ -578,6 +668,25 @@ export function diff(a: Lazy<any, any>, n = 1, axis = -1): Expr<any, any> {
     mismatch("diff requires input that is at least one dimensional.");
   }
   const ax = normalizeAxis(axis, nd, "axis");
+  for (const key of Object.keys(options)) {
+    if (key !== "prepend" && key !== "append") {
+      throw new NMathError(
+        "NMATH_INDEX_INVALID",
+        `NMATH_INDEX_INVALID: Unknown diff option '${key}'. Use prepend or append.`,
+      );
+    }
+  }
+  if (options.prepend !== undefined || options.append !== undefined) {
+    const combined: Lazy<any, any>[] = [];
+    if (options.prepend !== undefined) {
+      combined.push(diffEdge(a, options.prepend, ax));
+    }
+    combined.push(a);
+    if (options.append !== undefined) {
+      combined.push(diffEdge(a, options.append, ax));
+    }
+    a = concatenate(combined, ax);
+  }
   const later = Array.from({ length: nd }, (_, i) =>
     i === ax ? slice(1) : slice(),
   );

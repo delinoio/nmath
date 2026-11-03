@@ -217,7 +217,7 @@ Reference versions: NumPy 2.5.4, pandas 3.1.0 and Polars 2.1.0. This prerelease 
 | NumPy arithmetic     | `+ - * / **`, unary `+ -`, broadcasting, NEP 50 promotion; `%` for supported real dtypes; comparison functions; three-argument `where`; real math ufuncs; bitwise and logical functions; binary math functions | string/temporal comparisons, ufunc methods, one-argument `where`, complex math functions, ufunc keyword arguments                                        |
 | NumPy reductions     | `sum`, `mean`, `min`, `max`, `prod` (axis lists), `argmin`, `argmax`, `var`, `std`, `cumsum`, `cumprod`; `keepdims`                                                                                            | axis lists for `var`/`std`/scans, `out`/`dtype`/`initial`/`where` options                                                                                |
 | NumPy indexing       | integers, slices, integer-array and mask selectors that broadcast together, `newaxis`, ellipsis, views for basic indexing, atomic assignment                                                                   | multidimensional index arrays, `newaxis` in writes                                                                                                       |
-| NumPy joining        | `concatenate`, `stack`, `vstack`, `hstack`, `dstack`, `column_stack`, `append`, `atleast_1d`/`2d`/`3d`                                                                                                         | `out`/`dtype`/`casting` arguments, `block`, mixed datetime units                                                                                         |
+| NumPy joining        | `concatenate`, `stack`, `vstack`, `hstack`, `dstack`, `column_stack`, `append`, `atleast_1d`/`2d`/`3d`; `split`, `array_split`, `hsplit`, `vsplit`, `dsplit`, `repeat`, `tile`, `roll`                         | `out`/`dtype`/`casting` arguments, `block`, mixed datetime units                                                                                         |
 | NumPy linear algebra | `matmul` with broadcast batch axes and vector promotion; `fft`/`ifft`/`rfft`/`irfft`, `fft2`/`ifft2`/`fftn`/`ifftn`, `fftshift`/`ifftshift`, `fftfreq`/`rfftfreq`; polynomial evaluation and derivatives       | `lstsq`, other `cond` orders and other `linalg`/`fft` functions, polynomial operations beyond evaluation/derivatives, masked arrays                      |
 | NumPy random         | PCG64 `random`, `integers`, `uniform`, `standard_normal`, `normal`, and `exponential` with scalar parameters                                                                                                   | parameter broadcasting, `out`, other distributions and bit generators, state import/export and SeedSequence spawning                                     |
 | NumPy I/O            | NPY and stored/deflated NPZ; float16/complex input supports both byte orders and C/Fortran layout                                                                                                              | Automatic NPY/NPZ load dispatch, richer dtypes and remaining noncomplex endian/layout support                                                            |
@@ -566,7 +566,7 @@ await clip(a, 2n, null).compute(); // [[2, 2], [3, 4]], int32
 await diff(a, 1, 0).compute(); // [[2, 2]]
 ```
 
-In `clip`, `null` or `undefined` means no bound. Use `bigint` bounds to keep an integer dtype, because a JS `number` is a float. `diff` uses `not_equal` for bool input. Its `prepend` and `append` arguments remain targets.
+In `clip`, `null` or `undefined` means no bound. Use `bigint` bounds to keep an integer dtype, because a JS `number` is a float. `diff` uses `not_equal` for bool input. Its fourth argument takes `{ prepend, append }` values that join `a` along the axis before the difference. A 0-d value repeats across the other axes. Like NumPy's conversion of Python scalars, a JS `number` joins as a float64 array, a `bigint` as int64, a `boolean` as bool and a `Complex` as complex128, so `diff(int32Array, 1, -1, { prepend: 0n })` gives int64.
 
 ### newaxis and ellipsis
 
@@ -774,6 +774,24 @@ atleast_2d(b).shape; // [1, 2]
 ```
 
 The operands promote to one dtype like NumPy's `result_type`, and strings widen to the longest width. Datetime and timedelta operands must have the same dtype and unit. The result is a new array, so later writes to an operand do not change it. Zero-dimensional operands, an empty operand list and dimensions that differ outside the joined axis fail with `NMATH_SHAPE_MISMATCH`. An out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`. Operands from different contexts fail with `NMATH_CONTEXT_MISMATCH`. With literal shapes and axes, TypeScript keeps every dimension except the joined one and rejects dtypes that cannot join. One `atleast_*` operand returns one expression, and several return a frozen tuple. The `out`, `dtype` and `casting` arguments remain targets, and GPU execution rejects joining.
+
+### Splitting, repetition and roll
+
+`split`, `array_split`, `hsplit`, `vsplit` and `dsplit` return a frozen array of lazy views. `repeat`, `tile` and `roll` return new arrays.
+
+```ts
+import { array_split, repeat, roll, split, tile } from "@delinoio/nmath/numpy";
+
+const a = ctx.array([1, 2, 3, 4, 5, 6], { dtype: "int32" });
+split(a, 3).map((part) => part.shape); // [[2], [2], [2]]
+split(a, [1, 4]).map((part) => part.shape); // [[1], [3], [2]]
+array_split(a, 4).map((part) => part.shape); // [[2], [2], [1], [1]]
+await repeat(a.reshape([2, 3]), [1, 0, 2], 1).compute(); // [[1, 3, 3], [4, 6, 6]]
+tile(a, [2, 1]).shape; // [2, 6]
+await roll(a, 2).compute(); // [5, 6, 1, 2, 3, 4]
+```
+
+A section count must divide the axis for `split` (`NMATH_SHAPE_MISMATCH`); `array_split` makes the first parts one element longer instead. Split indexes follow Python slice rules, so negative and out-of-range indexes are allowed. Because the parts are views, a later write to the source is visible in a part that has not been computed yet. `repeat` without an axis flattens its input. It takes one count or one count per position, and a count list of another length fails with `NMATH_SHAPE_BROADCAST`. `roll` without an axis rolls the flattened values and keeps the shape. Shifts for a repeated axis add up. Negative or non-integer counts, sections and shifts fail with `NMATH_INDEX_INVALID`, and an out-of-range axis fails with `NMATH_INDEX_OUT_OF_BOUNDS`. With literal shapes and axes, TypeScript keeps every dimension except the split or repeated one. Array-valued repeat counts and shifts and GPU execution remain targets.
 
 ## Evaluate polynomials
 

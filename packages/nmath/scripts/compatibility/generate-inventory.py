@@ -410,9 +410,11 @@ counterparts({"numpy.clip": "numpy.clip"}, "elementwise", ["a", "a_min: array, w
     ["packages/nmath/src/products.ts", "packages/nmath/src/ufunc.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
 counterparts({"numpy.diff": "numpy.diff"}, "elementwise", ["a", "n: non-negative safe integer, default 1", "axis: default -1"], NUMERIC + ["datetime64", "timedelta64"],
     ["CPU repeated slicing differences; bool uses not_equal and datetimes subtract to timedeltas. n = 0 returns a view of the input.",
-     "Negative or non-integer n fails with NMATH_INDEX_INVALID; 0-d input fails with NMATH_SHAPE_MISMATCH. prepend and append remain targets.",
+     "Negative or non-integer n fails with NMATH_INDEX_INVALID; 0-d input fails with NMATH_SHAPE_MISMATCH.",
+     "prepend/append join NMath values or JS scalars (number float64, bigint int64, boolean bool, Complex complex128) along the axis with the concatenate node; 0-d values repeat across the other axes.",
      PRODUCT_EVIDENCE],
-    ["packages/nmath/src/products.ts"], PRODUCT_TESTS, PRODUCT_FIXTURES)
+    ["packages/nmath/src/products.ts", "packages/nmath/src/joining.ts"], PRODUCT_TESTS + ["packages/nmath/test/splitting.test.mjs", "packages/nmath/test/types/splitting.ts"],
+    PRODUCT_FIXTURES + ["packages/nmath/test/fixtures/splitting.json"])
 
 for op, args in [("squeeze", ["a", "axis: integer, integer list or omitted"]),
                  ("expand_dims", ["a", "axis: integer or integer list against the output rank"]),
@@ -449,6 +451,35 @@ for op in ["atleast_1d", "atleast_2d", "atleast_3d"]:
         ["Lazy reshape views in NumPy 2.5.4 shape_base order; one operand returns one expression and several (or none) return a frozen tuple.",
          "Exact shapes and values against recorded NumPy 2.5.4 cases; GPU execution of layout-only results remains a target."],
         ["packages/nmath/src/joining.ts"], JOINING_TESTS, JOINING_FIXTURES)
+SPLITTING = ["packages/nmath/src/splitting.ts", "packages/nmath/src/numpy.ts"]
+SPLITTING_TESTS = ["packages/nmath/test/splitting.test.mjs", "packages/nmath/test/types/splitting.ts"]
+SPLITTING_FIXTURES = ["packages/nmath/test/fixtures/splitting.json"]
+SPLITTING_EVIDENCE = "Exact NumPy 2.5.4 oracle shapes, dtypes and values for the recorded cases; GPU execution remains a target."
+for op, args in [("split", ["ary", "indices_or_sections: positive count or integer list", "axis: default 0"]),
+                 ("array_split", ["ary", "indices_or_sections: positive count or integer list", "axis: default 0"]),
+                 ("hsplit", ["ary: at least 1-D", "indices_or_sections"]), ("vsplit", ["ary: at least 2-D", "indices_or_sections"]),
+                 ("dsplit", ["ary: at least 3-D", "indices_or_sections"])]:
+    counterparts({"numpy." + op: "numpy." + op}, "shape-transform", args, NUMERIC + ["str", "datetime64", "timedelta64"],
+        ["Lazy slice views in NumPy 2.5.4 array_split order, returned as a frozen array; a count gives parts whose lengths differ by at most one, and indexes slice with Python rules.",
+         "Uneven split counts and too few dimensions fail with NMATH_SHAPE_MISMATCH; non-positive or non-integer sections with NMATH_INDEX_INVALID; out-of-range axes with NMATH_INDEX_OUT_OF_BOUNDS.",
+         SPLITTING_EVIDENCE],
+        SPLITTING, SPLITTING_TESTS, SPLITTING_FIXTURES)
+counterparts({"numpy.repeat": "numpy.repeat"}, "shape-transform", ["a", "repeats: count or one count per position", "axis: integer or null, default null"],
+    NUMERIC + ["str", "datetime64", "timedelta64"],
+    ["Integer-array read that repeats each position, so the result is a copy; null axis flattens first.",
+     "Negative or non-integer counts fail with NMATH_INDEX_INVALID and count lists of another length with NMATH_SHAPE_BROADCAST. Array-valued NMath counts and the ndarray method form remain targets.",
+     SPLITTING_EVIDENCE],
+    SPLITTING, SPLITTING_TESTS, SPLITTING_FIXTURES)
+counterparts({"numpy.tile": "numpy.tile"}, "shape-transform", ["A", "reps: count or count list"], NUMERIC + ["str", "datetime64", "timedelta64"],
+    ["Copying reshape to the padded rank, then one modular integer-array read per repeated axis; the result is always a copy.",
+     "Negative or non-integer repetitions fail with NMATH_INDEX_INVALID.", SPLITTING_EVIDENCE],
+    SPLITTING, SPLITTING_TESTS, SPLITTING_FIXTURES)
+counterparts({"numpy.roll": "numpy.roll"}, "shape-transform", ["a", "shift: integer or integer list", "axis: integer, integer list or null"],
+    NUMERIC + ["str", "datetime64", "timedelta64"],
+    ["Shifts broadcast against axes and add up for a repeated axis; each rolled axis joins two slices with the native concatenate node, and a null axis rolls the flattened input and keeps the shape. The result is always a copy.",
+     "Non-integer shifts fail with NMATH_INDEX_INVALID, shift and axis lists that do not broadcast with NMATH_SHAPE_BROADCAST and out-of-range axes with NMATH_INDEX_OUT_OF_BOUNDS.",
+     SPLITTING_EVIDENCE],
+    SPLITTING + ["packages/nmath/src/joining.ts"], SPLITTING_TESTS, SPLITTING_FIXTURES)
 CREATION = ["packages/nmath/src/creation.ts", "packages/nmath/src/numpy.ts"]
 CREATION_TESTS = ["packages/nmath/test/creation.test.mjs", "packages/nmath/test/types/creation.ts"]
 for op, args, limits in [
