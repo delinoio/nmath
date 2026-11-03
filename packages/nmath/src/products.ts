@@ -4,7 +4,7 @@
 // reduction) in the order NumPy 2.5.4 defines them.
 
 import { Complex, Expr, Lazy, ellipsis, indices, slice } from "./core.js";
-import { concatenate } from "./joining.js";
+import { concatenate, type JoinDType } from "./joining.js";
 import { NMathError } from "./errors.js";
 import { conjugate, maximum, minimum } from "./ufunc.js";
 import type {
@@ -15,7 +15,6 @@ import type {
   PromoteWeak,
   Shape,
   SumDType,
-  TemporalDType,
 } from "./types.js";
 
 type Arg<D extends ComputableDType, S extends Shape> = Lazy<NoInfer<D>, S> & {
@@ -554,24 +553,38 @@ export interface DiffOptions<P extends DiffEdge, E extends DiffEdge> {
   prepend?: P;
   append?: E;
 }
-/** The dtype after joining an edge value: JS scalars are strong float64, int64, bool or complex128 arrays. */
-type EdgeDType<D extends ComputableDType, V> = [V] extends [undefined]
+/** The dtype of an edge value: JS scalars are strong float64, int64, bool or complex128 arrays. */
+type EdgeValueDType<V> = V extends {
+  readonly dtype: infer D extends ComputableDType;
+}
   ? D
-  : V extends { readonly dtype: infer D2 extends ComputableDType }
-    ? D extends TemporalDType
-      ? D2 extends D
-        ? D
-        : never
-      : Promote<D, D2>
-    : V extends number
-      ? Promote<D, "float64">
-      : V extends bigint
-        ? Promote<D, "int64">
-        : V extends boolean
-          ? Promote<D, "bool">
-          : V extends Complex
-            ? Promote<D, "complex128">
-            : never;
+  : V extends number
+    ? "float64"
+    : V extends bigint
+      ? "int64"
+      : V extends boolean
+        ? "bool"
+        : V extends Complex
+          ? "complex128"
+          : never;
+/** One join operand per present edge alternative; an absent edge adds none. */
+type EdgePart<V> = V extends undefined
+  ? []
+  : [Expr<EdgeValueDType<V>, number[]>];
+/**
+ * The dtype of `concatenate([prepend, a, append])`. Each union alternative of
+ * an optional edge keeps its own result, including `D` when the edge is absent.
+ */
+type EdgeDType<D extends ComputableDType, P, E> = JoinDType<
+  [...EdgePart<P>, Expr<D, number[]>, ...EdgePart<E>]
+>;
+/**
+ * The declared edge type. Inferring the whole options object keeps the
+ * `undefined` alternative that inference from an optional property drops.
+ */
+type EdgeOf<O, K extends "prepend" | "append"> = K extends keyof O
+  ? O[K]
+  : undefined;
 type Valid<R> = [R] extends [never]
   ? { readonly "diff edge dtypes cannot be joined": true }
   : unknown;
@@ -635,15 +648,16 @@ export function diff<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
   const N extends number = 1,
-  P extends DiffEdge = undefined,
-  E extends DiffEdge = undefined,
+  O extends DiffOptions<DiffEdge, DiffEdge> = {},
 >(
   a: Arg<D, S>,
   n?: N,
   axis?: number,
-  options?: DiffOptions<P, E> & Valid<EdgeDType<EdgeDType<D, P>, E>>,
+  options?: O & Valid<EdgeDType<D, EdgeOf<O, "prepend">, EdgeOf<O, "append">>>,
 ): Expr<
-  N extends 0 ? D : DiffDType<EdgeDType<EdgeDType<D, P>, E>>,
+  N extends 0
+    ? D
+    : DiffDType<EdgeDType<D, EdgeOf<O, "prepend">, EdgeOf<O, "append">>>,
   DiffShape<S, N>
 >;
 export function diff(

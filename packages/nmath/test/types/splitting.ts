@@ -82,6 +82,13 @@ const arrayEdge: Expr<"float32", [number, number]> = diff(m, 1, 1, {
   prepend: c.zeros([4, 1], "int8"),
   append: c.zeros([4, 2], "float32"),
 });
+declare const maybeNumber: number | undefined;
+declare const maybeBigint: bigint | undefined;
+// An absent optional edge keeps the input dtype as one alternative.
+const maybeWidened = diff(v, 1, -1, { prepend: maybeNumber });
+exact<Equal<typeof maybeWidened.dtype, "int16" | "float64">>();
+const maybeBoth = diff(v, 1, -1, { prepend: maybeNumber, append: maybeBigint });
+exact<Equal<typeof maybeBoth.dtype, "int16" | "float64" | "int64">>();
 const dates: Expr<"timedelta64", [number]> = diff(when, 1, -1, {
   prepend: c.zeros([1], "datetime64"),
 });
