@@ -35,6 +35,107 @@ function rows(frame, names = frame.columns) {
     }),
   );
 }
+
+test("pandas floating reductions skip NaNs while core reductions propagate them", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const values of [
+        [NaN, 1, 3],
+        [1, NaN, 3],
+        [1, 3, NaN],
+      ]) {
+        const input = ctx.array(values, { dtype });
+        const series = new pd.Series(input);
+        for (const [name, expected] of Object.entries({
+          sum: 4,
+          mean: 2,
+          min: 1,
+          max: 3,
+        })) {
+          assert.equal(series[name]().dtype, dtype);
+          assert.equal(await series[name]().compute(), expected);
+          assert.ok(Number.isNaN(await input[name]().compute()));
+        }
+        assert.equal(await new pd.DataFrame({ x: input }).sum().x.compute(), 4);
+      }
+      for (const values of [[], [NaN, NaN]]) {
+        const input = ctx.array(values, { dtype });
+        const series = new pd.Series(input);
+        assert.equal(await series.sum().compute(), 0);
+        assert.ok(Number.isNaN(await series.mean().compute()));
+        assert.ok(Number.isNaN(await series.min().compute()));
+        assert.ok(Number.isNaN(await series.max().compute()));
+        assert.equal(await new pd.DataFrame({ x: input }).sum().x.compute(), 0);
+      }
+      const plain = new pd.Series(ctx.array([1, 3], { dtype }));
+      assert.equal(await plain.mean().compute(), 2);
+      const infinite = new pd.Series(ctx.array([Infinity, 1], { dtype }));
+      assert.equal(await infinite.sum().compute(), Infinity);
+      assert.equal(await infinite.min().compute(), 1);
+      const opposed = new pd.Series(
+        ctx.array([Infinity, -Infinity], { dtype }),
+      );
+      assert.ok(Number.isNaN(await opposed.sum().compute()));
+    }
+    const values = ctx.array([1, NaN, 3], { dtype: "float64" });
+    const validity = ctx.array([true, false, true], { dtype: "bool" });
+    const nullable = new pd.Series(values, "x", undefined, validity);
+    assert.throws(() => nullable.sum(), /Nullable Series reductions/);
+    assert.throws(
+      () => new pd.DataFrame({ x: nullable }).sum(),
+      /Nullable frame reductions/,
+    );
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("pandas reduction keeps execution-start snapshots, cancellation and budgets", async () => {
+  const ctx = context({ maxConcurrentJobs: 1, maxQueueLength: 8 });
+  try {
+    const blocker = ctx.zeros([512, 512], "float64");
+    const running = blocker.matmul(blocker).compute();
+    const input = ctx.array([1, NaN, 3], { dtype: "float64" });
+    const write = input.set([0], 5);
+    const queued = new pd.Series(input).sum().compute();
+    await write;
+    assert.equal(await queued, 8);
+    await running;
+    const runningAgain = blocker.matmul(blocker).compute();
+    const queuedCancel = new AbortController();
+    const pending = new pd.Series(input)
+      .sum()
+      .compute({ signal: queuedCancel.signal });
+    queuedCancel.abort();
+    await assert.rejects(pending, { code: "NMATH_CANCELLED" });
+    await runningAgain;
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await assert.rejects(
+      new pd.Series(input).sum().compute({ signal: cancelled.signal }),
+      {
+        code: "NMATH_CANCELLED",
+      },
+    );
+    await assert.rejects(
+      new pd.Series(input).sum().compute({ device: "gpu" }),
+      { code: "NMATH_GPU_UNSUPPORTED_OPERATION" },
+    );
+  } finally {
+    await ctx.close();
+  }
+  const tiny = context({ cpuMemoryBudget: 24n });
+  try {
+    const input = tiny.array([1, NaN, 3], { dtype: "float64" });
+    await assert.rejects(new pd.Series(input).mean().compute(), {
+      code: "NMATH_MEMORY_BUDGET_EXCEEDED",
+    });
+    assert.equal(tiny.metrics().cpuMemory.used, 24n);
+  } finally {
+    await tiny.close();
+  }
+});
 test("fixed pandas and Polars duplicate/null joins, groups, stable sort and empty groups", async () => {
   const ctx = context();
   try {

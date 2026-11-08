@@ -12,7 +12,7 @@ use crate::{
     dtype::DType,
     error::{Error, ErrorCode, Result},
     expr::{Expr, ExprKind},
-    kernels::{self, ReduceOp},
+    kernels::{self, ReduceOp, ReductionPolicy},
     memory::{Device, MemoryBudget, Reservation},
     sync::CancellationToken,
 };
@@ -110,7 +110,10 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             }
             Ok(())
         }
-        ExprKind::Reduce(op, a, axes) => {
+        ExprKind::Reduce(op, a, axes, policy) => {
+            if *policy == ReductionPolicy::SkipNan {
+                return Err(unsupported("Pandas reductions run on the CPU."));
+            }
             if !matches!(
                 op,
                 ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
@@ -415,7 +418,7 @@ impl<'a> Runtime<'a> {
             });
         self.check()?;
         let inner = match expr.kind() {
-            ExprKind::Reduce(_, input, axes) => {
+            ExprKind::Reduce(_, input, axes, _) => {
                 let axes = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
                 axes.iter()
                     .zip(input.shape())
@@ -550,7 +553,7 @@ impl<'a> Runtime<'a> {
                     value.clone(),
                 )?)
             }
-            ExprKind::Unary(_, a) | ExprKind::Reduce(_, a, _) => {
+            ExprKind::Unary(_, a) | ExprKind::Reduce(_, a, _, _) => {
                 let a = self.evaluate(a, None, snapshot)?;
                 self.run(expr, &a, None)
             }

@@ -2134,7 +2134,40 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    reduce_with_policy(
+        op,
+        input,
+        axes,
+        ReductionPolicy::PropagateNan,
+        budget,
+        token,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReductionPolicy {
+    PropagateNan,
+    SkipNan,
+}
+
+pub fn reduce_with_policy(
+    op: ReduceOp,
+    input: &DenseArray,
+    axes: Option<&[i64]>,
+    policy: ReductionPolicy,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
     validate_special_reduce(op, input.dtype(), axes)?;
+    if policy == ReductionPolicy::SkipNan
+        && (!matches!(input.dtype(), DType::Float32 | DType::Float64)
+            || !matches!(
+                op,
+                ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
+            ))
+    {
+        return Err(crate::dtype::unsupported());
+    }
     let rank = input.shape.len();
     let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
@@ -2144,7 +2177,10 @@ pub fn reduce(
         .iter()
         .zip(&reduced)
         .any(|(&len, &r)| r && len == 0);
-    if (matches!(op, ReduceOp::Min | ReduceOp::Max) || op.is_arg()) && empty_reduction {
+    if ((matches!(op, ReduceOp::Min | ReduceOp::Max) && policy == ReductionPolicy::PropagateNan)
+        || op.is_arg())
+        && empty_reduction
+    {
         return Err(Error::new(
             ErrorCode::ShapeMismatch,
             if op.is_arg() {
@@ -2309,6 +2345,13 @@ pub fn reduce(
     } else {
         0
     })?;
+    let _count_reservation = budget.reserve(
+        if policy == ReductionPolicy::SkipNan && op == ReduceOp::Mean {
+            checked_reduction_bytes(out_len, std::mem::size_of::<usize>())?
+        } else {
+            0
+        },
+    )?;
     fn run<T: Num>(
         op: ReduceOp,
         values: &[T],
@@ -2316,6 +2359,7 @@ pub fn reduce(
         out_len: usize,
         count: usize,
         contiguous: bool,
+        policy: ReductionPolicy,
         token: &CancellationToken,
     ) -> Result<Vec<T>> {
         let mut out = if op == ReduceOp::Prod {
@@ -2323,6 +2367,66 @@ pub fn reduce(
         } else {
             vec![T::default(); out_len]
         };
+        let mut has_nan = false;
+        if policy == ReductionPolicy::SkipNan {
+            for (i, value) in values.iter().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                has_nan |= value.nan();
+            }
+        }
+        if policy == ReductionPolicy::SkipNan && (count == 0 || has_nan) {
+            let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
+                vec![false; out_len]
+            } else {
+                Vec::new()
+            };
+            let mut counts = if op == ReduceOp::Mean {
+                vec![0usize; out_len]
+            } else {
+                Vec::new()
+            };
+            for (i, (slot, _)) in slots.enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                let x = values[i];
+                if x.nan() {
+                    continue;
+                }
+                match op {
+                    ReduceOp::Sum | ReduceOp::Mean => out[slot] = T::add(out[slot], x),
+                    ReduceOp::Min | ReduceOp::Max => {
+                        if !seen[slot]
+                            || if op == ReduceOp::Min {
+                                x < out[slot] || (T::take_equal() && x == out[slot])
+                            } else {
+                                x > out[slot] || (T::take_equal() && x == out[slot])
+                            }
+                        {
+                            out[slot] = x;
+                        }
+                        seen[slot] = true;
+                    }
+                    _ => unreachable!("pandas reduction policy admits four operators"),
+                }
+                if op == ReduceOp::Mean {
+                    counts[slot] += 1;
+                }
+            }
+            for (i, value) in out.iter_mut().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if op == ReduceOp::Mean {
+                    *value = value.mean(counts[i]);
+                } else if matches!(op, ReduceOp::Min | ReduceOp::Max) && !seen[i] {
+                    *value = T::default().mean(0);
+                }
+            }
+            return Ok(out);
+        }
         if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
             if T::pairwise_sum(&[], token)?.is_some() {
                 for (i, chunk) in values.chunks_exact(count).enumerate() {
@@ -2381,15 +2485,15 @@ pub fn reduce(
     let first_reduced = reduced.iter().position(|&r| r).unwrap_or(reduced.len());
     let contiguous = reduced[first_reduced..].iter().all(|&r| r);
     let buffer = match values.as_ref() {
-        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         Buffer::F16(x) if matches!(op, ReduceOp::Sum | ReduceOp::Mean) => {
             let mut out = vec![Float16::ZERO; out_len];
             if contiguous && count > 0 {
@@ -2428,11 +2532,11 @@ pub fn reduce(
             }
             Buffer::F16(out)
         }
-        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         _ => return Err(crate::dtype::unsupported()),
     };
     DenseArray::new(out_shape, buffer, reservation)

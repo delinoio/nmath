@@ -722,6 +722,17 @@ export abstract class Lazy<
     return keepDims(reduced, this.shape, axes, options);
   }
 
+  /** @internal */
+  pandasReduce(op: "sum"): Expr<SumDType<D>, []>;
+  pandasReduce(op: "mean"): Expr<TrueDivide<D>, []>;
+  pandasReduce(op: "min" | "max"): Expr<D, []>;
+  pandasReduce(op: "sum" | "mean" | "min" | "max"): Expr<any, []> {
+    return new Expr(
+      native(() => binding.NativeExpr.pandasReduce(op, this.nativeExpr())),
+      this.context,
+    );
+  }
+
   sum<
     const A extends number | readonly number[] | undefined = undefined,
     K extends boolean = false,

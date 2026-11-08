@@ -74,6 +74,7 @@ export declare class NativeExpr {
   static where(condition: NativeExpr, x: NativeExpr, y: NativeExpr): NativeExpr
   static unary(op: string, input: NativeExpr): NativeExpr
   static reduce(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
+  static pandasReduce(op: string, input: NativeExpr): NativeExpr
   static shift(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static concat(parts: Array<NativeExpr>, axis: number): NativeExpr
   static variance(op: string, input: NativeExpr, axis: number | undefined | null, ddof: number): NativeExpr

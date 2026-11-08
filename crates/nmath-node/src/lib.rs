@@ -497,6 +497,25 @@ impl NativeExpr {
     }
 
     #[napi(factory)]
+    pub fn pandas_reduce(op: String, input: &NativeExpr) -> Result<Self> {
+        let op = match op.as_str() {
+            "sum" => ReduceOp::Sum,
+            "mean" => ReduceOp::Mean,
+            "min" => ReduceOp::Min,
+            "max" => ReduceOp::Max,
+            other => {
+                return Err(core_err(
+                    ErrorCode::IndexInvalid,
+                    format!("Unknown pandas reduction '{other}'."),
+                ));
+            }
+        };
+        Ok(Self {
+            inner: Expr::pandas_reduce(op, &input.inner).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
     pub fn shift(op: String, input: &NativeExpr, axes: Option<Vec<i64>>) -> Result<Self> {
         let op = match op.as_str() {
             "fftshift" => ShiftOp::FftShift,
