@@ -123,6 +123,18 @@ fn finite_complex_components_survive_overflowing_magnitude() {
     assert!((values[0][1] - 1e-100).abs() / 1e-100 < 1e-12);
     drop(result);
 
+    let rotated_tiny_component = dense(
+        vec![2, 2],
+        Buffer::C128(vec![[1e308, 1e-100], [0.0, 0.0], [0.0, 0.0], [0.0, 1.0]]),
+    );
+    let result = determinant(&rotated_tiny_component, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] + 1e-100).abs() / 1e-100 < 1e-12);
+    assert!((values[0][1] - 1e308).abs() / 1e308 < 1e-12);
+    drop(result);
+
     let diagonal = dense(
         vec![2, 2],
         Buffer::C128(vec![[1e200, 1e200], [0.0, 0.0], [0.0, 0.0], [1.3e108, 0.0]]),

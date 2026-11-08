@@ -91,6 +91,23 @@ test("determinants retain finite complex components when magnitude overflows", a
     assert.ok(Math.abs(tinyComponentResult.real - 1e308) / 1e308 < 1e-12);
     assert.ok(Math.abs(tinyComponentResult.imag - 1e-100) / 1e-100 < 1e-12);
 
+    const rotatedTinyComponent = c.array(
+      [
+        [new Complex(1e308, 1e-100), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(0, 1)],
+      ],
+      { dtype: "complex128" },
+    );
+    const rotatedTinyComponentResult = await linalg
+      .det(rotatedTinyComponent)
+      .compute();
+    assert.ok(
+      Math.abs(rotatedTinyComponentResult.real + 1e-100) / 1e-100 < 1e-12,
+    );
+    assert.ok(
+      Math.abs(rotatedTinyComponentResult.imag - 1e308) / 1e308 < 1e-12,
+    );
+
     const diagonal = c.array(
       [
         [new Complex(1e200, 1e200), new Complex(0, 0)],
