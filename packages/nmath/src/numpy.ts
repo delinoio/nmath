@@ -218,11 +218,20 @@ export function positive(x: Lazy<any, any>): Expr<any, any> {
 export function sum<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<SumDType<D>, ReduceShape<S, undefined, K>>;
+export function sum<
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<SumDType<D>, ReduceShape<S, A, K>>;
 export function sum(
@@ -235,11 +244,23 @@ export function sum(
 export function mean<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<
+  D extends "timedelta64" ? D : TrueDivide<D>,
+  ReduceShape<S, undefined, K>
+>;
+export function mean<
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>>;
 export function mean(
@@ -252,11 +273,20 @@ export function mean(
 export function min<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, undefined, K>>;
+export function min<
+  D extends Exclude<ComputableDType, "str">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D, ReduceShape<S, A, K>>;
 export function min(
@@ -269,11 +299,20 @@ export function min(
 export function max<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, undefined, K>>;
+export function max<
+  D extends Exclude<ComputableDType, "str">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D, ReduceShape<S, A, K>>;
 export function max(
