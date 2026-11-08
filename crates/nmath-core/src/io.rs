@@ -426,32 +426,46 @@ pub fn write_atomic(
         ));
     }
     let tmp = temp_path(dest)?;
-    let result = (|| {
-        let mut file = File::options()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-            .map_err(io_error)?;
+    write_atomic_with_path(dest, &tmp, mode, token, |file| {
         for chunk in bytes.chunks(1 << 20) {
             token.check()?;
             file.write_all(chunk).map_err(io_error)?;
         }
-        file.sync_all().map_err(io_error)?;
+        file.sync_all().map_err(io_error)
+    })
+}
+
+fn write_atomic_with_path(
+    dest: &Path,
+    tmp: &Path,
+    mode: WriteMode,
+    token: &CancellationToken,
+    write_and_sync: impl FnOnce(&mut File) -> Result<()>,
+) -> Result<()> {
+    let mut file = File::options()
+        .write(true)
+        .create_new(true)
+        .open(tmp)
+        .map_err(io_error)?;
+    let result = (|| {
+        write_and_sync(&mut file)?;
         token.check()?;
         match mode {
             // A hard link fails if the destination exists, so publication never clobbers a
             // file created concurrently.
-            WriteMode::CreateNew => fs::hard_link(&tmp, dest).map_err(|e| {
+            WriteMode::CreateNew => fs::hard_link(tmp, dest).map_err(|e| {
                 if e.kind() == std::io::ErrorKind::AlreadyExists {
                     Error::new(ErrorCode::IoExists, "The output file already exists.")
                 } else {
                     io_error(e)
                 }
             }),
-            WriteMode::Overwrite => fs::rename(&tmp, dest).map_err(io_error),
+            WriteMode::Overwrite => fs::rename(tmp, dest).map_err(io_error),
         }
     })();
-    let _ = fs::remove_file(&tmp);
+    drop(file);
+    // Exclusive creation succeeded, so this operation owns the temporary path.
+    let _ = fs::remove_file(tmp);
     result
 }
 
@@ -581,6 +595,178 @@ mod tests {
             fs::read_dir(dir.path()).unwrap().count(),
             1,
             "no temporary files remain"
+        );
+    }
+
+    #[test]
+    fn atomic_write_collision_preserves_unowned_temporary_file() {
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            let dir = tempfile::tempdir().unwrap();
+            let dest = dir.path().join("destination.npy");
+            let tmp = dir.path().join("occupied.tmp");
+            if mode == WriteMode::Overwrite {
+                fs::write(&dest, b"old destination").unwrap();
+            }
+            fs::write(&tmp, b"other writer temporary").unwrap();
+
+            let error =
+                write_atomic_with_path(&dest, &tmp, mode, &CancellationToken::new(), |_| {
+                    panic!("exclusive creation must fail before writing")
+                })
+                .unwrap_err();
+            assert_eq!(error.code, ErrorCode::IoFailed);
+            assert!(!error.full_message().contains(dir.path().to_str().unwrap()));
+            assert!(!error.full_message().contains("other writer temporary"));
+            assert_eq!(fs::read(&tmp).unwrap(), b"other writer temporary");
+            if mode == WriteMode::Overwrite {
+                assert_eq!(fs::read(&dest).unwrap(), b"old destination");
+            } else {
+                assert!(!dest.exists());
+            }
+        }
+    }
+
+    #[test]
+    fn atomic_write_removes_owned_temporary_file_on_prepublication_failure() {
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            let dir = tempfile::tempdir().unwrap();
+            let dest = dir.path().join("destination.npy");
+            let tmp = dir.path().join("owned.tmp");
+            if mode == WriteMode::Overwrite {
+                fs::write(&dest, b"old destination").unwrap();
+            }
+            let token = CancellationToken::new();
+            let error = write_atomic_with_path(&dest, &tmp, mode, &token, |file| {
+                file.write_all(b"partial output").map_err(io_error)?;
+                token.cancel();
+                Ok(())
+            })
+            .unwrap_err();
+            assert_eq!(error.code, ErrorCode::Cancelled);
+            assert!(!tmp.exists());
+            if mode == WriteMode::Overwrite {
+                assert_eq!(fs::read(&dest).unwrap(), b"old destination");
+            } else {
+                assert!(!dest.exists());
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("destination.npy");
+        let tmp = dir.path().join("owned.tmp");
+        fs::write(&dest, b"old destination").unwrap();
+        for operation in ["write", "sync"] {
+            let error = write_atomic_with_path(
+                &dest,
+                &tmp,
+                WriteMode::Overwrite,
+                &CancellationToken::new(),
+                |file| {
+                    if operation == "sync" {
+                        file.write_all(b"partial output").map_err(io_error)?;
+                    }
+                    Err(io_error(std::io::Error::other(operation)))
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error.code, ErrorCode::IoFailed);
+            assert!(!tmp.exists());
+            assert_eq!(fs::read(&dest).unwrap(), b"old destination");
+        }
+
+        let missing_parent = dir.path().join("missing");
+        let dest = missing_parent.join("destination.npy");
+        let error = write_atomic_with_path(
+            &dest,
+            &tmp,
+            WriteMode::Overwrite,
+            &CancellationToken::new(),
+            |file| file.write_all(b"complete output").map_err(io_error),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoFailed);
+        assert!(!tmp.exists());
+        assert!(!dest.exists());
+
+        let dest = dir.path().join("raced.npy");
+        let error = write_atomic_with_path(
+            &dest,
+            &tmp,
+            WriteMode::CreateNew,
+            &CancellationToken::new(),
+            |file| {
+                file.write_all(b"new output").map_err(io_error)?;
+                fs::write(&dest, b"racing writer").map_err(io_error)
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoExists);
+        assert!(!tmp.exists());
+        assert_eq!(fs::read(&dest).unwrap(), b"racing writer");
+    }
+
+    #[test]
+    #[ignore = "run with NMATH_PUBLICATION_FIXTURE_DIR for native validation"]
+    fn native_publication_fixture() {
+        let root = PathBuf::from(std::env::var_os("NMATH_PUBLICATION_FIXTURE_DIR").unwrap());
+        assert!(root.is_dir());
+        assert!(fs::read_dir(&root).unwrap().next().is_none());
+
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            let name = if mode == WriteMode::CreateNew {
+                "create-new"
+            } else {
+                "overwrite"
+            };
+            let dir = root.join(name);
+            fs::create_dir(&dir).unwrap();
+            let dest = dir.join("destination.npy");
+            let tmp = dir.join("occupied.tmp");
+            if mode == WriteMode::Overwrite {
+                fs::write(&dest, b"old destination").unwrap();
+            }
+            fs::write(&tmp, b"other writer temporary").unwrap();
+            let error =
+                write_atomic_with_path(&dest, &tmp, mode, &CancellationToken::new(), |_| {
+                    panic!("occupied temp must reject exclusive creation")
+                })
+                .unwrap_err();
+            assert_eq!(error.code, ErrorCode::IoFailed);
+            assert_eq!(fs::read(&tmp).unwrap(), b"other writer temporary");
+            if mode == WriteMode::Overwrite {
+                assert_eq!(fs::read(&dest).unwrap(), b"old destination");
+            } else {
+                assert!(!dest.exists());
+            }
+            println!("{name}: occupied temporary file and destination preserved");
+        }
+
+        let dir = root.join("owned-cancellation");
+        fs::create_dir(&dir).unwrap();
+        let dest = dir.join("destination.npy");
+        let tmp = dir.join("owned.tmp");
+        fs::write(&dest, b"old destination").unwrap();
+        let token = CancellationToken::new();
+        let error = write_atomic_with_path(&dest, &tmp, WriteMode::Overwrite, &token, |file| {
+            file.write_all(b"partial output").map_err(io_error)?;
+            token.cancel();
+            Ok(())
+        })
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Cancelled);
+        assert!(!tmp.exists());
+        assert_eq!(fs::read(&dest).unwrap(), b"old destination");
+        println!("owned cancellation: temporary file removed; destination preserved");
+
+        let dest = root.join("normal.npy");
+        let token = CancellationToken::new();
+        write_atomic(&dest, b"first", WriteMode::CreateNew, &token).unwrap();
+        write_atomic(&dest, b"second", WriteMode::Overwrite, &token).unwrap();
+        token.cancel();
+        assert_eq!(fs::read(&dest).unwrap(), b"second");
+        println!(
+            "normal publication: create-new and overwrite succeeded; later cancellation did not \
+             undo output"
         );
     }
 }
