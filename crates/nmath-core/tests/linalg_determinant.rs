@@ -31,6 +31,7 @@ fn compensating_pivots_preserve_finite_determinants() {
             panic!("determinant must retain float64");
         };
         assert!(values[0].is_finite() && values[0] != 0.0);
+        // The pinned NumPy test_linalg double-precision criterion is decimal 12.
         assert!((values[0] - 1.0).abs() < 1e-12, "{}", values[0]);
     }
     assert_eq!(budget.usage().used, 0);
@@ -45,6 +46,16 @@ fn signs_phases_singular_and_empty_cases() {
         determinant(&negative, &budget, &token).buffer,
         Buffer::F64(vec![-6.0])
     );
+    let ordinary = dense(
+        vec![3, 3],
+        Buffer::F64(vec![2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0]),
+    );
+    let ordinary_result = determinant(&ordinary, &budget, &token);
+    let Buffer::F64(values) = &ordinary_result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!((values[0] - 24.0).abs() < 1e-12);
+    drop(ordinary_result);
     let swapped = dense(vec![2, 2], Buffer::F64(vec![0.0, 1.0, 1.0, 0.0]));
     assert_eq!(
         determinant(&swapped, &budget, &token).buffer,
@@ -62,6 +73,17 @@ fn signs_phases_singular_and_empty_cases() {
     assert!((values[0][0] - 1.0).abs() < 1e-12);
     assert!((values[0][1] - 1.0).abs() < 1e-12);
     drop(result);
+    let single_complex = dense(
+        vec![2, 2],
+        Buffer::C64(vec![[1.0, 2.0], [0.0, 0.0], [0.0, 0.0], [3.0, 0.0]]),
+    );
+    let single_result = determinant(&single_complex, &budget, &token);
+    let Buffer::C64(values) = &single_result.buffer else {
+        panic!("determinant must retain complex64");
+    };
+    assert!((values[0][0] - 3.0).abs() < 1e-6);
+    assert!((values[0][1] - 6.0).abs() < 1e-6);
+    drop(single_result);
 
     let singular = dense(vec![2, 2], Buffer::F64(vec![1.0, 2.0, 2.0, 4.0]));
     assert_eq!(
