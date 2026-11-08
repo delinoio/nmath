@@ -38,7 +38,10 @@ export default function FullFeaturedChat() {
                 onLinkCheck: (url) => {
                   const trusted = ["github.com", "npmjs.com"];
                   const hostname = new URL(url).hostname;
-                  return trusted.some((d) => hostname.endsWith(d));
+                  return trusted.some(
+                    (domain) =>
+                      hostname === domain || hostname.endsWith("." + domain),
+                  );
                 },
               }}
               plugins={{ code, mermaid, math }}

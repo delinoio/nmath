@@ -228,6 +228,110 @@ fn pandas_group_excludes_nan_without_changing_polars_or_null_groups() {
     c.close();
 }
 #[test]
+fn polars_grouped_float_max_prefers_non_nan_values() {
+    let c = context(32768);
+    let group = |dtype: DType, values: Vec<f64>, validity: Vec<bool>, op, flavor| {
+        let len = values.len();
+        let keys = c.array(vec![len], Buffer::I32(vec![1; len])).unwrap();
+        let values = c
+            .array(
+                vec![len],
+                match dtype {
+                    DType::Float32 => Buffer::F32(values.into_iter().map(|n| n as f32).collect()),
+                    _ => Buffer::F64(values),
+                },
+            )
+            .unwrap();
+        let mask = c.array(vec![len], Buffer::Bool(validity)).unwrap();
+        run(
+            &c,
+            Plan::Group(
+                Box::new(Plan::Source(vec![
+                    Column {
+                        values: Expr::input(&keys),
+                        valid: None,
+                    },
+                    Column {
+                        values: Expr::input(&values),
+                        valid: Some(Expr::input(&mask)),
+                    },
+                ])),
+                0,
+                1,
+                op,
+                true,
+                flavor,
+            ),
+        )
+        .unwrap()
+    };
+
+    for dtype in [DType::Float32, DType::Float64] {
+        for (values, validity, expected) in [
+            (vec![1.0, f64::NAN], vec![true, true], Some(1.0)),
+            (vec![f64::NAN, 1.0], vec![true, true], Some(1.0)),
+            (
+                vec![f64::NAN, f64::NEG_INFINITY],
+                vec![true, true],
+                Some(f64::NEG_INFINITY),
+            ),
+            (
+                vec![f64::INFINITY, f64::NAN],
+                vec![true, true],
+                Some(f64::INFINITY),
+            ),
+            (vec![f64::NAN, f64::NAN], vec![true, true], Some(f64::NAN)),
+            (vec![f64::NAN, 2.0], vec![true, false], Some(f64::NAN)),
+            (
+                vec![1.0, f64::NAN, 99.0],
+                vec![true, true, false],
+                Some(1.0),
+            ),
+            (vec![1.0, 2.0], vec![true, true], Some(2.0)),
+            (vec![1.0, 2.0], vec![false, false], None),
+        ] {
+            let out = group(dtype, values, validity, Aggregate::Max, Flavor::Polars);
+            assert_eq!(out.rows, 1);
+            assert_eq!(
+                out.columns[1].valid.buffer.get(0),
+                Scalar::Bool(expected.is_some())
+            );
+            if let Some(expected) = expected {
+                let Scalar::Float(actual) = out.columns[1].values.buffer.get(0) else {
+                    panic!("group max must retain floating dtype");
+                };
+                assert!(actual == expected || (actual.is_nan() && expected.is_nan()));
+            }
+        }
+        let empty = group(dtype, vec![], vec![], Aggregate::Max, Flavor::Polars);
+        assert_eq!(empty.rows, 0);
+        let pandas = group(
+            dtype,
+            vec![1.0, f64::NAN],
+            vec![true, true],
+            Aggregate::Max,
+            Flavor::Pandas,
+        );
+        assert_eq!(pandas.columns[1].values.buffer.get(0), Scalar::Float(1.0));
+        for (op, expected) in [
+            (Aggregate::Count, 2.0),
+            (Aggregate::Sum, f64::NAN),
+            (Aggregate::Mean, f64::NAN),
+        ] {
+            let out = group(
+                dtype,
+                vec![1.0, f64::NAN],
+                vec![true, true],
+                op,
+                Flavor::Polars,
+            );
+            let actual = out.columns[1].values.buffer.get(0).as_f64();
+            assert!(actual == expected || (actual.is_nan() && expected.is_nan()));
+        }
+    }
+    c.close();
+}
+#[test]
 fn running_cancellation_releases_intermediates() {
     let c = context(2_000_000);
     let a = c
