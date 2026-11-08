@@ -355,7 +355,8 @@ impl Context {
         let array = array.clone();
         let work: Work = Box::new(move |env| {
             let snap = array.snapshot_cancellable(&env.budget, &env.token)?;
-            let bytes = io::encode_npy(&snap.shape, &snap.buffer)?;
+            let (bytes, _serialization) =
+                io::encode_npy_budgeted(&snap.shape, &snap.buffer, &env.budget)?;
             io::write_atomic(&path, &bytes, mode, &env.token)?;
             Ok(JobOutput::Unit)
         });
@@ -697,7 +698,7 @@ mod io_npz_context;
 
 #[cfg(test)]
 mod admission_tests {
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{fs, sync::mpsc, thread, time::Duration};
 
     use super::*;
     use crate::{BinaryOp, Buffer, Scalar, expr::freeze_test_hook};
@@ -715,6 +716,186 @@ mod admission_tests {
     fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
         let (tx, rx) = mpsc::channel();
         (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn npy_save_reserves_serialization_before_publication() {
+        let dir = tempfile::tempdir().unwrap();
+        let context_with_budget = |budget| {
+            Context::new(ContextOptions {
+                max_concurrent_jobs: 1,
+                max_queue_length: 0,
+                cpu_memory_budget: budget,
+                gpu_memory_budget: 0,
+            })
+            .unwrap()
+        };
+
+        let zero = context_with_budget(0);
+        let empty = zero.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let absent = dir.path().join("absent.npy");
+        let (done, rx) = completion();
+        zero.save_npy(
+            &empty,
+            absent.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert!(!absent.exists());
+        assert_eq!(zero.metrics().cpu_memory.used, 0);
+        assert_eq!(zero.metrics().cpu_memory.peak, 0);
+        zero.close();
+
+        let tight = context_with_budget(16);
+        let one = tight.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let existing = dir.path().join("existing.npy");
+        fs::write(&existing, b"original").unwrap();
+        let (done, rx) = completion();
+        tight
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(fs::read(&existing).unwrap(), b"original");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(tight.metrics().cpu_memory.used, 8);
+        tight.close();
+
+        let enough = context_with_budget(4096);
+        let empty = enough.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &empty,
+                absent.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&absent).unwrap()).unwrap(),
+            (vec![0], Buffer::F64(vec![]))
+        );
+        let one = enough.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&existing).unwrap()).unwrap(),
+            (vec![1], Buffer::F64(vec![7.0]))
+        );
+        assert!(enough.metrics().cpu_memory.peak > 16);
+        assert_eq!(enough.metrics().cpu_memory.used, 8);
+        enough.close();
+    }
+
+    #[test]
+    fn oversized_npy_header_fails_before_publication() {
+        let ctx = context(4);
+        let dir = tempfile::tempdir().unwrap();
+        for (index, rank) in [4_000, 22_000].into_iter().enumerate() {
+            let array = ctx.array(vec![1; rank], Buffer::U8(vec![1])).unwrap();
+            let used_before = ctx.metrics().cpu_memory.used;
+            let fresh = dir.path().join(format!("fresh-{rank}.npy"));
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                fresh.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert!(!fresh.exists());
+
+            let existing = dir.path().join(format!("existing-{rank}.npy"));
+            fs::write(&existing, b"original").unwrap();
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert_eq!(fs::read(&existing).unwrap(), b"original");
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), index + 1);
+            assert_eq!(ctx.metrics().cpu_memory.used, used_before);
+        }
+
+        let supported = ctx.array(vec![1; 3_300], Buffer::U8(vec![1])).unwrap();
+        let path = dir.path().join("supported.npy");
+        let (done, rx) = completion();
+        ctx.save_npy(
+            &supported,
+            path.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        let bytes = fs::read(&path).unwrap();
+        assert_eq!(u16::from_le_bytes([bytes[8], bytes[9]]), 9_974);
+        assert_eq!(
+            io::decode_npy(&bytes).unwrap(),
+            (vec![1; 3_300], Buffer::U8(vec![1]))
+        );
+        ctx.close();
     }
 
     fn completed(rx: mpsc::Receiver<Result<JobOutput>>) {

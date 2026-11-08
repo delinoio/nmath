@@ -199,6 +199,8 @@ GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmet
 
 `array.save(path, { overwrite })` writes NPY files and `ctx.load(path)` reads them. NMath never replaces an existing file unless you pass `overwrite: true`. Output goes to a temporary file that is renamed into place, so cancellation or failure leaves the original file unchanged. Keep input files unchanged while a job reads them; NMath reports changes it detects with `NMATH_IO_MODIFIED`, but it cannot detect every change.
 
+NPY saves count their serialization memory against the context CPU budget. If the budget is too small, the save fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before writing and leaves any existing destination unchanged. `ctx.metrics()` reports this memory while it is in use and releases the charge when the job finishes.
+
 Complex NPY output uses little-endian components in C order. Complex NPY input accepts either byte order and C or Fortran order. Loading preserves dtype, logical shape and both components.
 
 ## Errors
@@ -410,6 +412,8 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 `random(shape, dtype?)` and `standard_normal(shape, dtype?)` accept float32 or float64 and default to float64. `uniform(low, high, shape)`, `normal(loc, scale, shape)` and `exponential(scale, shape)` return float64. All distribution parameters are scalars. Use `[]` as the shape for a scalar result.
 
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
+
+If a dtype argument or option can be `undefined`, TypeScript includes the default dtype in the result type. Narrow the result dtype before assuming a specific typed array. A definitely present dtype keeps its exact result type.
 
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
 
@@ -669,6 +673,8 @@ console.log(await a.var(undefined, 1).compute()); // 1.1428571428571428
 ### Linear algebra and FFT
 
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
+
+Determinants preserve finite complex components when the overall complex magnitude is not representable. Wider extreme-scale and non-finite numerical behavior remains outside the documented acceptance boundary.
 
 `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, and `fft.irfft` accept `{ n?, axis?, norm? }`. The default axis is `-1`; normalization is `"backward"`, `"forward"`, or `"ortho"`. Length crops or zero-pads input. `rfft` requires real input. `irfft` defaults to `2 * (inputLength - 1)`; pass `n` to recover an odd original length. Call `.compute()` to execute on CPU. GPU execution and `out` buffers are unsupported. Complex output uses `Complex` values and interleaved typed arrays.
 
