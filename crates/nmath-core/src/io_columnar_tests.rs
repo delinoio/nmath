@@ -164,6 +164,69 @@ fn malformed_truncated_budget_and_cancel_preserve_destination() {
     }
 }
 #[test]
+fn truncation_during_raw_read_is_modified() {
+    let dir = tempfile::tempdir().unwrap();
+    let b = budget();
+    let token = CancellationToken::new();
+    for format in [Format::ArrowIpc, Format::Parquet] {
+        let path = dir.path().join("input");
+        let (schema, mut table) = fixture(65537, &b);
+        if let Buffer::I64(values) = &mut table.columns[4].values.buffer {
+            for (index, value) in values.iter_mut().enumerate() {
+                *value = (index as u64).wrapping_mul(0x9e3779b97f4a7c15) as i64;
+            }
+        }
+        write(
+            &path,
+            format,
+            schema,
+            &table,
+            WriteMode::Overwrite,
+            &b,
+            &token,
+        )
+        .unwrap();
+        let bytes = fs::read(&path).unwrap();
+        assert!(bytes.len() > 64 * 1024, "{format:?}: {} bytes", bytes.len());
+        let baseline = b.usage().used;
+
+        for (boundary, remaining) in [(0, 0), (1, 64 * 1024)] {
+            fs::write(&path, &bytes).unwrap();
+            let result = read_with(&path, format, &b, &token, |chunks_read| {
+                if chunks_read == boundary {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .open(&path)
+                        .unwrap()
+                        .set_len(remaining)
+                        .unwrap();
+                }
+            });
+            assert_eq!(result.err().unwrap().code, ErrorCode::IoModified);
+            assert_eq!(b.usage().used, baseline);
+        }
+
+        fs::write(&path, &bytes).unwrap();
+        let result = read(&path, format, &b, &token).unwrap();
+        assert_eq!(result.schema.fields().len(), table.columns.len());
+        assert_eq!(result.table.rows, table.rows);
+        drop(result);
+        assert_eq!(b.usage().used, baseline);
+
+        fs::write(&path, b"not a columnar file").unwrap();
+        assert_eq!(
+            read(&path, format, &b, &token).err().unwrap().code,
+            ErrorCode::IoFormat
+        );
+        fs::remove_file(&path).unwrap();
+        assert_eq!(
+            read(&path, format, &b, &token).err().unwrap().code,
+            ErrorCode::IoFailed
+        );
+        assert_eq!(b.usage().used, baseline);
+    }
+}
+#[test]
 fn malformed_thrift_container_never_enters_native_parser() {
     // A list claiming 2^28 entries in a five-byte footer.
     let mut bytes = b"PAR1".to_vec();
