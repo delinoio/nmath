@@ -80,7 +80,7 @@ npx @vercel/before-and-after url1 url2
 
 ## Image Upload
 
-The repository-local upload helper uses `pnpm exec clibox` for clipboard copying. Install dependencies with `pnpm install` and run the helper from the repository root. If the platform clipboard is unavailable, the helper still prints the URLs or Markdown for manual copying. Upload adapter behavior is unchanged.
+The repository-local upload helper attempts `pnpm exec clibox` for clipboard copying. Run the helper from the repository root. If the clipboard command is unavailable, the helper still prints the URLs or Markdown for manual copying. The Gist adapter needs authenticated `gh` for upload and raw URL lookup; it does not need `clibox` to extract the Gist ID.
 
 ```bash
 # Default (0x0.st - no signup needed)
