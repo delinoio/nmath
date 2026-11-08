@@ -193,7 +193,11 @@ export interface SignalOptions {
 export type ComputeResult<
   D extends ComputableDType,
   S extends Shape,
-> = S extends readonly [] ? ScalarOf<D> : NMathArray<D, S>;
+> = S extends readonly []
+  ? ScalarOf<D>
+  : [] extends S
+    ? ScalarOf<D> | NMathArray<D, S>
+    : NMathArray<D, S>;
 
 // ---------------------------------------------------------------------------
 // Selectors
