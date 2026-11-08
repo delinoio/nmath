@@ -709,6 +709,54 @@ fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
 }
 
 #[test]
+fn modern_decorators_ignore_user_owned_array_assignments() {
+    for member in ["field = 2", "accessor field = 2"] {
+        for name in ["_saved_decorators", "_saved_decorators_1"] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let {name}: number[] = [];
+let saved: () => Promise<void>;
+let received = 0;
+function dec(values: number[], callback: () => Promise<void>): any {{
+    received = values[0]; saved = callback; return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec(({name} = [a[0] = 1]), async () => {{ {name} = [a[0] = 3]; }}) {member}; }}
+    const before = [new C().field, a.values[0], received, {name}[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], {name}[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-user-array", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{member} {name}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{member} {name}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,1,1,3,3,2]"
+            );
+        }
+    }
+}
+
+#[test]
 fn modern_field_decorator_ignores_return_text_in_class_decorators() {
     for label in [
         r#""return class ""#,

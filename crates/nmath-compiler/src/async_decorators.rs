@@ -663,6 +663,7 @@ fn parsed_decorator_calls(
     let mut assignments = Vec::new();
     let mut classes = Vec::new();
     let mut returns = Vec::new();
+    let mut decorated_bindings = std::collections::HashSet::new();
     while let Some((node, function_body)) = pending.pop() {
         if node.kind() == Kind::ReturnStatement {
             if let (Some(body_open), Some(expression)) =
@@ -694,6 +695,35 @@ fn parsed_decorator_calls(
                 classes.push(GeneratedClass { start, open, close });
             }
         }
+        if node.kind() == Kind::CallExpression {
+            let call = node.as_call_expression();
+            let arguments = call.arguments.nodes();
+            if call.expression.kind() == Kind::Identifier
+                && call.expression.text() == "__esDecorate"
+                && arguments.len() >= 4
+                && arguments[2].kind() == Kind::Identifier
+                && arguments[3].kind() == Kind::ObjectLiteralExpression
+            {
+                let field_or_accessor = arguments[3]
+                    .as_object_literal_expression()
+                    .properties
+                    .nodes()
+                    .iter()
+                    .any(|property| {
+                        if property.kind() != Kind::PropertyAssignment {
+                            return false;
+                        }
+                        let property = property.as_property_assignment();
+                        property.name().kind() == Kind::Identifier
+                            && property.name().text() == "kind"
+                            && property.initializer().kind() == Kind::StringLiteral
+                            && matches!(property.initializer().text(), "field" | "accessor")
+                    });
+                if field_or_accessor {
+                    decorated_bindings.insert((function_body, arguments[2].text()));
+                }
+            }
+        }
         if node.kind() == Kind::BinaryExpression {
             let expression = node.as_binary_expression();
             if expression.operator_token.kind() == Kind::EqualsToken
@@ -715,17 +745,20 @@ fn parsed_decorator_calls(
                         })
                 });
                 if generated {
-                    assignments.push(DecoratorAssignment {
-                        name_start,
-                        name_end,
-                        array_open: tsrs_scanner::skip_trivia(
-                            text,
-                            expression.right().pos().expect_source("decorator array"),
-                        ) as usize,
-                        array_close: expression.right().end().expect_source("decorator array")
-                            as usize
-                            - 1,
-                    });
+                    assignments.push((
+                        DecoratorAssignment {
+                            name_start,
+                            name_end,
+                            array_open: tsrs_scanner::skip_trivia(
+                                text,
+                                expression.right().pos().expect_source("decorator array"),
+                            ) as usize,
+                            array_close: expression.right().end().expect_source("decorator array")
+                                as usize
+                                - 1,
+                        },
+                        function_body,
+                    ));
                 }
             }
         }
@@ -759,6 +792,18 @@ fn parsed_decorator_calls(
             pending.push((child, child_body));
         }
     }
+    // A matching suffix also occurs in user-owned arrays. Keep only bindings
+    // consumed by a real field/accessor decorator call in the same function
+    // body. This exposes the enclosing generated array and excludes deferred
+    // user callback assignments before classifying awaits.
+    let mut assignments: Vec<_> = assignments
+        .into_iter()
+        .filter_map(|(assignment, body)| {
+            decorated_bindings
+                .contains(&(body, &text[assignment.name_start..assignment.name_end]))
+                .then_some(assignment)
+        })
+        .collect();
     assignments.sort_unstable_by_key(|assignment| assignment.name_start);
     let mut awaits: Vec<_> = positions
         .into_iter()
