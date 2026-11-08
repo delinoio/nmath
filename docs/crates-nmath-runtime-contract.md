@@ -67,6 +67,7 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.
 - A shared view reflects later changes to its storage. An execution snapshot copies or pins the visible bytes when a job starts, so later writes do not affect a running job.
+- Ordinary compute and assignment right-hand sides freeze all input nodes under one shared snapshot gate after their FIFO turns are acquired. A write cannot publish between copies of aliased storage or overlapping views. The gate is released before evaluation or assignment publication; queued jobs still see writes completed before their snapshot phase.
 - Every storage records its byte size against its context's CPU or GPU budget until the last reference drops.
 
 ### Shape transformations
