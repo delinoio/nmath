@@ -6,6 +6,7 @@ use std::{
     fs::{self, File},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::SystemTime,
 };
 
@@ -21,6 +22,7 @@ const NPY_MAGIC: &[u8] = b"\x93NUMPY";
 /// Upper bound for an NPY header; NumPy itself rejects headers above this size
 /// by default.
 const MAX_HEADER_LEN: usize = 10_000;
+static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn io_error(err: std::io::Error) -> Error {
     // Messages never include file paths, per the observability contract.
@@ -515,23 +517,42 @@ pub enum WriteMode {
     Overwrite,
 }
 
-fn temp_path(dest: &Path) -> Result<PathBuf> {
+fn next_temp_sequence(sequence: &AtomicU64) -> Result<u64> {
+    let mut value = sequence.load(Ordering::Relaxed);
+    loop {
+        let next = value.checked_add(1).ok_or_else(|| {
+            Error::new(
+                ErrorCode::IoFailed,
+                "The temporary pathname sequence is exhausted.",
+            )
+        })?;
+        match sequence.compare_exchange_weak(value, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return Ok(value),
+            Err(observed) => value = observed,
+        }
+    }
+}
+
+fn temp_path_at(dest: &Path, timestamp: u128, sequence: u64) -> Result<PathBuf> {
     let parent = dest
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let name = dest
-        .file_name()
+    dest.file_name()
         .ok_or_else(|| Error::new(ErrorCode::IoFailed, "The output path has no file name."))?;
-    let nonce = SystemTime::now()
+    Ok(parent.join(format!(
+        ".nmath-{}-{timestamp}-{sequence}.tmp",
+        std::process::id()
+    )))
+}
+
+fn temp_path(dest: &Path) -> Result<PathBuf> {
+    let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    Ok(parent.join(format!(
-        ".{}.nmath-{}-{nonce}.tmp",
-        name.to_string_lossy(),
-        std::process::id()
-    )))
+    let sequence = next_temp_sequence(&TEMP_SEQUENCE)?;
+    temp_path_at(dest, timestamp, sequence)
 }
 
 /// Writes `bytes` to a temporary file next to `dest` and publishes it
@@ -550,6 +571,31 @@ pub fn write_atomic(
         ));
     }
     let tmp = temp_path(dest)?;
+    write_atomic_with_path(dest, &tmp, mode, token, |file| {
+        for chunk in bytes.chunks(1 << 20) {
+            token.check()?;
+            file.write_all(chunk).map_err(io_error)?;
+        }
+        file.sync_all().map_err(io_error)
+    })
+}
+
+#[cfg(test)]
+fn write_atomic_at(
+    dest: &Path,
+    bytes: &[u8],
+    mode: WriteMode,
+    token: &CancellationToken,
+    timestamp: u128,
+) -> Result<()> {
+    if mode == WriteMode::CreateNew && dest.exists() {
+        return Err(Error::new(
+            ErrorCode::IoExists,
+            "The output file already exists.",
+        ));
+    }
+    let sequence = next_temp_sequence(&TEMP_SEQUENCE)?;
+    let tmp = temp_path_at(dest, timestamp, sequence)?;
     write_atomic_with_path(dest, &tmp, mode, token, |file| {
         for chunk in bytes.chunks(1 << 20) {
             token.check()?;
@@ -643,7 +689,212 @@ fn read_checked_with<R>(
 
 #[cfg(test)]
 mod tests {
+    use std::{sync::mpsc, time::Duration};
+
     use super::*;
+
+    fn max_component_len(parent: &Path) -> usize {
+        let probe = |len: usize| {
+            let path = parent.join("x".repeat(len));
+            if fs::write(&path, []).is_ok() {
+                fs::remove_file(path).unwrap();
+                true
+            } else {
+                false
+            }
+        };
+        assert!(probe(1), "fixture directory must be writable");
+        let (mut valid, mut invalid) = (1, 4096);
+        assert!(!probe(invalid), "increase the component-limit probe bound");
+        while valid + 1 < invalid {
+            let candidate = valid + (invalid - valid) / 2;
+            if probe(candidate) {
+                valid = candidate;
+            } else {
+                invalid = candidate;
+            }
+        }
+        assert!(probe(valid));
+        assert!(!probe(valid + 1));
+        valid
+    }
+
+    fn max_name(limit: usize, extension: &str) -> String {
+        let name = format!("{}.{}", "a".repeat(limit - extension.len() - 1), extension);
+        assert_eq!(name.len(), limit);
+        name
+    }
+
+    fn run_long_filename_fixture(root: &Path) {
+        let direct = root.join("direct");
+        let writers = root.join("writers");
+        fs::create_dir(&direct).unwrap();
+        fs::create_dir(&writers).unwrap();
+        let limit = max_component_len(&direct);
+        assert_eq!(max_component_len(&writers), limit);
+        if let Some(expected) = std::env::var_os("NMATH_PUBLICATION_NAME_MAX") {
+            assert_eq!(limit, expected.to_str().unwrap().parse::<usize>().unwrap());
+        }
+
+        let dest = direct.join(max_name(limit, "npy"));
+        // Hold naming inputs fixed: independent calls can cross decimal-width
+        // boundaries. Maximum values also exercise the component-length bound.
+        let tmp = temp_path_at(&dest, u128::MAX, u64::MAX).unwrap();
+        let short_tmp = temp_path_at(&direct.join("short.npy"), u128::MAX, u64::MAX).unwrap();
+        assert_eq!(tmp.parent(), dest.parent());
+        assert_eq!(
+            tmp.file_name().unwrap().len(),
+            short_tmp.file_name().unwrap().len()
+        );
+        assert!(tmp.file_name().unwrap().len() < limit);
+        assert!(
+            tmp.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with(".nmath-")
+        );
+        let token = CancellationToken::new();
+        write_atomic(&dest, b"first", WriteMode::CreateNew, &token).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"first");
+        assert_eq!(
+            write_atomic(&dest, b"clobber", WriteMode::CreateNew, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::IoExists
+        );
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        assert_eq!(
+            write_atomic(&dest, b"clobber", WriteMode::Overwrite, &cancelled)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(fs::read(&dest).unwrap(), b"first");
+        let failed_tmp = temp_path(&dest).unwrap();
+        let error =
+            write_atomic_with_path(&dest, &failed_tmp, WriteMode::Overwrite, &token, |file| {
+                file.write_all(b"partial").map_err(io_error)?;
+                Err(Error::new(ErrorCode::IoFailed, "Fixture write failure."))
+            })
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoFailed);
+        assert_eq!(fs::read(&dest).unwrap(), b"first");
+        assert!(!failed_tmp.exists());
+        write_atomic(&dest, b"second", WriteMode::Overwrite, &token).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"second");
+        let short = direct.join("short.npy");
+        write_atomic(&short, b"short first", WriteMode::CreateNew, &token).unwrap();
+        write_atomic(&short, b"short second", WriteMode::Overwrite, &token).unwrap();
+        assert_eq!(fs::read(&short).unwrap(), b"short second");
+        assert_eq!(fs::read_dir(&direct).unwrap().count(), 2);
+
+        let npy = writers.join(max_name(limit, "npy"));
+        let ctx = crate::Context::new(crate::ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 8,
+            cpu_memory_budget: 128 << 20,
+            gpu_memory_budget: 0,
+        })
+        .unwrap();
+        let array = ctx.array(vec![1], Buffer::I32(vec![42])).unwrap();
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            let (tx, rx) = mpsc::channel();
+            ctx.save_npy(
+                &array,
+                npy.clone(),
+                mode,
+                CancellationToken::new(),
+                Box::new(move |result| tx.send(result).unwrap()),
+            )
+            .unwrap();
+            assert!(matches!(
+                rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap(),
+                crate::context::JobOutput::Unit
+            ));
+            assert_eq!(
+                decode_npy(&fs::read(&npy).unwrap()).unwrap(),
+                (vec![1], Buffer::I32(vec![42]))
+            );
+        }
+        ctx.close();
+
+        let budget = MemoryBudget::new(crate::memory::Device::Cpu, 128 << 20);
+        let npz = writers.join(max_name(limit, "npz"));
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            crate::io_npz::save_npz(
+                &npz,
+                &[],
+                crate::io_npz::NpzCompression::Stored,
+                mode,
+                &budget,
+                &token,
+            )
+            .unwrap();
+            assert!(
+                crate::io_npz::load_npz(&npz, &budget, &token)
+                    .unwrap()
+                    .arrays
+                    .is_empty()
+            );
+        }
+
+        let table = crate::table::Table {
+            columns: vec![crate::table::MaterializedColumn {
+                values: crate::buffer::DenseArray::new(
+                    vec![1],
+                    Buffer::I64(vec![7]),
+                    Reservation::none(),
+                )
+                .unwrap(),
+                valid: crate::buffer::DenseArray::new(
+                    vec![1],
+                    Buffer::Bool(vec![true]),
+                    Reservation::none(),
+                )
+                .unwrap(),
+            }],
+            rows: 1,
+            pivot_columns: None,
+        };
+        let names = ["value".to_owned()];
+        for (format, extension, expected) in [
+            (crate::io_text::Format::Csv, "csv", &b"value\n7\n"[..]),
+            (
+                crate::io_text::Format::Json,
+                "json",
+                &b"[{\"value\":7}]"[..],
+            ),
+        ] {
+            let path = writers.join(max_name(limit, extension));
+            for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+                crate::io_text::write(&path, format, &names, &table, mode, &budget, &token)
+                    .unwrap();
+                assert_eq!(fs::read(&path).unwrap(), expected);
+            }
+        }
+        assert_eq!(fs::read_dir(&writers).unwrap().count(), 4);
+        println!(
+            "component limit {limit}; temporary component {} bytes; direct, NPY, NPZ, CSV, JSON \
+             create-new and overwrite passed",
+            tmp.file_name().unwrap().len()
+        );
+    }
+
+    #[test]
+    fn maximum_valid_component_publishes_through_all_common_writers() {
+        let root = tempfile::tempdir().unwrap();
+        run_long_filename_fixture(root.path());
+    }
+
+    #[test]
+    #[ignore = "run with NMATH_PUBLICATION_FIXTURE_DIR for native validation"]
+    fn native_long_filename_fixture() {
+        let root = PathBuf::from(std::env::var_os("NMATH_PUBLICATION_FIXTURE_DIR").unwrap());
+        assert!(root.is_dir());
+        assert!(fs::read_dir(&root).unwrap().next().is_none());
+        run_long_filename_fixture(&root);
+    }
 
     #[test]
     fn descriptor_preflight_matches_encoded_descriptor_lengths() {
@@ -807,6 +1058,49 @@ mod tests {
                 assert!(!dest.exists());
             }
         }
+    }
+
+    #[test]
+    fn concurrent_equal_clock_writes_use_distinct_owned_temporary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.npy");
+        let second = dir.path().join("second.npy");
+        let timestamp = 123_u128;
+
+        std::thread::scope(|scope| {
+            let first_job = scope.spawn(|| {
+                write_atomic_at(
+                    &first,
+                    b"first",
+                    WriteMode::CreateNew,
+                    &CancellationToken::new(),
+                    timestamp,
+                )
+            });
+            let second_job = scope.spawn(|| {
+                write_atomic_at(
+                    &second,
+                    b"second",
+                    WriteMode::CreateNew,
+                    &CancellationToken::new(),
+                    timestamp,
+                )
+            });
+            first_job.join().unwrap().unwrap();
+            second_job.join().unwrap().unwrap();
+        });
+
+        assert_eq!(fs::read(&first).unwrap(), b"first");
+        assert_eq!(fs::read(&second).unwrap(), b"second");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn temporary_sequence_exhaustion_is_reported_without_wraparound() {
+        let sequence = AtomicU64::new(u64::MAX);
+        let error = next_temp_sequence(&sequence).unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoFailed);
+        assert_eq!(sequence.load(Ordering::Relaxed), u64::MAX);
     }
 
     #[test]
