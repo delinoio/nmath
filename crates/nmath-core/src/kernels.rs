@@ -375,7 +375,7 @@ trait Num: Copy + PartialOrd + Send + Sync + Default {
     fn nan(self) -> bool {
         false
     }
-    fn take_equal() -> bool {
+    fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool {
         true
     }
     fn pairwise_sum(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
@@ -442,6 +442,13 @@ macro_rules! float_num {
     ($($t:ty),*) => {$(
         impl Num for $t {
             fn nan(self) -> bool { self.is_nan() }
+            fn take_equal(op: ReduceOp, old: Self, next: Self) -> bool {
+                if old == 0.0 && next == 0.0 {
+                    if op == ReduceOp::Min { next.is_sign_negative() } else { next.is_sign_positive() }
+                } else {
+                    true
+                }
+            }
             fn mean(self, count: usize) -> Self { self / count as $t }
             fn one() -> Self { 1.0 }
             fn add(a: Self, b: Self) -> Self { a + b }
@@ -463,6 +470,18 @@ float_num!(f64);
 impl Num for f32 {
     fn nan(self) -> bool {
         self.is_nan()
+    }
+
+    fn take_equal(op: ReduceOp, old: Self, next: Self) -> bool {
+        if old == 0.0 && next == 0.0 {
+            if op == ReduceOp::Min {
+                next.is_sign_negative()
+            } else {
+                next.is_sign_positive()
+            }
+        } else {
+            true
+        }
     }
 
     fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
@@ -547,7 +566,7 @@ impl Num for Float16 {
         self.is_nan()
     }
 
-    fn take_equal() -> bool {
+    fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool {
         false
     }
 
@@ -623,7 +642,7 @@ fn half_pairwise(values: &[Float16], token: &CancellationToken) -> Result<f32> {
 macro_rules! complex_num {
     ($($t:ty),*) => {$(
         impl Num for [$t; 2] {
-            fn take_equal() -> bool { false }
+            fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool { false }
             fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
                 token.check()?;
                 let n = values.len();
@@ -2358,9 +2377,9 @@ pub fn reduce(
                         || (!old.nan()
                             && (x.nan()
                                 || if op == ReduceOp::Min {
-                                    x < old || (T::take_equal() && x == old)
+                                    x < old || (x == old && T::take_equal(op, old, x))
                                 } else {
-                                    x > old || (T::take_equal() && x == old)
+                                    x > old || (x == old && T::take_equal(op, old, x))
                                 }));
                     seen[slot] = true;
                     if take { x } else { old }
@@ -3086,6 +3105,85 @@ mod tests {
             reduce(ReduceOp::Sum, &empty, None, &b, &t).unwrap().buffer,
             Buffer::F64(vec![0.0])
         );
+    }
+
+    #[test]
+    fn floating_extrema_select_zero_sign_across_axes() {
+        let (budget, token) = env();
+        let cases = [
+            (vec![2], vec![-0.0, 0.0], None, vec![]),
+            (vec![2], vec![0.0, -0.0], None, vec![]),
+            (vec![1, 2], vec![-0.0, 0.0], Some(vec![1]), vec![1]),
+            (vec![2, 1], vec![0.0, -0.0], Some(vec![0]), vec![1]),
+            (
+                vec![2, 2],
+                vec![-0.0, 0.0, 0.0, -0.0],
+                Some(vec![0]),
+                vec![2],
+            ),
+            (
+                vec![2, 2],
+                vec![-0.0, 0.0, 0.0, -0.0],
+                Some(vec![1]),
+                vec![2],
+            ),
+        ];
+        for (shape, values, axes, expected_shape) in cases {
+            let single = dense(
+                shape.clone(),
+                Buffer::F32(values.iter().map(|&value| value as f32).collect()),
+            );
+            let double = dense(shape, Buffer::F64(values));
+            for op in [ReduceOp::Min, ReduceOp::Max] {
+                let expected32 = if op == ReduceOp::Min {
+                    (-0.0_f32).to_bits()
+                } else {
+                    0.0_f32.to_bits()
+                };
+                let expected64 = if op == ReduceOp::Min {
+                    (-0.0_f64).to_bits()
+                } else {
+                    0.0_f64.to_bits()
+                };
+                let out32 = reduce(op, &single, axes.as_deref(), &budget, &token).unwrap();
+                assert_eq!(out32.shape, expected_shape);
+                let Buffer::F32(out32) = out32.buffer else {
+                    panic!("expected float32 result");
+                };
+                assert!(out32.iter().all(|value| value.to_bits() == expected32));
+                let out64 = reduce(op, &double, axes.as_deref(), &budget, &token).unwrap();
+                assert_eq!(out64.shape, expected_shape);
+                let Buffer::F64(out64) = out64.buffer else {
+                    panic!("expected float64 result");
+                };
+                assert!(out64.iter().all(|value| value.to_bits() == expected64));
+            }
+        }
+    }
+
+    #[test]
+    fn float16_extrema_keep_first_equal_zero_and_float_nan() {
+        let (budget, token) = env();
+        for bits in [[0x8000, 0], [0, 0x8000]] {
+            let input = dense(vec![2], Buffer::F16(bits.map(Float16::from_bits).to_vec()));
+            for op in [ReduceOp::Min, ReduceOp::Max] {
+                let out = reduce(op, &input, None, &budget, &token).unwrap();
+                let Buffer::F16(values) = out.buffer else {
+                    panic!("expected float16 result");
+                };
+                assert_eq!(values[0].to_bits(), bits[0]);
+            }
+        }
+        let first = f64::from_bits(0x7ff8_0000_0000_0001);
+        let second = f64::from_bits(0x7ff8_0000_0000_0002);
+        let input = dense(vec![4], Buffer::F64(vec![1.0, first, -1.0, second]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            let out = reduce(op, &input, None, &budget, &token).unwrap();
+            let Buffer::F64(values) = out.buffer else {
+                panic!("expected float64 result");
+            };
+            assert_eq!(values[0].to_bits(), first.to_bits());
+        }
     }
 
     #[test]

@@ -60,8 +60,58 @@ fn descr(dtype: DType) -> Result<String> {
     .into())
 }
 
+/// Returns the padded version-1 header length before allocating the header.
+pub(crate) fn checked_npy_header_len(shape: &[usize], dtype: DType) -> Result<u16> {
+    let digit_count = |dimension: &usize| {
+        if *dimension == 0 {
+            1
+        } else {
+            dimension.ilog10() as usize + 1
+        }
+    };
+    let shape_len = match shape {
+        [] => 2,
+        [dimension] => 3 + digit_count(dimension),
+        dimensions => {
+            let digits = dimensions.iter().try_fold(0usize, |length, dimension| {
+                length.checked_add(digit_count(dimension))
+            });
+            digits
+                .and_then(|length| {
+                    (dimensions.len() - 1)
+                        .checked_mul(2)
+                        .and_then(|separators| length.checked_add(separators))
+                })
+                .and_then(|length| length.checked_add(2))
+                .ok_or_else(|| format_error("header length is out of range"))?
+        }
+    };
+    let body_len = "{'descr': '"
+        .len()
+        .checked_add(descr(dtype)?.len())
+        .and_then(|length| length.checked_add("', 'fortran_order': False, 'shape': ".len()))
+        .and_then(|length| length.checked_add(shape_len))
+        .and_then(|length| length.checked_add(", }".len()))
+        .ok_or_else(|| format_error("header length is out of range"))?;
+    let framing_len = NPY_MAGIC.len() + 2 + 2;
+    let unpadded = framing_len
+        .checked_add(body_len)
+        .and_then(|length| length.checked_add(1))
+        .ok_or_else(|| format_error("header length is out of range"))?;
+    let padding = (64 - unpadded % 64) % 64;
+    let header_len = body_len
+        .checked_add(padding)
+        .and_then(|length| length.checked_add(1))
+        .ok_or_else(|| format_error("header length is out of range"))?;
+    if header_len > MAX_HEADER_LEN {
+        return Err(format_error("header length is out of range"));
+    }
+    u16::try_from(header_len).map_err(|_| format_error("header length is out of range"))
+}
+
 /// Encodes a C-order array as NPY version 1.0.
 pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
+    let header_len = checked_npy_header_len(shape, buffer.dtype())?;
     let shape_text = match shape.len() {
         0 => "()".to_string(),
         1 => format!("({},)", shape[0]),
@@ -82,10 +132,13 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
     let unpadded = NPY_MAGIC.len() + 2 + 2 + header.len() + 1;
     header.push_str(&" ".repeat((64 - unpadded % 64) % 64));
     header.push('\n');
+    if header.len() != usize::from(header_len) {
+        return Err(format_error("header length is out of range"));
+    }
     let mut out = Vec::with_capacity(unpadded + 64 + buffer.byte_len() as usize);
     out.extend_from_slice(NPY_MAGIC);
     out.extend_from_slice(&[1, 0]);
-    out.extend_from_slice(&(header.len() as u16).to_le_bytes());
+    out.extend_from_slice(&header_len.to_le_bytes());
     out.extend_from_slice(header.as_bytes());
     match buffer {
         Buffer::Unicode { values, .. } => values
@@ -518,6 +571,30 @@ mod tests {
             decode_npy(&scalar).unwrap(),
             (vec![], Buffer::F32(vec![1.5]))
         );
+    }
+
+    #[test]
+    fn npy_header_length_matches_output_and_rejects_unsupported_ranks() {
+        let buffer = Buffer::U8(vec![1]);
+        for (rank, expected_len) in [(0, 118), (1, 118), (3_300, 9_974), (3_306, 9_974)] {
+            let shape = vec![1; rank];
+            let bytes = encode_npy(&shape, &buffer).unwrap();
+            let declared = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
+            assert_eq!(declared, expected_len);
+            assert_eq!(
+                declared,
+                checked_npy_header_len(&shape, buffer.dtype()).unwrap() as usize
+            );
+            assert_eq!(bytes.len(), 10 + declared + 1);
+            assert_eq!(decode_npy(&bytes).unwrap(), (shape, buffer.clone()));
+        }
+        for rank in [3_307, 4_000, 22_000] {
+            let shape = vec![1; rank];
+            assert_eq!(
+                encode_npy(&shape, &buffer).unwrap_err().code,
+                ErrorCode::IoFormat
+            );
+        }
     }
 
     #[test]
