@@ -209,11 +209,8 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
     if wrapper_close < class_close {
         return Err("Generated class is outside its wrapper".into());
     }
-    let mut edits = vec![Edit {
-        start: wrapper_at,
-        end: wrapper_at + "(() => {".len(),
-        parts: vec![Part::New("await (async () => {".into())],
-    }];
+    let mut edits = Vec::new();
+    let mut found_decorator_block = false;
     let mut static_cursor = class_open;
     while let Some(static_at) = text[static_cursor..class_close]
         .find("static {")
@@ -252,12 +249,10 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                 }
                 position = end;
             }
-            let last = assignments
-                .iter()
-                .rposition(|assignment| assignment.4)
-                .ok_or(
-                    "Awaited field decorator assignment is not in the generated decorator block",
-                )?;
+            let Some(last) = assignments.iter().rposition(|assignment| assignment.4) else {
+                return Ok(None);
+            };
+            found_decorator_block = true;
             let sentinel = (0..)
                 .map(|index| format!("__nmath_decorator_sentinel_{index}"))
                 .find(|candidate| !text.contains(candidate))
@@ -306,5 +301,13 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         }
         static_cursor = static_close + 1;
     }
+    if !found_decorator_block {
+        return Ok(None);
+    }
+    edits.push(Edit {
+        start: wrapper_at,
+        end: wrapper_at + "(() => {".len(),
+        parts: vec![Part::New("await (async () => {".into())],
+    });
     apply(text, edits).map(Some)
 }

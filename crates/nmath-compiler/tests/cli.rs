@@ -580,6 +580,29 @@ fn modern_field_decorators_rewrite_each_class_and_runtime_alias() {
 }
 
 #[test]
+fn unrelated_async_method_does_not_make_a_decorator_factory_async() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nconst a = new \
+                  NMathArray<'float64', [1]>([0]);\nfunction dec(value: number): (field: \
+                  undefined, context: ClassFieldDecoratorContext) => void { return () => {}; \
+                  }\n\nfunction make() { class C { @dec(0) field = 0; async run() { a[0] = 1; } } \
+                  return C; }\nexport const C = make();\n";
+    let fixture = field_decorator_fixture("decorator-unrelated-async-method", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert!(!output.contains("await (async () =>"), "{output}");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the emitted module");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+}
+
+#[test]
 fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
     for (name, source) in [
         (
