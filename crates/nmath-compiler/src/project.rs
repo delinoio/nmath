@@ -434,6 +434,24 @@ fn emit_nts_javascript(
             .collect());
     }
     let mut writes = pass.writes;
+    let mut decorator_rewrites = BTreeMap::new();
+    for (path, text) in &mut writes {
+        if path.ends_with(".js") {
+            let mut rewrites = Vec::new();
+            while let Some(rewrite) = crate::async_decorators::rewrite(text).map_err(|message| {
+                vec![CompilerDiagnostic::without_location(
+                    CompilerCode::Emit,
+                    message,
+                )]
+            })? {
+                *text = rewrite.new.clone();
+                rewrites.push(rewrite);
+            }
+            if !rewrites.is_empty() {
+                decorator_rewrites.insert(format!("{path}.map"), rewrites);
+            }
+        }
+    }
     for (path, text) in &mut writes {
         if path.ends_with(".js.map") {
             *text =
@@ -443,6 +461,18 @@ fn emit_nts_javascript(
                         message,
                     )]
                 })?;
+            if let Some(rewrites) = decorator_rewrites.get(path) {
+                for rewrite in rewrites {
+                    *text = crate::source_maps::relocate_generated(text, rewrite).map_err(
+                        |message| {
+                            vec![CompilerDiagnostic::without_location(
+                                CompilerCode::Emit,
+                                message,
+                            )]
+                        },
+                    )?;
+                }
+            }
         }
     }
     Ok(writes)
