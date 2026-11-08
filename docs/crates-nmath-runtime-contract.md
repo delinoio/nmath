@@ -175,6 +175,8 @@ GPU initialization occurs only on an execution worker after admission. Native ba
 
 Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input accepts little- or big-endian components and C or Fortran order; the loader converts Fortran input to logical C order. Header, shape and payload-length validation applies before decoded allocation. Float16 also accepts both byte orders and Fortran input. Other real dtypes retain their existing input restrictions. NPZ members use the same NPY codec and inherit its dtype and layout support.
 
+NPY output uses version 1.0 and limits the complete padded header to 10,000 bytes, matching the shared decoder limit. A save whose header exceeds this limit fails with `NMATH_IO_FORMAT` before file publication. Successful output declares the exact padded header length in its version-1 length field. NPZ retains its separate member rank limit.
+
 ## Security
 
 - NMath uses the calling process's file permissions. It has no authentication, tenancy or sandbox.
