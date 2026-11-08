@@ -296,21 +296,23 @@ impl NdArray {
             visited += 1;
             Ok(())
         };
-        if let Some(axis) = output_advanced_axis.filter(|&axis| axis > 0) {
-            let advanced_len = shape[axis];
-            let trailing = shape[axis + 1..].iter().product::<usize>();
-            let leading = size / (advanced_len * trailing);
-            for advanced_index in 0..advanced_len {
-                for leading_index in 0..leading {
-                    let prefix = leading_index * advanced_len * trailing;
-                    for trailing_index in 0..trailing {
-                        write_output(prefix + advanced_index * trailing + trailing_index)?;
+        if size != 0 {
+            if let Some(axis) = output_advanced_axis.filter(|&axis| axis > 0) {
+                let advanced_len = shape[axis];
+                let trailing = shape[axis + 1..].iter().product::<usize>();
+                let leading = size / (advanced_len * trailing);
+                for advanced_index in 0..advanced_len {
+                    for leading_index in 0..leading {
+                        let prefix = leading_index * advanced_len * trailing;
+                        for trailing_index in 0..trailing {
+                            write_output(prefix + advanced_index * trailing + trailing_index)?;
+                        }
                     }
                 }
-            }
-        } else {
-            for output_index in 0..size {
-                write_output(output_index)?;
+            } else {
+                for output_index in 0..size {
+                    write_output(output_index)?;
+                }
             }
         }
         token.check()?;
