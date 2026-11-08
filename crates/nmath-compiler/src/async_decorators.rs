@@ -531,6 +531,11 @@ fn enclosing_downlevel_decorator_block(
     None
 }
 
+enum SuspensionKind {
+    Await,
+    Yield,
+}
+
 #[derive(Clone, Copy)]
 struct WrapperReturn {
     body_open: usize,
@@ -636,12 +641,13 @@ fn parsed_decorator_calls(
     Vec<DecoratorAssignment>,
     Vec<GeneratedClass>,
     Vec<WrapperReturn>,
+    bool,
 ) {
     use tsrs_ast::{Kind, SourceFileParseOptions};
     use tsrs_core::{ScriptKind, arena::Region, tspath};
 
-    if !text.contains("await __nmath") {
-        return (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    if !text.contains("await __nmath") && !text.contains("yield __nmath") {
+        return (Vec::new(), Vec::new(), Vec::new(), Vec::new(), false);
     }
     // Parse the pinned emitter's JavaScript before relocating its invalid
     // static-block awaits. The parser still represents those awaits, while
@@ -762,16 +768,21 @@ fn parsed_decorator_calls(
                 }
             }
         }
-        if node.kind() == Kind::AwaitExpression {
+        if matches!(node.kind(), Kind::AwaitExpression | Kind::YieldExpression) {
             let at =
                 tsrs_scanner::skip_trivia(text, node.pos().expect_source("emitted await")) as usize;
-            if let Some(mut suffix) = text[at..].strip_prefix("await __nmath") {
+            let (prefix, kind) = if node.kind() == Kind::YieldExpression {
+                ("yield __nmath", SuspensionKind::Yield)
+            } else {
+                ("await __nmath", SuspensionKind::Await)
+            };
+            if let Some(mut suffix) = text[at..].strip_prefix(prefix) {
                 if let Some(rest) = suffix.strip_prefix('_') {
                     let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
                     suffix = if digits > 0 { &rest[digits..] } else { "" };
                 }
                 if suffix.starts_with(".set(") {
-                    positions.push((at, function_body));
+                    positions.push((at, function_body, kind));
                 }
             }
         }
@@ -805,15 +816,19 @@ fn parsed_decorator_calls(
         })
         .collect();
     assignments.sort_unstable_by_key(|assignment| assignment.name_start);
-    let mut awaits: Vec<_> = positions
-        .into_iter()
-        .filter_map(|(at, body)| {
-            await_is_in_decorator_assignment(&assignments, at, body).then_some(at)
-        })
-        .collect();
+    let mut awaits = Vec::new();
+    let mut unsupported_generator = false;
+    for (at, body, kind) in positions {
+        if await_is_in_decorator_assignment(&assignments, at, body) {
+            match kind {
+                SuspensionKind::Await => awaits.push(at),
+                SuspensionKind::Yield => unsupported_generator = true,
+            }
+        }
+    }
     awaits.sort_unstable();
     classes.sort_unstable_by_key(|class| class.start);
-    (awaits, assignments, classes, returns)
+    (awaits, assignments, classes, returns, unsupported_generator)
 }
 
 pub(crate) struct Rewriter {
@@ -821,26 +836,41 @@ pub(crate) struct Rewriter {
     assignments: Vec<DecoratorAssignment>,
     classes: Vec<GeneratedClass>,
     returns: Vec<WrapperReturn>,
+    unsupported_generator: bool,
     cursor: usize,
 }
 
 impl Rewriter {
     pub fn new(text: &str) -> Self {
-        let (awaits, assignments, classes, returns) = if text.contains("__esDecorate(") {
-            parsed_decorator_calls(text)
-        } else {
-            (Vec::new(), Vec::new(), Vec::new(), Vec::new())
-        };
+        let (awaits, assignments, classes, returns, unsupported_generator) =
+            if text.contains("__esDecorate(") {
+                parsed_decorator_calls(text)
+            } else {
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), false)
+            };
         Self {
             awaits,
             assignments,
             classes,
             returns,
+            unsupported_generator,
             cursor: 0,
         }
     }
 
     pub fn rewrite(&mut self, text: &str) -> Result<Option<Rewrite>, String> {
+        // ES2015/ES2016 lower async bodies to generators before this pass.
+        // Moving those yields through synchronous decorator IIFEs requires a
+        // different transform. Fail while all output is still buffered, until
+        // that transform can preserve generator and class evaluation semantics.
+        if self.unsupported_generator {
+            return Err(
+                "Modern decorator assignments with generator-lowered awaits are not supported \
+                 (ES2015/ES2016). Set compilerOptions.target to ES2022 or move the NMath write \
+                 before class evaluation."
+                    .into(),
+            );
+        }
         let Some(rewrite) = rewrite(
             text,
             self.cursor,

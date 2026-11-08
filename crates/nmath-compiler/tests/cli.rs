@@ -709,6 +709,87 @@ fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
 }
 
 #[test]
+fn generator_lowered_decorator_awaits_fail_without_publishing_output() {
+    for target in ["es2015", "es2016"] {
+        let source = "import { NMathArray } from '@delinoio/nmath';\nconst a = new \
+                      NMathArray<'float64', [1]>([0]);\nfunction dec(_value: number): any { \
+                      return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) \
+                      field = 2; } return new C().field; }\n";
+        let fixture = field_decorator_fixture("decorator-generator-target", false, source);
+        let mut config: Value = serde_json::from_str(&fixture.read("tsconfig.json")).unwrap();
+        config["compilerOptions"]["target"] = target.into();
+        fixture.write("tsconfig.json", &config.to_string());
+        fixture.write("dist/main.js", "preserve existing JavaScript");
+        fixture.write("dist/main.js.map", "preserve existing map");
+        fixture.write("dist/main.d.ts", "preserve existing declarations");
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 1, "{target}: {result:#}");
+        assert!(codes(&result).contains(&"NMATH_COMPILER_EMIT".to_string()));
+        assert!(
+            result["diagnostics"]
+                .to_string()
+                .contains("generator-lowered")
+        );
+        assert!(result["outputFiles"].as_array().unwrap().is_empty());
+        assert_eq!(fixture.read("dist/main.js"), "preserve existing JavaScript");
+        assert_eq!(fixture.read("dist/main.js.map"), "preserve existing map");
+        assert_eq!(
+            fixture.read("dist/main.d.ts"),
+            "preserve existing declarations"
+        );
+        // Ordinary async writes still use generator lowering successfully.
+        fixture.write(
+            "src/main.nts",
+            "import { NMathArray } from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+             [1]>([0]);\nexport async function run() { a[0] = 1; return a.values[0]; }\n",
+        );
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{target} control: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(await m.run()))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "1");
+        fixture.write(
+            "src/main.nts",
+            "import { NMathArray } from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+             [1]>([0]);\nlet saved: () => Promise<void>; function dec(callback: () => \
+             Promise<void>): any { saved = callback; return () => {}; }\nexport async function \
+             run() { class C { @dec(async () => { a[0] = 1; }) field = 2; } const before = \
+             a.values[0]; await saved!(); return [before, a.values[0], new C().field]; }\n",
+        );
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{target} deferred callback: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[0,1,2]");
+    }
+}
+
+#[test]
 fn modern_decorators_ignore_user_owned_array_assignments() {
     for member in ["field = 2", "accessor field = 2"] {
         for name in ["_saved_decorators", "_saved_decorators_1"] {
