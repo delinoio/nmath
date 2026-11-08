@@ -343,7 +343,8 @@ record objects. pandas writes with `frame.toCsv(context, path, options?)` and
 `toJson`; Polars uses `writeCsv` and `writeJson`. These are explicit JS adaptations,
 including JSON records orientation instead of pandas' default columns orientation.
 Files retain numeric values and nulls. Supply a complete ordered schema Map to
-preserve narrow dtypes, all-null columns and empty JSON schemas. int64 and uint64
+preserve narrow dtypes, all-null columns and empty JSON schemas. Schemas accept
+bool, signed and unsigned 8/16/32/64-bit integers, float32 and float64. int64 and uint64
 remain exact bigint values. A custom pandas index requires `dropIndex:true` on
 write; reads create a positional index.
 
@@ -358,7 +359,7 @@ The core methods `ctx.readText(path, format, options?)` and
 `ctx.writeText(path, format, columns, validity?, options?)` use `format: 'csv'|'json'`
 and Maps of columns/masks. Dispose both Maps returned by a core read.
 Custom delimiters, compressed/alternate encodings, other JSON orientations/JSONL,
-string/datetime columns and full upstream read/write options remain unsupported.
+float16, complex, string and temporal columns and full upstream read/write options remain unsupported.
 CSV empty cells and JSON null become invalid values. JSON non-finite floats become
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
