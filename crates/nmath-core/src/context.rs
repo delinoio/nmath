@@ -21,6 +21,7 @@ use crate::{
     random::Generator,
     shape::Selector,
     sync::{CancellationToken, Ticket},
+    table::SNAPSHOT_GATE,
 };
 
 static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -263,7 +264,10 @@ impl Context {
                         .into_iter()
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
-                    env.freeze(&expr)?;
+                    {
+                        let _gate = SNAPSHOT_GATE.lock().unwrap();
+                        env.freeze(&expr)?;
+                    }
                     let value = env.eval(&expr)?;
                     env.token.check()?;
                     Ok(JobOutput::Value(value))
@@ -305,26 +309,21 @@ impl Context {
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
                     let turn = ticket.wait(&env.token)?;
-                    env.freeze(&value)?;
+                    {
+                        let _gate = SNAPSHOT_GATE.lock().unwrap();
+                        env.freeze(&value)?;
+                    }
                     // Assignment copies values, so view-valued expressions
                     // (basic indexing of an input)
                     // materialize from the frozen snapshot.
                     let dense = env.eval_dense(&value)?;
-                    // String width and temporal unit casts allocate a full
-                    // source buffer. Hold its reservation
-                    // until the atomic write finishes.
-                    let _cast_charge = if target.dtype().kind() == crate::dtype::DTypeKind::Other {
-                        Some(
-                            env.budget.reserve(
-                                (dense.size() as u64)
-                                    .checked_mul(target.dtype().item_size() as u64)
-                                    .ok_or_else(crate::dtype::unsupported)?,
-                            )?,
-                        )
-                    } else {
-                        None
-                    };
-                    target.assign(&turn, &selectors, &dense, &env.token)?;
+                    target.assign_with_budget(
+                        &turn,
+                        &selectors,
+                        &dense,
+                        &env.token,
+                        &env.budget,
+                    )?;
                     Ok(JobOutput::Unit)
                 })
             },
@@ -338,7 +337,7 @@ impl Context {
         let source = source.clone();
         let id = self.id();
         let work: Work = Box::new(move |env| {
-            let snap = source.snapshot(&env.budget)?;
+            let snap = source.snapshot_cancellable(&env.budget, &env.token)?;
             Ok(JobOutput::Array(NdArray::from_dense(id, snap)))
         });
         self.submit(OperationKind::Copy, "copy", Device::Cpu, token, work, done)
@@ -355,7 +354,7 @@ impl Context {
         self.ensure_owned(Some(array.context_id()))?;
         let array = array.clone();
         let work: Work = Box::new(move |env| {
-            let snap = array.snapshot(&env.budget)?;
+            let snap = array.snapshot_cancellable(&env.budget, &env.token)?;
             let bytes = io::encode_npy(&snap.shape, &snap.buffer)?;
             io::write_atomic(&path, &bytes, mode, &env.token)?;
             Ok(JobOutput::Unit)
@@ -701,7 +700,7 @@ mod admission_tests {
     use std::{sync::mpsc, thread, time::Duration};
 
     use super::*;
-    use crate::{Buffer, Scalar};
+    use crate::{BinaryOp, Buffer, Scalar, expr::freeze_test_hook};
 
     fn context(queue: usize) -> Context {
         Context::new(ContextOptions {
@@ -720,6 +719,149 @@ mod admission_tests {
 
     fn completed(rx: mpsc::Receiver<Result<JobOutput>>) {
         rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+    }
+
+    fn aliased_freeze_case(overlapping_views: bool, assignment_rhs: bool) {
+        let ctx = Context::new(ContextOptions {
+            max_concurrent_jobs: 2,
+            max_queue_length: 2,
+            cpu_memory_budget: 1 << 20,
+            gpu_memory_budget: 0,
+        })
+        .unwrap();
+        let source = ctx.array(vec![2], Buffer::F64(vec![1.0, 1.0])).unwrap();
+        let view = || {
+            source
+                .view(&[Selector::Slice {
+                    start: Some(0),
+                    stop: Some(1),
+                    step: None,
+                }])
+                .unwrap()
+        };
+        let (left, right) = if overlapping_views {
+            (view(), view())
+        } else {
+            (source.clone(), source.clone())
+        };
+        let expr = Expr::binary(BinaryOp::Add, &Expr::input(&left), &Expr::input(&right)).unwrap();
+        let target = ctx
+            .array(
+                vec![expr.shape()[0]],
+                Buffer::F64(vec![0.0; expr.shape()[0]]),
+            )
+            .unwrap();
+        let (first_copy_tx, first_copy_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        freeze_test_hook::install(
+            source.storage_id(),
+            Box::new(move || {
+                first_copy_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }),
+        );
+        let (done, rx) = completion();
+        if assignment_rhs {
+            ctx.assign(&target, vec![], &expr, CancellationToken::new(), done)
+                .unwrap();
+        } else {
+            ctx.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+                .unwrap();
+        }
+        first_copy_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let freeze_holds_gate = SNAPSHOT_GATE.try_lock().is_err();
+        let writer_source = source.clone();
+        let writer = thread::spawn(move || {
+            let token = CancellationToken::new();
+            let turn = writer_source.write_ticket().wait(&token).unwrap();
+            let replacement = DenseArray::new(
+                vec![2],
+                Buffer::F64(vec![3.0, 3.0]),
+                crate::memory::Reservation::none(),
+            )
+            .unwrap();
+            writer_source
+                .assign(&turn, &[], &replacement, &token)
+                .unwrap();
+        });
+        release_tx.send(()).unwrap();
+        let result = rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        writer.join().unwrap();
+
+        assert!(
+            freeze_holds_gate,
+            "the entire input freeze must hold the gate"
+        );
+        let expected = Buffer::F64(vec![2.0; expr.shape()[0]]);
+        if assignment_rhs {
+            assert!(matches!(result, JobOutput::Unit));
+            assert_eq!(target.to_buffer(), expected);
+        } else {
+            let JobOutput::Value(Value::Dense(value)) = result else {
+                panic!("addition must return a dense result");
+            };
+            assert_eq!(value.buffer, expected);
+        }
+        assert_eq!(source.to_buffer(), Buffer::F64(vec![3.0, 3.0]));
+        if overlapping_views {
+            assert_eq!(left.to_buffer(), Buffer::F64(vec![3.0]));
+            assert_eq!(right.to_buffer(), Buffer::F64(vec![3.0]));
+        }
+        ctx.close();
+    }
+
+    #[test]
+    fn ordinary_freeze_keeps_aliases_and_overlapping_views_consistent() {
+        aliased_freeze_case(false, false);
+        aliased_freeze_case(true, false);
+        aliased_freeze_case(true, true);
+    }
+
+    #[test]
+    fn queued_compute_freezes_after_the_prior_write() {
+        let ctx = context(2);
+        let source = ctx.array(vec![1], Buffer::F64(vec![1.0])).unwrap();
+        let expr =
+            Expr::binary(BinaryOp::Add, &Expr::input(&source), &Expr::input(&source)).unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (block_done, block_rx) = completion();
+        ctx.submit(
+            OperationKind::Compute,
+            "blocker",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |_| {
+                started_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                Ok(JobOutput::Unit)
+            }),
+            block_done,
+        )
+        .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (done, rx) = completion();
+        ctx.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+            .unwrap();
+        let token = CancellationToken::new();
+        let turn = source.write_ticket().wait(&token).unwrap();
+        let replacement = DenseArray::new(
+            vec![1],
+            Buffer::F64(vec![3.0]),
+            crate::memory::Reservation::none(),
+        )
+        .unwrap();
+        source.assign(&turn, &[], &replacement, &token).unwrap();
+        drop(turn);
+        release_tx.send(()).unwrap();
+        completed(block_rx);
+        let JobOutput::Value(Value::Dense(value)) =
+            rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap()
+        else {
+            panic!("addition must return a dense result");
+        };
+        assert_eq!(value.buffer, Buffer::F64(vec![6.0]));
+        ctx.close();
     }
 
     #[test]

@@ -796,9 +796,13 @@ impl JobEnv {
             if let ExprKind::Input(a) = &e.0.kind {
                 let key = a as *const NdArray;
                 if !self.snapshots.contains_key(&key) {
-                    match a.snapshot(&self.budget) {
+                    match a.snapshot_cancellable(&self.budget, &self.token) {
                         Ok(s) => {
                             self.snapshots.insert(key, s);
+                            #[cfg(test)]
+                            if let Some(hook) = freeze_test_hook::take(a.storage_id()) {
+                                hook();
+                            }
                         }
                         Err(err) => result = Err(err),
                     }
@@ -1111,6 +1115,29 @@ impl JobEnv {
                 operation.generate(&mut slot.1, shape, &budget, &token)
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod freeze_test_hook {
+    use std::{
+        collections::HashMap,
+        sync::{Mutex, OnceLock},
+    };
+
+    type Hook = Box<dyn FnOnce() + Send>;
+    static HOOKS: OnceLock<Mutex<HashMap<u64, Hook>>> = OnceLock::new();
+
+    fn hooks() -> &'static Mutex<HashMap<u64, Hook>> {
+        HOOKS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub fn install(storage_id: u64, hook: Hook) {
+        assert!(hooks().lock().unwrap().insert(storage_id, hook).is_none());
+    }
+
+    pub fn take(storage_id: u64) -> Option<Hook> {
+        hooks().lock().unwrap().remove(&storage_id)
     }
 }
 
