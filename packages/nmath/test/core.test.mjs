@@ -244,6 +244,10 @@ test("creation helpers reject over-budget input before building buffers", async 
     () => np.arange(ctx, 0, 2 ** 40, 1, "float64"),
     "NMATH_MEMORY_BUDGET_EXCEEDED",
   );
+  throwsWith(
+    () => np.arange(ctx, 0, 5, 0.5, "int32"),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
   await ctx.close();
   // The native check rejects mismatched input before copying it.
   const roomy = context();
@@ -252,6 +256,46 @@ test("creation helpers reject over-budget input before building buffers", async 
     "NMATH_SHAPE_MISMATCH",
   );
   await roomy.close();
+});
+
+test("NumPy arange fills from dtype-converted initial values", async () => {
+  const ctx = context();
+  const cases = [
+    { args: [0, 5, 0.5, "int32"], expected: Array(10).fill(0) },
+    { args: [0, 5, 0.5, "uint32"], expected: Array(10).fill(0) },
+    {
+      args: [100_000_000, 100_000_016, 1, "float32"],
+      expected: Array(16).fill(100_000_000),
+    },
+    { args: [0, 5, 1, "int32"], expected: [0, 1, 2, 3, 4] },
+    { args: [5, 0, -1, "int32"], expected: [5, 4, 3, 2, 1] },
+    { args: [0, 2, 0.5], expected: [0, 0.5, 1, 1.5] },
+  ];
+  for (const { args, expected } of cases) {
+    const result = np.arange(ctx, ...args);
+    assert.equal(result.dtype, args[3] ?? "float64");
+    assert.deepEqual(result.shape, [expected.length]);
+    assert.deepEqual(result.toArray(), expected);
+    result.dispose();
+  }
+
+  for (const dtype of ["int32", "uint32", "float32", "float64"]) {
+    const first = dtype === "int32" || dtype === "uint32" ? 3 : 3.75;
+    const second = dtype === "int32" || dtype === "uint32" ? 4 : 4.25;
+    for (const [stop, expected] of [
+      [3.75, []],
+      [4.25, [first]],
+      [4.75, [first, second]],
+    ]) {
+      const result = np.arange(ctx, 3.75, stop, 0.5, dtype);
+      assert.equal(result.dtype, dtype);
+      assert.deepEqual(result.shape, [expected.length]);
+      assert.deepEqual(result.toArray(), expected);
+      result.dispose();
+    }
+  }
+  assert.throws(() => np.arange(ctx, 0, 1, 0), RangeError);
+  await ctx.close();
 });
 
 test("creation rejects invalid dimensions before allocation or native conversion", async () => {
