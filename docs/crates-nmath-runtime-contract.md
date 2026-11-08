@@ -107,6 +107,8 @@ CPU execution traverses broadcast batches without expanding repeated operands or
 
 Reduction and matrix-multiplication kernels borrow operands whose dtype already matches. Required operand conversions reserve their full byte size before allocation and release that reservation when the temporary drops. Reductions traverse output offsets without input-sized slot or integer scratch vectors. Reduction rank metadata and min/max output-initialization flags remain charged for their live lifetimes; index reductions charge output-sized best-value and seen scratch before allocation; variance charges output-sized accumulators before allocation; product reductions and cumulative scans need no extra scratch beyond a promoted operand copy. Result data and shape remain charged until the result drops. Reduction byte sizes are checked before allocation. Casts and kernels check cancellation between chunks; failure and cancellation release temporary reservations.
 
+Assignment reserves the target-dtype conversion buffer for every dtype, including same-dtype writes, before casting. Destination offsets, per-axis and advanced-index positions, source offsets, and their traversal metadata reserve checked CPU bytes before allocation. The cast and destination/source offset reservations remain live through the atomic write. Selection-construction scratch releases when offset construction finishes; all temporary charges release on failure or cancellation before commit. A rejected reservation leaves the target and pending generator state unchanged.
+
 ### Random generation
 
 - `Generator` implements NumPy's `PCG64` bit generator and `SeedSequence` seeding so the same seed produces the same raw 64-bit stream as NumPy 2.5.4.
