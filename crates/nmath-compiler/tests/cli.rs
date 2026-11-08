@@ -659,6 +659,120 @@ fn thenable_decorated_class_constructors_are_not_assimilated() {
 }
 
 #[test]
+fn modern_field_decorator_does_not_use_shadowed_symbol() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst Symbol = 123;\nconst a = new \
+                  NMathArray<'float64', [1]>([0]);\nfunction dec(value: number): (field: \
+                  undefined, context: ClassFieldDecoratorContext) => void { return () => {}; \
+                  }\nexport async function run() { class C { @dec(a[0] = 1) value = 2; } return \
+                  [new C().value, a.values[0], setCalls, Symbol]; }\n";
+    let fixture = field_decorator_fixture("decorator-shadowed-symbol", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the shadowed Symbol fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[2,1,1,123]"
+    );
+}
+
+#[test]
+fn modern_auto_accessor_decorator_await_is_relocated() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (target: any, context: any) => void { \
+                  return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) \
+                  accessor value = 2; } return [new C().value, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-auto-accessor", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the auto-accessor fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn nested_template_literals_do_not_break_decorator_rewrite() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec(a[0] = 1) value = 2; method() { return `outer${`}`}`; } \
+                  } return [new C().method(), a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-nested-template", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the nested-template fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[\"outer}\",1,1]"
+    );
+}
+
+#[test]
+fn many_decorated_classes_rewrite_without_retaining_prior_snapshots() {
+    let count = std::env::var("NMATH_MEMORY_CLASS_COUNT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(100);
+    let mut classes = String::new();
+    for index in 0..count {
+        classes.push_str(&format!(
+            "class C{index} {{ @dec(a[0] = {index}) value = {index}; }}\n"
+        ));
+    }
+    let source = format!(
+        "import {{ NMathArray }} from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+         [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+         ClassFieldDecoratorContext) => void {{ return () => {{}}; }}\nexport async function \
+         run() {{ {classes} return a.values[0]; }}\n"
+    );
+    let fixture = field_decorator_fixture("decorator-many-classes", false, &source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert_eq!(
+        output.matches("globalThis.Symbol()").count(),
+        count,
+        "{output}"
+    );
+    let map: Value = serde_json::from_str(&fixture.read("dist/main.js.map")).unwrap();
+    assert_eq!(map["sourcesContent"][0], source);
+}
+
+#[test]
 fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
     for (name, source) in [
         (

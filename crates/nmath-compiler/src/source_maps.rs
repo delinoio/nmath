@@ -287,7 +287,9 @@ pub(crate) fn compose(path: &str, text: &str, sources: &Sources) -> Result<Strin
 /// synthesized wrapper and cleanup syntax has no original source location.
 pub(crate) fn relocate_generated(
     text: &str,
-    rewrite: &crate::async_decorators::Rewrite,
+    old: &str,
+    new: &str,
+    copies: &[crate::async_decorators::CopySpan],
 ) -> Result<String, String> {
     let mut map: Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
     let mut generator = new_generator(
@@ -307,16 +309,15 @@ pub(crate) fn relocate_generated(
         }
         ids.push(id);
     }
-    let old_coordinates = EcmaCoordinateIndex::new(&rewrite.old);
-    let new_coordinates = EcmaCoordinateIndex::new(&rewrite.new);
+    let old_coordinates = EcmaCoordinateIndex::new(old);
+    let new_coordinates = EcmaCoordinateIndex::new(new);
     let mut mappings = Vec::new();
     let mut decoder = decode_mappings(map["mappings"].as_str().ok_or("Missing mappings")?);
     for mapping in decoder.values() {
         let old = old_coordinates
             .offset_of_line_character(mapping.generated_line, mapping.generated_character)
             as usize;
-        if let Some(copy) = rewrite
-            .copies
+        if let Some(copy) = copies
             .iter()
             .find(|copy| copy.old_start <= old && old < copy.old_end)
         {
@@ -338,14 +339,14 @@ pub(crate) fn relocate_generated(
     // End a prior source range at every synthesized gap. A later mapped
     // segment restarts the source mapping at its new generated position.
     let mut new_cursor = 0;
-    for copy in &rewrite.copies {
+    for copy in copies {
         if copy.new_start > new_cursor {
             let (line, column) = new_coordinates.line_character(new_cursor as u32);
             mappings.push((line, column, None, None, None, None));
         }
         new_cursor = copy.new_start + copy.old_end - copy.old_start;
     }
-    if new_cursor < rewrite.new.len() {
+    if new_cursor < new.len() {
         let (line, column) = new_coordinates.line_character(new_cursor as u32);
         mappings.push((line, column, None, None, None, None));
     }

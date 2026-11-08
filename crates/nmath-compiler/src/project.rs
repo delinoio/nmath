@@ -434,45 +434,52 @@ fn emit_nts_javascript(
             .collect());
     }
     let mut writes = pass.writes;
-    let mut decorator_rewrites = BTreeMap::new();
-    for (path, text) in &mut writes {
-        if path.ends_with(".js") {
-            let mut rewrites = Vec::new();
-            while let Some(rewrite) = crate::async_decorators::rewrite(text).map_err(|message| {
-                vec![CompilerDiagnostic::without_location(
-                    CompilerCode::Emit,
-                    message,
-                )]
-            })? {
-                *text = rewrite.new.clone();
-                rewrites.push(rewrite);
-            }
-            if !rewrites.is_empty() {
-                decorator_rewrites.insert(format!("{path}.map"), rewrites);
-            }
-        }
-    }
-    for (path, text) in &mut writes {
-        if path.ends_with(".js.map") {
+    let map_paths = writes
+        .keys()
+        .filter(|path| path.ends_with(".js.map"))
+        .cloned()
+        .collect::<Vec<_>>();
+    for path in map_paths {
+        if let Some(text) = writes.get_mut(&path) {
             *text =
-                crate::source_maps::compose(path, text, &mapped_sources).map_err(|message| {
+                crate::source_maps::compose(&path, text, &mapped_sources).map_err(|message| {
                     vec![CompilerDiagnostic::without_location(
                         CompilerCode::Emit,
                         message,
                     )]
                 })?;
-            if let Some(rewrites) = decorator_rewrites.get(path) {
-                for rewrite in rewrites {
-                    *text = crate::source_maps::relocate_generated(text, rewrite).map_err(
-                        |message| {
-                            vec![CompilerDiagnostic::without_location(
-                                CompilerCode::Emit,
-                                message,
-                            )]
-                        },
-                    )?;
-                }
+        }
+    }
+    let js_paths = writes
+        .keys()
+        .filter(|path| path.ends_with(".js"))
+        .cloned()
+        .collect::<Vec<_>>();
+    for path in js_paths {
+        loop {
+            let old = writes.remove(&path).expect("JavaScript output path exists");
+            let Some(rewrite) = crate::async_decorators::rewrite(&old).map_err(|message| {
+                vec![CompilerDiagnostic::without_location(
+                    CompilerCode::Emit,
+                    message,
+                )]
+            })?
+            else {
+                writes.insert(path.clone(), old);
+                break;
+            };
+            let new = rewrite.new;
+            let map_path = format!("{path}.map");
+            if let Some(map) = writes.get_mut(&map_path) {
+                *map = crate::source_maps::relocate_generated(map, &old, &new, &rewrite.copies)
+                    .map_err(|message| {
+                        vec![CompilerDiagnostic::without_location(
+                            CompilerCode::Emit,
+                            message,
+                        )]
+                    })?;
             }
+            writes.insert(path.clone(), new);
         }
     }
     Ok(writes)

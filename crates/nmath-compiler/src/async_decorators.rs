@@ -16,7 +16,6 @@ pub(crate) struct CopySpan {
 }
 
 pub(crate) struct Rewrite {
-    pub old: String,
     pub new: String,
     pub copies: Vec<CopySpan>,
 }
@@ -40,6 +39,166 @@ fn line_end(text: &str, at: usize) -> usize {
     text[at..]
         .find('\n')
         .map_or(text.len(), |index| at + index + 1)
+}
+
+fn skip_quoted(text: &str, start: usize, delimiter: u8) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start + 1;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' => index += 2,
+            byte if byte == delimiter => return Some(index + 1),
+            _ => index += 1,
+        }
+    }
+    None
+}
+
+fn skip_regex(text: &str, start: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start + 1;
+    let mut escaped = false;
+    let mut character_class = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if escaped {
+            escaped = false;
+        } else if byte == b'\\' {
+            escaped = true;
+        } else if character_class {
+            if byte == b']' {
+                character_class = false;
+            }
+        } else if byte == b'[' {
+            character_class = true;
+        } else if byte == b'/' {
+            index += 1;
+            while index < bytes.len() && bytes[index].is_ascii_alphabetic() {
+                index += 1;
+            }
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn skip_template_expression(text: &str, start: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start;
+    let mut braces = 1usize;
+    let mut can_start_regex = true;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        let next = bytes.get(index + 1).copied();
+        if byte == b'/' && next == Some(b'/') {
+            index += 2;
+            while index < bytes.len() && bytes[index] != b'\n' {
+                index += 1;
+            }
+            continue;
+        }
+        if byte == b'/' && next == Some(b'*') {
+            index += 2;
+            while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/') {
+                index += 1;
+            }
+            index = (index + 2).min(bytes.len());
+            continue;
+        }
+        if matches!(byte, b'\'' | b'"') {
+            index = skip_quoted(text, index, byte)?;
+            can_start_regex = false;
+            continue;
+        }
+        if byte == b'`' {
+            index = skip_template(text, index)?;
+            can_start_regex = false;
+            continue;
+        }
+        if byte == b'/' && can_start_regex {
+            index = skip_regex(text, index)?;
+            can_start_regex = false;
+            continue;
+        }
+        if byte.is_ascii_alphabetic() || matches!(byte, b'_' | b'$') {
+            let token_start = index;
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'_' | b'$'))
+            {
+                index += 1;
+            }
+            can_start_regex = matches!(
+                &text[token_start..index],
+                "await"
+                    | "case"
+                    | "delete"
+                    | "do"
+                    | "else"
+                    | "in"
+                    | "instanceof"
+                    | "of"
+                    | "return"
+                    | "throw"
+                    | "typeof"
+                    | "void"
+                    | "yield"
+            );
+            continue;
+        }
+        if byte == b'{' {
+            braces += 1;
+            can_start_regex = true;
+        } else if byte == b'}' {
+            braces = braces.checked_sub(1)?;
+            if braces == 0 {
+                return Some(index + 1);
+            }
+            can_start_regex = false;
+        } else if matches!(byte, b'(' | b'[') {
+            can_start_regex = true;
+        } else if matches!(byte, b')' | b']' | b'.') {
+            can_start_regex = false;
+        } else if matches!(
+            byte,
+            b';' | b','
+                | b':'
+                | b'?'
+                | b'='
+                | b'!'
+                | b'&'
+                | b'|'
+                | b'+'
+                | b'-'
+                | b'*'
+                | b'%'
+                | b'^'
+                | b'~'
+                | b'<'
+                | b'>'
+        ) {
+            can_start_regex = true;
+        }
+        index += 1;
+    }
+    None
+}
+
+fn skip_template(text: &str, start: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start + 1;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\\' => index += 2,
+            b'`' => return Some(index + 1),
+            b'$' if bytes.get(index + 1) == Some(&b'{') => {
+                index = skip_template_expression(text, index + 2)?;
+            }
+            _ => index += 1,
+        }
+    }
+    None
 }
 
 fn statement_end(text: &str, start: usize, limit: usize) -> Option<usize> {
@@ -99,7 +258,11 @@ fn statement_end(text: &str, start: usize, limit: usize) -> Option<usize> {
         } else if byte == b'/' && can_start_regex {
             regex = true;
             regex_class = false;
-        } else if matches!(byte, b'\'' | b'"' | b'`') {
+        } else if byte == b'`' {
+            index = skip_template(text, index)?;
+            can_start_regex = false;
+            continue;
+        } else if matches!(byte, b'\'' | b'"') {
             quote = Some(byte);
             can_start_regex = false;
         } else if byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$' {
@@ -237,7 +400,11 @@ fn matching_delimiter(text: &str, open: usize, opening: u8, closing: u8) -> Opti
         } else if byte == b'/' && can_start_regex {
             regex = true;
             regex_class = false;
-        } else if matches!(byte, b'\'' | b'"' | b'`') {
+        } else if byte == b'`' {
+            index = skip_template(text, index)?;
+            can_start_regex = false;
+            continue;
+        } else if matches!(byte, b'\'' | b'"') {
             quote = Some(byte);
             can_start_regex = false;
         } else if byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$' {
@@ -442,7 +609,6 @@ fn apply(text: &str, mut edits: Vec<Edit>) -> Result<Rewrite, String> {
     }
     append_copy(cursor, text.len(), &mut output, &mut copies);
     Ok(Rewrite {
-        old: text.to_string(),
         new: output,
         copies,
     })
@@ -514,7 +680,10 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             .map_or(0, |index| index + 1);
         let decorator_var = &text[start..end];
         let field_call = format!("{decorator_var}, {{ kind: \"field\"");
-        if !text[class_open..wrapper_close].contains(&field_call) {
+        let accessor_call = format!("{decorator_var}, {{ kind: \"accessor\"");
+        if !text[class_open..wrapper_close].contains(&field_call)
+            && !text[class_open..wrapper_close].contains(&accessor_call)
+        {
             cursor = at + "await __nmath".len();
             continue;
         }
@@ -632,7 +801,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                 parts.push(Part::Copy(value_start, value_end));
             }
             parts.push(Part::New(format!(
-                ", {sentinel} = Symbol())]() {{}}\n        "
+                ", {sentinel} = globalThis.Symbol())]() {{}}\n        "
             )));
             edits.push(Edit {
                 start: class_close,
@@ -737,6 +906,14 @@ mod tests {
     method() { return /[}]/.test("}"); }
     [(_decorators = [await __nmath.set(a, 0, 1)])]() {}
 }"#;
+        let open = text.find("class C {").unwrap() + "class C ".len();
+        let close = matching_brace(text, open).unwrap();
+        assert_eq!(close, text.rfind('}').unwrap());
+    }
+
+    #[test]
+    fn matching_brace_ignores_nested_template_literals() {
+        let text = "class C { method() { return `outer${`}`}`; } }";
         let open = text.find("class C {").unwrap() + "class C ".len();
         let close = matching_brace(text, open).unwrap();
         assert_eq!(close, text.rfind('}').unwrap());
