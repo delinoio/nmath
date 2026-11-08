@@ -317,6 +317,29 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
     matching_delimiter(text, open, b'{', b'}')
 }
 
+fn enclosing_wrapper(text: &str, class_at: usize) -> Option<(usize, usize, usize, bool)> {
+    let mut found = None;
+    for (pattern, asynchronous) in [("(() => {", false), ("(async () => {", true)] {
+        let mut search = 0;
+        while let Some(offset) = text[search..class_at].find(pattern) {
+            let wrapper_at = search + offset;
+            let wrapper_open = wrapper_at + pattern.len() - 1;
+            let Some(wrapper_close) = matching_brace(text, wrapper_open) else {
+                search = wrapper_at + pattern.len();
+                continue;
+            };
+            if wrapper_open < class_at
+                && class_at < wrapper_close
+                && found.is_none_or(|(at, _, _, _)| wrapper_at > at)
+            {
+                found = Some((wrapper_at, wrapper_open, wrapper_close, asynchronous));
+            }
+            search = wrapper_at + pattern.len();
+        }
+    }
+    found
+}
+
 fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
     let mut search = 0;
     let mut marker = None;
@@ -447,6 +470,11 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             .ok_or("Generated class body is missing")?;
         let class_close =
             matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
+        let Some((_, _, wrapper_close, asynchronous_wrapper)) = enclosing_wrapper(text, class_at)
+        else {
+            cursor = at + "await __nmath".len();
+            continue;
+        };
         if at > class_close {
             cursor = at + "await __nmath".len();
             continue;
@@ -462,7 +490,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             .map_or(0, |index| index + 1);
         let decorator_var = &text[start..end];
         let field_call = format!("{decorator_var}, {{ kind: \"field\"");
-        if !text[class_open..class_close].contains(&field_call) {
+        if !text[class_open..wrapper_close].contains(&field_call) {
             cursor = at + "await __nmath".len();
             continue;
         }
@@ -470,9 +498,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         }
-        let sync = text[..class_at].rfind("(() => {");
-        let asynchronous = text[..class_at].rfind("(async () => {");
-        if asynchronous.is_some_and(|async_at| sync.is_none_or(|sync_at| async_at > sync_at)) {
+        if asynchronous_wrapper {
             cursor = at + "await __nmath".len();
             continue;
         }
