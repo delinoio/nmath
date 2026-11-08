@@ -160,3 +160,20 @@ test("determinants retain subnormal pivot scale", async () => {
     await c.close();
   }
 });
+
+test("determinants round subnormal reconstruction at the boundary", async () => {
+  const c = context();
+  try {
+    const boundary = c.array(
+      [
+        [2 ** -537, 0],
+        [0, 1.5 * 2 ** -538],
+      ],
+      { dtype: "float64" },
+    );
+    const result = await linalg.det(boundary).compute();
+    assert.equal(result, 5e-324);
+  } finally {
+    await c.close();
+  }
+});

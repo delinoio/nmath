@@ -200,6 +200,23 @@ fn subnormal_pivots_retain_their_scale() {
 }
 
 #[test]
+fn subnormal_reconstruction_rounds_once_at_the_boundary() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let boundary = dense(
+        vec![2, 2],
+        Buffer::F64(vec![2_f64.powi(-537), 0.0, 0.0, 1.5 * 2_f64.powi(-538)]),
+    );
+    let result = determinant(&boundary, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert_eq!(values[0], 5e-324);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
 fn determinant_retains_batch_dtype_cancellation_and_budget() {
     let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
     let token = CancellationToken::new();

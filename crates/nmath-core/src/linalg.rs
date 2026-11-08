@@ -437,7 +437,13 @@ impl SignedLog {
         if self.sign == 0.0 {
             0.0
         } else {
-            self.sign * self.mantissa * 2_f64.powf(self.exponent)
+            let magnitude = if self.exponent >= -1022.0 {
+                self.mantissa * 2_f64.powf(self.exponent)
+            } else {
+                let scaled = self.mantissa * 2_f64.powf(self.exponent + 1074.0);
+                f64::from_bits(scaled.round_ties_even() as u64)
+            };
+            self.sign * magnitude
         }
     }
 }
