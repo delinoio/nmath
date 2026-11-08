@@ -17,19 +17,7 @@ fn snapshot_npz_inputs(
     token.check()?;
     for (name, array) in arrays {
         token.check()?;
-        let offset_bytes = array
-            .size()
-            .checked_mul(std::mem::size_of::<usize>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorCode::MemoryBudgetExceeded,
-                    "NPZ snapshot offsets exceed the memory budget.",
-                )
-            })?;
-        let offsets = budget.reserve(offset_bytes)?;
-        let snapshot = array.snapshot(budget)?;
-        drop(offsets);
+        let snapshot = array.snapshot_cancellable(budget, token)?;
         snapshots.push(NamedArray {
             name,
             array: snapshot,
@@ -190,7 +178,7 @@ mod snapshot_tests {
     }
 
     #[test]
-    fn offset_scratch_overlaps_payload_and_prior_members() {
+    fn snapshot_payload_overlaps_prior_members_without_offset_scratch() {
         let budget = MemoryBudget::new(Device::Cpu, 10_000);
         let metadata = budget.reserve(100).unwrap();
         let snapshots = snapshot_npz_inputs(
@@ -203,10 +191,7 @@ mod snapshot_tests {
             || {},
         )
         .unwrap();
-        assert_eq!(
-            budget.usage().peak,
-            100 + 4 + 1024 * (std::mem::size_of::<usize>() as u64 + 1)
-        );
+        assert_eq!(budget.usage().peak, 100 + 4 + 1024);
         assert_eq!(budget.usage().used, 100 + 4 + 1024);
         drop(snapshots);
         drop(metadata);
@@ -214,7 +199,7 @@ mod snapshot_tests {
     }
 
     #[test]
-    fn later_offset_failure_and_cancellation_release_gate_and_reservations() {
+    fn later_payload_failure_and_cancellation_release_gate_and_reservations() {
         let budget = MemoryBudget::new(Device::Cpu, 200);
         let metadata = budget.reserve(100).unwrap();
         let failed = snapshot_npz_inputs(

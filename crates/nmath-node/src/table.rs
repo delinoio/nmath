@@ -70,13 +70,18 @@ impl NativeTable {
     }
 
     #[napi]
-    pub fn sort(&self, position: u32, descending: bool, nulls_last: bool) -> Self {
+    pub fn sort(&self, position: u32, descending: bool, nulls_last: bool, pandas: bool) -> Self {
         Self {
             plan: Plan::Sort(
                 Box::new(self.plan.clone()),
                 position as usize,
                 descending,
                 nulls_last,
+                if pandas {
+                    Flavor::Pandas
+                } else {
+                    Flavor::Polars
+                },
             ),
         }
     }
