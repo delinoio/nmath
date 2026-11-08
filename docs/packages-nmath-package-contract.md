@@ -55,6 +55,7 @@ Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ct
 ### Expressions and compute
 
 - Functions such as `add(a, b)` and methods such as `a.add(b)` return `Expr` without computing.
+- NumPy `negative` and `positive` preserve the input dtype and shape in their expression result for supported numeric, complex and timedelta arrays and expressions. Their declarations reject `bool`, `str` and `datetime64`, as the direct `neg()` and `pos()` methods do.
 - `expr.compute({ device?: 'cpu' | 'gpu', signal?: AbortSignal }): Promise<Result>` runs one independent job.
 - Results with rank 0 are JS scalars: `number` for floating and 32-bit-or-smaller integer dtypes, `bigint` for 64-bit integers, `boolean` and `string`. Complex values use the lossless `Complex` class. Other results are `NMathArray` values.
 - Explicit lossy conversions: `toNumber()`, `toDate()`.
