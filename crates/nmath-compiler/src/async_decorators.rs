@@ -46,14 +46,32 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut quote = None;
     let mut escaped = false;
+    let mut regex = false;
+    let mut regex_class = false;
     let mut line_comment = false;
     let mut block_comment = false;
+    let mut can_start_regex = true;
     let bytes = text.as_bytes();
     let mut index = open;
     while index < bytes.len() {
         let byte = bytes[index];
         let next = bytes.get(index + 1).copied();
-        if line_comment {
+        if regex {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if regex_class {
+                if byte == b']' {
+                    regex_class = false;
+                }
+            } else if byte == b'[' {
+                regex_class = true;
+            } else if byte == b'/' {
+                regex = false;
+                can_start_regex = false;
+            }
+        } else if line_comment {
             if byte == b'\n' {
                 line_comment = false;
             }
@@ -76,15 +94,79 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
         } else if byte == b'/' && next == Some(b'*') {
             block_comment = true;
             index += 1;
+        } else if byte == b'/' && can_start_regex {
+            regex = true;
+            regex_class = false;
         } else if matches!(byte, b'\'' | b'"' | b'`') {
             quote = Some(byte);
+            can_start_regex = false;
+        } else if byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$' {
+            let start = index;
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'_' | b'$'))
+            {
+                index += 1;
+            }
+            let identifier = &text[start..index];
+            can_start_regex = matches!(
+                identifier,
+                "await"
+                    | "case"
+                    | "delete"
+                    | "do"
+                    | "else"
+                    | "in"
+                    | "instanceof"
+                    | "of"
+                    | "return"
+                    | "throw"
+                    | "typeof"
+                    | "void"
+                    | "yield"
+            );
+            continue;
+        } else if byte.is_ascii_digit() {
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'.')
+            {
+                index += 1;
+            }
+            can_start_regex = false;
+            continue;
         } else if byte == b'{' {
             depth += 1;
+            can_start_regex = true;
         } else if byte == b'}' {
             depth -= 1;
             if depth == 0 {
                 return Some(index);
             }
+            can_start_regex = false;
+        } else if matches!(byte, b'(' | b'[') {
+            can_start_regex = true;
+        } else if matches!(byte, b')' | b']' | b'.') {
+            can_start_regex = false;
+        } else if matches!(
+            byte,
+            b';' | b','
+                | b':'
+                | b'?'
+                | b'='
+                | b'!'
+                | b'&'
+                | b'|'
+                | b'+'
+                | b'-'
+                | b'*'
+                | b'%'
+                | b'^'
+                | b'~'
+                | b'<'
+                | b'>'
+        ) {
+            can_start_regex = true;
         }
         index += 1;
     }
@@ -310,4 +392,20 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         parts: vec![Part::New("await (async () => {".into())],
     });
     apply(text, edits).map(Some)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::matching_brace;
+
+    #[test]
+    fn matching_brace_ignores_regex_literals() {
+        let text = r#"class C {
+    method() { return /[}]/.test("}"); }
+    [(_decorators = [await __nmath.set(a, 0, 1)])]() {}
+}"#;
+        let open = text.find("class C {").unwrap() + "class C ".len();
+        let close = matching_brace(text, open).unwrap();
+        assert_eq!(close, text.rfind('}').unwrap());
+    }
 }
