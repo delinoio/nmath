@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     buffer::Buffer,
-    dtype::DType,
+    dtype::{DType, TimeBase, TimeUnit},
     error::{Error, ErrorCode, Result},
     memory::{MemoryBudget, Reservation},
     sync::CancellationToken,
@@ -60,21 +60,55 @@ fn descr(dtype: DType) -> Result<String> {
     .into())
 }
 
+fn decimal_len(value: usize) -> usize {
+    if value == 0 {
+        1
+    } else {
+        value.ilog10() as usize + 1
+    }
+}
+
+fn time_unit_len(unit: TimeUnit) -> usize {
+    let base_len = match unit.base {
+        TimeBase::Year
+        | TimeBase::Month
+        | TimeBase::Week
+        | TimeBase::Day
+        | TimeBase::Hour
+        | TimeBase::Minute
+        | TimeBase::Second => 1,
+        TimeBase::Milli
+        | TimeBase::Micro
+        | TimeBase::Nano
+        | TimeBase::Pico
+        | TimeBase::Femto
+        | TimeBase::Atto => 2,
+    };
+    base_len
+        + if unit.step == 1 {
+            0
+        } else {
+            decimal_len(unit.step as usize)
+        }
+}
+
+fn descr_len(dtype: DType) -> usize {
+    match dtype {
+        DType::Complex128 => 4,
+        DType::Str(width) => 2 + decimal_len(width),
+        DType::Datetime64(unit) | DType::Timedelta64(unit) => 5 + time_unit_len(unit),
+        _ => 3,
+    }
+}
+
 /// Returns the padded version-1 header length before allocating the header.
 pub(crate) fn checked_npy_header_len(shape: &[usize], dtype: DType) -> Result<u16> {
-    let digit_count = |dimension: &usize| {
-        if *dimension == 0 {
-            1
-        } else {
-            dimension.ilog10() as usize + 1
-        }
-    };
     let shape_len = match shape {
         [] => 2,
-        [dimension] => 3 + digit_count(dimension),
+        [dimension] => 3 + decimal_len(*dimension),
         dimensions => {
             let digits = dimensions.iter().try_fold(0usize, |length, dimension| {
-                length.checked_add(digit_count(dimension))
+                length.checked_add(decimal_len(*dimension))
             });
             digits
                 .and_then(|length| {
@@ -88,7 +122,7 @@ pub(crate) fn checked_npy_header_len(shape: &[usize], dtype: DType) -> Result<u1
     };
     let body_len = "{'descr': '"
         .len()
-        .checked_add(descr(dtype)?.len())
+        .checked_add(descr_len(dtype))
         .and_then(|length| length.checked_add("', 'fortran_order': False, 'shape': ".len()))
         .and_then(|length| length.checked_add(shape_len))
         .and_then(|length| length.checked_add(", }".len()))
@@ -107,6 +141,43 @@ pub(crate) fn checked_npy_header_len(shape: &[usize], dtype: DType) -> Result<u1
         return Err(format_error("header length is out of range"));
     }
     u16::try_from(header_len).map_err(|_| format_error("header length is out of range"))
+}
+
+/// Bounds the output capacity and live header/shape formatting workspace.
+/// The unbudgeted encoder remains available to NPZ, which owns codec workspace.
+pub(crate) fn encode_npy_budgeted(
+    shape: &[usize],
+    buffer: &Buffer,
+    budget: &MemoryBudget,
+) -> Result<(Vec<u8>, Reservation)> {
+    let header_len = usize::from(checked_npy_header_len(shape, buffer.dtype())?);
+    let payload_len = usize::try_from(buffer.byte_len())
+        .map_err(|_| format_error("serialization size is out of range"))?;
+    let capacity = (NPY_MAGIC.len() + 2 + 2)
+        .checked_add(header_len)
+        .and_then(|size| size.checked_add(64))
+        .and_then(|size| size.checked_add(payload_len))
+        .ok_or_else(|| format_error("serialization size is out of range"))?;
+    // Shape formatting can hold one String per axis, the collection of those
+    // Strings, a joined shape, and the final header alongside the output.
+    let workspace = header_len
+        .checked_mul(4)
+        .and_then(|size| {
+            shape
+                .len()
+                .checked_mul(2 * std::mem::size_of::<String>())
+                .and_then(|strings| size.checked_add(strings))
+        })
+        .and_then(|size| size.checked_add(64))
+        .ok_or_else(|| format_error("serialization size is out of range"))?;
+    let reservation_bytes = capacity
+        .checked_add(workspace)
+        .ok_or_else(|| format_error("serialization size is out of range"))?;
+    let reservation = budget.reserve(
+        u64::try_from(reservation_bytes)
+            .map_err(|_| format_error("serialization size is out of range"))?,
+    )?;
+    Ok((encode_npy(shape, buffer)?, reservation))
 }
 
 /// Encodes a C-order array as NPY version 1.0.
@@ -559,6 +630,41 @@ fn read_checked_with<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn descriptor_preflight_matches_encoded_descriptor_lengths() {
+        for dtype in DType::ALL.into_iter().chain([
+            DType::Str(1234),
+            DType::Datetime64(TimeUnit {
+                base: TimeBase::Milli,
+                step: 12,
+            }),
+        ]) {
+            assert_eq!(descr_len(dtype), descr(dtype).unwrap().len());
+        }
+    }
+
+    #[test]
+    fn budgeted_npy_encode_charges_live_serialization_and_releases_it() {
+        let buffer = Buffer::F64(vec![]);
+        let zero = MemoryBudget::new(crate::memory::Device::Cpu, 0);
+        assert_eq!(
+            encode_npy_budgeted(&[0], &buffer, &zero).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(zero.usage().used, 0);
+        assert_eq!(zero.usage().peak, 0);
+
+        let enough = MemoryBudget::new(crate::memory::Device::Cpu, 4096);
+        let (bytes, reservation) = encode_npy_budgeted(&[0], &buffer, &enough).unwrap();
+        assert_eq!(bytes.len(), 128);
+        assert!(reservation.bytes() >= bytes.capacity() as u64);
+        assert_eq!(enough.usage().used, reservation.bytes());
+        assert_eq!(enough.usage().peak, reservation.bytes());
+        drop(reservation);
+        assert_eq!(enough.usage().used, 0);
+        assert_eq!(decode_npy(&bytes).unwrap(), (vec![0], buffer));
+    }
 
     #[test]
     fn npy_round_trip() {
