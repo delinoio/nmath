@@ -204,6 +204,42 @@ datetimeUnary.neg();
 // @ts-expect-error Direct positive rejects datetime arrays.
 datetimeUnary.pos();
 
+// Compiler unary helpers retain supported dtype and shape information.
+const helperFloatNegative = nts.neg(floatUnaryArray);
+const helperFloatPositive = nts.pos(floatUnaryExpr);
+const helperIntegerNegative = nts.neg(v);
+const helperComplexNegative = nts.neg(complexUnaryExpr);
+const helperComplexPositive = nts.pos(complexUnaryArray);
+const helperDurationNegative = nts.neg(durationUnaryArray);
+const helperDurationPositive = nts.pos(durationUnaryExpr);
+assertTrue<
+  Equal<typeof helperFloatNegative, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof helperFloatPositive, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<Equal<typeof helperIntegerNegative, Expr<"int32", [3]>>>();
+assertTrue<Equal<typeof helperComplexNegative, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof helperComplexPositive, Expr<"complex64", []>>>();
+assertTrue<
+  Equal<typeof helperDurationNegative, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof helperDurationPositive, Expr<"timedelta64", number[]>>
+>();
+// @ts-expect-error Compiler negative rejects bool arrays.
+nts.neg(boolUnary);
+// @ts-expect-error Compiler positive rejects bool arrays.
+nts.pos(boolUnary);
+// @ts-expect-error Compiler negative rejects string arrays.
+nts.neg(stringUnary);
+// @ts-expect-error Compiler positive rejects string arrays.
+nts.pos(stringUnary);
+// @ts-expect-error Compiler negative rejects datetime arrays.
+nts.neg(datetimeUnary);
+// @ts-expect-error Compiler positive rejects datetime arrays.
+nts.pos(datetimeUnary);
+
 const mm = m.matmul(ctx.zeros([3, 5], "float32"));
 assertTrue<Equal<(typeof mm)["shape"], [2, 5]>>();
 // @ts-expect-error core dimensions 3 and 4 do not match
