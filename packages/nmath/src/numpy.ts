@@ -131,13 +131,28 @@ export function full<D extends ComputableDType, const S extends Shape>(
 }
 
 /** `np.arange(start, stop, step)` for numeric dtypes other than 64-bit integers. */
-export function arange<D extends "int32" | "uint32" | "float32" | "float64">(
+type ArangeDType = "int32" | "uint32" | "float32" | "float64";
+
+export function arange(
+  context: NMathContext,
+  start: number,
+  stop: number,
+  step?: number,
+): NMathArray<"float64", [number]>;
+export function arange<const D extends ArangeDType | undefined>(
+  context: NMathContext,
+  start: number,
+  stop: number,
+  step: number | undefined,
+  dtype: D,
+): NMathArray<D extends ArangeDType ? D : "float64", [number]>;
+export function arange(
   context: NMathContext,
   start: number,
   stop: number,
   step = 1,
-  dtype: D = "float64" as D,
-): NMathArray<D, [number]> {
+  dtype: ArangeDType = "float64",
+): NMathArray<ArangeDType, [number]> {
   if (step === 0) {
     throw new RangeError("arange step must not be zero.");
   }
