@@ -219,6 +219,8 @@ Methods use an explicit shape, with `[]` for a scalar:
 - `standard_normal(shape, dtype = "float64")`, with float32 or float64.
 - `normal(loc, scale, shape)` and `exponential(scale, shape)`, returning float64.
 
+For these three methods with a configurable dtype, a definitely present dtype keeps its exact result type. An optional dtype argument or `integers` option includes the documented default in its result dtype when the value can be `undefined`. Omitted dtypes retain the exact default type. The declared computed storage follows every possible result dtype.
+
 Distribution parameters are scalars. Each `compute()` is a new scheduled native job. Jobs sharing a generator run in request order and commit state only on success. Invalid bounds, allocation errors and cancellation before completion preserve generator state, including cached uint32 values. No JS random kernel or Python runtime is used.
 
 Parameter broadcasting, `out`, other distributions and bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain targets. Integer float coercion is not supported: callers must supply safe integers or bigint explicitly. These methods do not establish full NumPy random compatibility or cross-platform numerical acceptance.
