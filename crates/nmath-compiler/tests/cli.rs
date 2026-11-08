@@ -657,6 +657,42 @@ fn modern_field_decorator_relocates_outer_assignments_with_nested_classes() {
 }
 
 #[test]
+fn modern_field_decorator_supports_unicode_field_names() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(_value: any): any { return () => {}; }\nexport async \
+                  function run() { class C { @dec(a[0] = 1) 值 = 2; } return [new C().值, \
+                  a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-unicode-field", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert!(output.contains("__nmath.set(a, 0, 1)"), "{output}");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the Unicode-field fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the Unicode-field fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
 fn modern_field_decorators_rewrite_each_class_and_runtime_alias() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst __nmath = 0;\nconst a = new \

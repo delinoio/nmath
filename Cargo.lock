@@ -973,6 +973,7 @@ dependencies = [
  "tsrs_spanmap",
  "tsrs_tsoptions",
  "tsrs_vfs",
+ "unicode-ident",
 ]
 
 [[package]]

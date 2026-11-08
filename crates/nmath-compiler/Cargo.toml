@@ -16,6 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+unicode-ident.workspace = true
 tsrs_ast.workspace = true
 tsrs_contentmapper.workspace = true
 tsrs_core.workspace = true

@@ -41,6 +41,18 @@ fn line_end(text: &str, at: usize) -> usize {
         .map_or(text.len(), |index| at + index + 1)
 }
 
+fn is_identifier_char(ch: char) -> bool {
+    unicode_ident::is_xid_continue(ch) || ch == '$'
+}
+
+fn identifier_start(text: &str, end: usize) -> usize {
+    text[..end]
+        .char_indices()
+        .rev()
+        .find_map(|(index, ch)| (!is_identifier_char(ch)).then_some(index + ch.len_utf8()))
+        .unwrap_or(0)
+}
+
 fn skip_quoted(text: &str, start: usize, delimiter: u8) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut index = start + 1;
@@ -685,9 +697,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             continue;
         };
         let end = class_open + marker + "_decorators".len();
-        let start = text[..end]
-            .rfind(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-            .map_or(0, |index| index + 1);
+        let start = identifier_start(text, end);
         let decorator_var = &text[start..end];
         let field_call = format!("{decorator_var}, {{ kind: \"field\"");
         let accessor_call = format!("{decorator_var}, {{ kind: \"accessor\"");
@@ -757,10 +767,11 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                 };
                 let marker = position + offset;
                 let mut assignment_name_start = marker;
-                while assignment_name_start > 0 {
-                    let byte = text.as_bytes()[assignment_name_start - 1];
-                    if byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$') {
-                        assignment_name_start -= 1;
+                while let Some((index, ch)) =
+                    text[..assignment_name_start].char_indices().next_back()
+                {
+                    if is_identifier_char(ch) {
+                        assignment_name_start = index;
                     } else {
                         break;
                     }
