@@ -340,6 +340,28 @@ fn enclosing_wrapper(text: &str, class_at: usize) -> Option<(usize, usize, usize
     found
 }
 
+fn enclosing_downlevel_decorator_block(
+    text: &str,
+    class_close: usize,
+    wrapper_close: usize,
+    await_at: usize,
+) -> Option<(usize, usize)> {
+    let mut search = class_close;
+    while let Some(offset) = text[search..wrapper_close].find("(() => {") {
+        let block_at = search + offset;
+        let block_open = block_at + "(() => {".len() - 1;
+        let block_close = matching_brace(text, block_open)?;
+        if block_open < await_at
+            && await_at < block_close
+            && text[block_open..block_close].contains("__esDecorate(")
+        {
+            return Some((block_at, block_close));
+        }
+        search = block_at + "(() => {".len();
+    }
+    None
+}
+
 fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
     let mut search = 0;
     let mut marker = None;
@@ -449,7 +471,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         return Ok(None);
     }
     let mut cursor = 0;
-    let (await_at, class_at, class_open, class_close) = loop {
+    let (await_at, class_at, class_open, class_close, downlevel) = loop {
         let Some(at) = find_await_set(text, cursor) else {
             return Ok(None);
         };
@@ -475,7 +497,9 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         };
-        if at > class_close {
+        let downlevel =
+            enclosing_downlevel_decorator_block(text, class_close, wrapper_close, at).is_some();
+        if at > class_close && !downlevel {
             cursor = at + "await __nmath".len();
             continue;
         }
@@ -502,7 +526,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         }
-        break (at, class_at, class_open, class_close);
+        break (at, class_at, class_open, class_close, downlevel);
     };
     let wrapper_at = text[..class_at]
         .rfind("(() => {")
@@ -626,9 +650,35 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         }
         static_cursor = static_close + 1;
     }
+    if downlevel {
+        let (block_at, block_close) =
+            enclosing_downlevel_decorator_block(text, class_close, wrapper_close, await_at)
+                .ok_or("Generated downlevel decorator block is missing")?;
+        let invocation = text
+            .get(block_close..block_close + 4)
+            .ok_or("Generated downlevel decorator invocation is missing")?;
+        if invocation != "})()" {
+            return Err("Generated downlevel decorator invocation is malformed".into());
+        }
+        edits.push(Edit {
+            start: block_at,
+            end: block_at + "(() => {".len(),
+            parts: vec![Part::New("(await (async () => {".into())],
+        });
+        edits.push(Edit {
+            start: block_close + 4,
+            end: block_close + 4,
+            parts: vec![Part::New(")".into())],
+        });
+    }
     let return_at = text[wrapper_open..class_open]
         .rfind("return class ")
         .map(|offset| wrapper_open + offset)
+        .or_else(|| {
+            text[wrapper_open..class_open]
+                .rfind("return ")
+                .map(|offset| wrapper_open + offset)
+        })
         .or_else(|| {
             text[class_close..wrapper_close]
                 .find("return ")
@@ -646,6 +696,8 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         + text[return_at..return_end]
             .rfind(';')
             .ok_or("Generated class wrapper return terminator is missing")?;
+    let value_prefix = if downlevel { "{ value: (" } else { "{ value: " };
+    let value_suffix = if downlevel { ") }" } else { " }" };
     edits.push(Edit {
         start: wrapper_at,
         end: wrapper_at + "(() => {".len(),
@@ -654,12 +706,12 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
     edits.push(Edit {
         start: expression_start,
         end: expression_start,
-        parts: vec![Part::New("{ value: ".into())],
+        parts: vec![Part::New(value_prefix.into())],
     });
     edits.push(Edit {
         start: expression_end,
         end: expression_end,
-        parts: vec![Part::New(" }".into())],
+        parts: vec![Part::New(value_suffix.into())],
     });
     let invocation = text
         .get(wrapper_close..wrapper_close + 4)
@@ -692,8 +744,7 @@ mod tests {
 
     #[test]
     fn nested_decorator_callback_await_is_not_eager_assignment() {
-        let text =
-            "_decorators = [dec(async () => { await __nmath.set(a, 0, 1); })];";
+        let text = "_decorators = [dec(async () => { await __nmath.set(a, 0, 1); })];";
         let await_at = text.find("await __nmath").unwrap();
         assert!(!await_is_in_decorator_assignment(text, await_at));
     }
