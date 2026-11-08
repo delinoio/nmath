@@ -83,6 +83,8 @@ The FFT entry point adds `fft2`, `ifft2`, `fftn`, `ifftn`, `fftshift`, `ifftshif
 
 Core and NumPy array creation, and exact float16 bit creation, keep an exact tuple shape only when the options require `shape`. An optional or possibly undefined `shape` returns a conservative `number[]` shape because the runtime can infer its shape from the input data. Dtype inference and explicit shape validation are unchanged.
 
+Indexing with a fixed selector tuple retains the dimensions known after each selector, including an empty selector tuple that leaves the shape unchanged. A dynamic selector array or unresolved variadic tail yields an unknown-rank shape because selectors may remove axes. The shared `IndexShape` type also treats an optional selector tuple conservatively; public selectors themselves cannot be `undefined`. The public `get` method and `.nts` indexing helper share this inference and preserve dtype.
+
 `compute()` returns a dtype-specific JS scalar for a known rank-zero shape and an `NMathArray` for a provably nonempty shape. When the shape can be empty, including mutable or readonly unknown-rank arrays, its result type includes both alternatives. Callers must narrow such a result before using array methods.
 `numpy.arange` returns a `[number]` array with the explicitly selected supported dtype. An omitted or `undefined` dtype selects `float64`. When a dtype argument can be `undefined`, its result dtype includes both the explicit dtype and the `float64` fallback, so typed-array export reflects both possible storage types.
 
