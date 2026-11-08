@@ -30,6 +30,43 @@ const m = ctx.zeros([2, 3], "float32");
 const v = ctx.zeros([3], "int32");
 const col = ctx.zeros([2, 1], "float64");
 
+// arange keeps the float64 fallback when an explicit dtype may be undefined.
+declare const optionalInt32DType: "int32" | undefined;
+declare const optionalUint32DType: "uint32" | undefined;
+declare const optionalFloat32DType: "float32" | undefined;
+const optionalInt32Range = np.arange(ctx, 0, 2, 1, optionalInt32DType);
+const optionalUint32Range = np.arange(ctx, 0, 2, 1, optionalUint32DType);
+const optionalFloat32Range = np.arange(ctx, 0, 2, 1, optionalFloat32DType);
+assertTrue<Equal<typeof optionalInt32Range.dtype, "int32" | "float64">>();
+assertTrue<Equal<typeof optionalUint32Range.dtype, "uint32" | "float64">>();
+assertTrue<Equal<typeof optionalFloat32Range.dtype, "float32" | "float64">>();
+assertTrue<Equal<typeof optionalInt32Range.shape, [number]>>();
+expectType<Int32Array | Float64Array>(optionalInt32Range.toTypedArray());
+expectType<Uint32Array | Float64Array>(optionalUint32Range.toTypedArray());
+expectType<Float32Array | Float64Array>(optionalFloat32Range.toTypedArray());
+// @ts-expect-error the undefined branch exports Float64Array
+expectType<Int32Array>(optionalInt32Range.toTypedArray());
+// @ts-expect-error the undefined branch exports Float64Array
+expectType<Uint32Array>(optionalUint32Range.toTypedArray());
+// @ts-expect-error the undefined branch exports Float64Array
+expectType<Float32Array>(optionalFloat32Range.toTypedArray());
+const defaultRange = np.arange(ctx, 0, 2);
+const undefinedRange = np.arange(ctx, 0, 2, 1, undefined);
+const int32Range = np.arange(ctx, 0, 2, 1, "int32");
+const uint32Range = np.arange(ctx, 0, 2, 1, "uint32");
+const float32Range = np.arange(ctx, 0, 2, 1, "float32");
+const float64Range = np.arange(ctx, 0, 2, 1, "float64");
+assertTrue<Equal<typeof defaultRange.dtype, "float64">>();
+assertTrue<Equal<typeof undefinedRange.dtype, "float64">>();
+assertTrue<Equal<typeof int32Range.dtype, "int32">>();
+assertTrue<Equal<typeof uint32Range.dtype, "uint32">>();
+assertTrue<Equal<typeof float32Range.dtype, "float32">>();
+assertTrue<Equal<typeof float64Range.dtype, "float64">>();
+// @ts-expect-error bool is not supported by arange
+np.arange(ctx, 0, 2, 1, "bool");
+// @ts-expect-error int64 is not supported by arange
+np.arange(ctx, 0, 2, 1, "int64");
+
 // Dtype promotion follows NumPy.
 const mv = m.add(v);
 assertTrue<Equal<typeof mv, Expr<"float64", [2, 3]>>>();
