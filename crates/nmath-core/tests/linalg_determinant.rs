@@ -97,7 +97,7 @@ fn determinant_retains_batch_dtype_cancellation_and_budget() {
             .code,
         ErrorCode::Cancelled
     );
-    let insufficient = MemoryBudget::new(Device::Cpu, 0);
+    let insufficient = MemoryBudget::new(Device::Cpu, 8);
     assert_eq!(
         linalg::execute(LinalgOp::Det, &batch, None, &insufficient, &token)
             .unwrap_err()
@@ -105,5 +105,10 @@ fn determinant_retains_batch_dtype_cancellation_and_budget() {
         ErrorCode::MemoryBudgetExceeded
     );
     assert_eq!(insufficient.usage().used, 0);
+    let sufficient = MemoryBudget::new(Device::Cpu, 72);
+    let charged = determinant(&batch, &sufficient, &token);
+    assert_eq!(sufficient.usage().used, 8);
+    drop(charged);
+    assert_eq!(sufficient.usage().used, 0);
     assert_eq!(budget.usage().used, 0);
 }
