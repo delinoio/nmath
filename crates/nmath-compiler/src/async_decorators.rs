@@ -898,8 +898,10 @@ fn rewrite(
                 continue;
             }
             if asynchronous_wrapper {
-                cursor = at + "await __nmath".len();
-                continue 'awaits;
+                // A repaired inner wrapper can itself sit in an outer
+                // decorator array. Keep walking enclosing classes so its
+                // newly introduced await is relocated with that array.
+                continue;
             }
             break 'awaits (
                 at,
