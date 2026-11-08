@@ -6,6 +6,7 @@ use std::{
     fs::{self, File},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::SystemTime,
 };
 
@@ -21,6 +22,7 @@ const NPY_MAGIC: &[u8] = b"\x93NUMPY";
 /// Upper bound for an NPY header; NumPy itself rejects headers above this size
 /// by default.
 const MAX_HEADER_LEN: usize = 10_000;
+static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn io_error(err: std::io::Error) -> Error {
     // Messages never include file paths, per the observability contract.
@@ -391,18 +393,42 @@ pub enum WriteMode {
     Overwrite,
 }
 
-fn temp_path(dest: &Path) -> Result<PathBuf> {
+fn next_temp_sequence(sequence: &AtomicU64) -> Result<u64> {
+    let mut value = sequence.load(Ordering::Relaxed);
+    loop {
+        let next = value.checked_add(1).ok_or_else(|| {
+            Error::new(
+                ErrorCode::IoFailed,
+                "The temporary pathname sequence is exhausted.",
+            )
+        })?;
+        match sequence.compare_exchange_weak(value, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return Ok(value),
+            Err(observed) => value = observed,
+        }
+    }
+}
+
+fn temp_path_at(dest: &Path, timestamp: u128, sequence: u64) -> Result<PathBuf> {
     let parent = dest
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
     dest.file_name()
         .ok_or_else(|| Error::new(ErrorCode::IoFailed, "The output path has no file name."))?;
-    let nonce = SystemTime::now()
+    Ok(parent.join(format!(
+        ".nmath-{}-{timestamp}-{sequence}.tmp",
+        std::process::id()
+    )))
+}
+
+fn temp_path(dest: &Path) -> Result<PathBuf> {
+    let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    Ok(parent.join(format!(".nmath-{}-{nonce}.tmp", std::process::id())))
+    let sequence = next_temp_sequence(&TEMP_SEQUENCE)?;
+    temp_path_at(dest, timestamp, sequence)
 }
 
 /// Writes `bytes` to a temporary file next to `dest` and publishes it
@@ -421,6 +447,31 @@ pub fn write_atomic(
         ));
     }
     let tmp = temp_path(dest)?;
+    write_atomic_with_path(dest, &tmp, mode, token, |file| {
+        for chunk in bytes.chunks(1 << 20) {
+            token.check()?;
+            file.write_all(chunk).map_err(io_error)?;
+        }
+        file.sync_all().map_err(io_error)
+    })
+}
+
+#[cfg(test)]
+fn write_atomic_at(
+    dest: &Path,
+    bytes: &[u8],
+    mode: WriteMode,
+    token: &CancellationToken,
+    timestamp: u128,
+) -> Result<()> {
+    if mode == WriteMode::CreateNew && dest.exists() {
+        return Err(Error::new(
+            ErrorCode::IoExists,
+            "The output file already exists.",
+        ));
+    }
+    let sequence = next_temp_sequence(&TEMP_SEQUENCE)?;
+    let tmp = temp_path_at(dest, timestamp, sequence)?;
     write_atomic_with_path(dest, &tmp, mode, token, |file| {
         for chunk in bytes.chunks(1 << 20) {
             token.check()?;
@@ -822,6 +873,49 @@ mod tests {
                 assert!(!dest.exists());
             }
         }
+    }
+
+    #[test]
+    fn concurrent_equal_clock_writes_use_distinct_owned_temporary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.npy");
+        let second = dir.path().join("second.npy");
+        let timestamp = 123_u128;
+
+        std::thread::scope(|scope| {
+            let first_job = scope.spawn(|| {
+                write_atomic_at(
+                    &first,
+                    b"first",
+                    WriteMode::CreateNew,
+                    &CancellationToken::new(),
+                    timestamp,
+                )
+            });
+            let second_job = scope.spawn(|| {
+                write_atomic_at(
+                    &second,
+                    b"second",
+                    WriteMode::CreateNew,
+                    &CancellationToken::new(),
+                    timestamp,
+                )
+            });
+            first_job.join().unwrap().unwrap();
+            second_job.join().unwrap().unwrap();
+        });
+
+        assert_eq!(fs::read(&first).unwrap(), b"first");
+        assert_eq!(fs::read(&second).unwrap(), b"second");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn temporary_sequence_exhaustion_is_reported_without_wraparound() {
+        let sequence = AtomicU64::new(u64::MAX);
+        let error = next_temp_sequence(&sequence).unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoFailed);
+        assert_eq!(sequence.load(Ordering::Relaxed), u64::MAX);
     }
 
     #[test]
