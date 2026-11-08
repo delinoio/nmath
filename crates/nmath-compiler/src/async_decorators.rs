@@ -532,6 +532,13 @@ fn enclosing_downlevel_decorator_block(
 }
 
 #[derive(Clone, Copy)]
+struct WrapperReturn {
+    body_open: usize,
+    expression_start: usize,
+    expression_end: usize,
+}
+
+#[derive(Clone, Copy)]
 struct GeneratedClass {
     start: usize,
     open: usize,
@@ -624,12 +631,17 @@ fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, 
 
 fn parsed_decorator_calls(
     text: &str,
-) -> (Vec<usize>, Vec<DecoratorAssignment>, Vec<GeneratedClass>) {
+) -> (
+    Vec<usize>,
+    Vec<DecoratorAssignment>,
+    Vec<GeneratedClass>,
+    Vec<WrapperReturn>,
+) {
     use tsrs_ast::{Kind, SourceFileParseOptions};
     use tsrs_core::{ScriptKind, arena::Region, tspath};
 
     if !text.contains("await __nmath") {
-        return (Vec::new(), Vec::new(), Vec::new());
+        return (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     }
     // Parse the pinned emitter's JavaScript before relocating its invalid
     // static-block awaits. The parser still represents those awaits, while
@@ -650,7 +662,22 @@ fn parsed_decorator_calls(
     let mut positions = Vec::new();
     let mut assignments = Vec::new();
     let mut classes = Vec::new();
+    let mut returns = Vec::new();
     while let Some((node, function_body)) = pending.pop() {
+        if node.kind() == Kind::ReturnStatement {
+            if let (Some(body_open), Some(expression)) =
+                (function_body, node.as_return_statement().expression())
+            {
+                returns.push(WrapperReturn {
+                    body_open,
+                    expression_start: tsrs_scanner::skip_trivia(
+                        text,
+                        expression.pos().expect_source("return expression"),
+                    ) as usize,
+                    expression_end: expression.end().expect_source("return expression") as usize,
+                });
+            }
+        }
         if node.kind() == Kind::ClassExpression {
             let start = tsrs_scanner::skip_trivia(text, node.pos().expect_source("class")) as usize;
             let open = node
@@ -741,27 +768,29 @@ fn parsed_decorator_calls(
         .collect();
     awaits.sort_unstable();
     classes.sort_unstable_by_key(|class| class.start);
-    (awaits, assignments, classes)
+    (awaits, assignments, classes, returns)
 }
 
 pub(crate) struct Rewriter {
     awaits: Vec<usize>,
     assignments: Vec<DecoratorAssignment>,
     classes: Vec<GeneratedClass>,
+    returns: Vec<WrapperReturn>,
     cursor: usize,
 }
 
 impl Rewriter {
     pub fn new(text: &str) -> Self {
-        let (awaits, assignments, classes) = if text.contains("__esDecorate(") {
+        let (awaits, assignments, classes, returns) = if text.contains("__esDecorate(") {
             parsed_decorator_calls(text)
         } else {
-            (Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new())
         };
         Self {
             awaits,
             assignments,
             classes,
+            returns,
             cursor: 0,
         }
     }
@@ -773,6 +802,7 @@ impl Rewriter {
             &self.awaits,
             &self.assignments,
             &self.classes,
+            &self.returns,
         )?
         else {
             return Ok(None);
@@ -828,6 +858,17 @@ impl Rewriter {
             })
             .collect();
         self.classes.sort_unstable_by_key(|class| class.start);
+        self.returns = self
+            .returns
+            .iter()
+            .filter_map(|statement| {
+                Some(WrapperReturn {
+                    body_open: relocate(statement.body_open)?,
+                    expression_start: relocate(statement.expression_start)?,
+                    expression_end: relocate(statement.expression_end - 1)? + 1,
+                })
+            })
+            .collect();
         self.cursor = rewrite.resume_at;
         Ok(Some(rewrite))
     }
@@ -839,6 +880,7 @@ fn rewrite(
     awaits: &[usize],
     decorator_assignments: &[DecoratorAssignment],
     classes: &[GeneratedClass],
+    returns: &[WrapperReturn],
 ) -> Result<Option<Rewrite>, String> {
     if !text.contains("__esDecorate(") {
         return Ok(None);
@@ -1055,26 +1097,16 @@ fn rewrite(
             parts: vec![Part::New(")".into())],
         });
     }
-    let return_at = text[wrapper_open..class_open]
-        .rfind("return class ")
-        .map(|offset| wrapper_open + offset)
-        .or_else(|| {
-            text[class_close..wrapper_close]
-                .find("return ")
-                .map(|offset| class_close + offset)
-        })
+    // Select a return owned by this function body, never text inside a
+    // literal or a nested callback. Retain exact parsed expression boundaries
+    // so boxing cannot include trivia or a neighboring statement.
+    let statement = returns
+        .iter()
+        .filter(|statement| statement.body_open == wrapper_open)
+        .max_by_key(|statement| statement.expression_start)
         .ok_or("Generated class wrapper return is missing")?;
-    let expression_start = return_at + "return".len();
-    let expression_start = expression_start
-        + text[expression_start..]
-            .len()
-            .saturating_sub(text[expression_start..].trim_start().len());
-    let return_end = statement_end(text, return_at, wrapper_close)
-        .ok_or("Generated class wrapper return is unbalanced")?;
-    let expression_end = return_at
-        + text[return_at..return_end]
-            .rfind(';')
-            .ok_or("Generated class wrapper return terminator is missing")?;
+    let expression_start = statement.expression_start;
+    let expression_end = statement.expression_end;
     // An array element does not infer an anonymous class name, unlike an
     // object property. It still boxes thenable constructors during awaiting.
     let value_prefix = if downlevel { "[(" } else { "[" };

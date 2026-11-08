@@ -709,6 +709,55 @@ fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
 }
 
 #[test]
+fn modern_field_decorator_ignores_return_text_in_class_decorators() {
+    for label in [
+        r#""return class ""#,
+        "`return class `",
+        r#"`outer ${"return class "}`"#,
+        "/return class /",
+        "1 /* return class  */",
+    ] {
+        let source = format!(
+            r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any {{ return () => {{}}; }}
+function classDec(_label: unknown, callback: (value: any) => any): any {{
+    return (value: any) => callback(value);
+}}
+export async function run() {{
+    @classDec({label}, value => {{ return value; }})
+    class C {{ @dec(a[0] = 1) field = 2; static observedName = this.name; }}
+    return [new C().field, a.values[0], setCalls, C.name, C.observedName];
+}}
+"#
+        );
+        let fixture = field_decorator_fixture("decorator-return-literal", false, &source);
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{label}: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{label}: {}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            r#"[2,1,1,"C","C"]"#
+        );
+    }
+}
+
+#[test]
 fn modern_field_decorator_relocates_outer_assignments_with_nested_classes() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
