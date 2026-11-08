@@ -206,6 +206,47 @@ fn rewrites_element_assignment_at_top_level_and_in_async_functions() {
 }
 
 #[test]
+fn field_decorators_inherit_the_enclosing_await_context() {
+    for source in [
+        "async function f() { class C { @dec(a[0] = 1) key = 2; } }",
+        "class C { @dec(a[0] = 1) key = 2; }",
+    ] {
+        let lowered = lower(source);
+        assert!(
+            lowered.contains("@dec((await __nmath.set(a, 0, 1))) key = 2"),
+            "{lowered}"
+        );
+        assert_eq!(lowered.matches("__nmath.set(").count(), 1, "{lowered}");
+    }
+
+    assert_eq!(
+        lower("async function f() { class C { @dec(1 + 2) key = 2; @dec(a[0] = 1) m() {} } }"),
+        "async function f() { class C { @dec(1 + 2) key = 2; @dec((await __nmath.set(a, 0, 1))) \
+         m() {} } }"
+    );
+}
+
+#[test]
+fn field_initializers_and_other_restricted_contexts_keep_original_diagnostics() {
+    for source in [
+        "function f() { class C { @dec(a[0] = 1) key = 2; } }",
+        "async function f() { class C { @dec(1) key = a[0] = 1; } }",
+        "async function f() { class C { static { a[0] = 1; } } }",
+        "async function f(x = (a[0] = 1)) {}",
+    ] {
+        let output = fixture_transform("a.nts", source);
+        assert_eq!(output.diagnostics.len(), 1, "{source}");
+        let diagnostic = &output.diagnostics[0];
+        assert_eq!(diagnostic.code, DiagnosticCode::AssignRequiresAsync);
+        assert_eq!(
+            &source[diagnostic.start as usize..(diagnostic.start + diagnostic.length) as usize],
+            "a[0] = 1",
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn keeps_statement_boundaries_in_semicolonless_code() {
     assert_eq!(
         lower("const x = 1\na[i] = v\n"),

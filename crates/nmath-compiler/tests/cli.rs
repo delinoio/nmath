@@ -325,6 +325,160 @@ fn inherited_numeric_index_executes_when_no_implicit_any_is_disabled() {
     assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "3");
 }
 
+fn field_decorator_fixture(name: &str, legacy: bool, source: &str) -> Fixture {
+    let fixture = Fixture::new(name);
+    let mut config = serde_json::json!({
+        "compilerOptions": {
+            "strict": true,
+            "module": "esnext",
+            "target": "es2022",
+            "moduleResolution": "bundler",
+            "outDir": "dist",
+            "rootDir": "src",
+            "types": []
+        },
+        "include": ["src"]
+    });
+    if legacy {
+        config["compilerOptions"]["experimentalDecorators"] = Value::Bool(true);
+    }
+    fixture.write("tsconfig.json", &config.to_string());
+    fixture.write(
+        "node_modules/@delinoio/nmath/package.json",
+        r#"{"name":"@delinoio/nmath","type":"module","exports":{".":{"types":"./core.d.ts","default":"./core.js"},"./nts-runtime":{"types":"./nts-runtime.d.ts","default":"./nts-runtime.js"}}}"#,
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.d.ts",
+        "export declare const lazyBrand: unique symbol;\nexport declare class NMathArray<D, S> { \
+         readonly [lazyBrand]: true; constructor(values: number[]); values: number[]; }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.js",
+        "export class NMathArray { constructor(values) { this.values = values; } }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.d.ts",
+        "import { NMathArray } from './core.js';\nexport declare function set<T>(a: \
+         NMathArray<any, any>, i: number, value: T): Promise<T>;\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.js",
+        "export async function set(a, i, value) { await Promise.resolve(); a.values[i] = value; \
+         return value; }\n",
+    );
+    fixture.write("src/main.nts", source);
+    fixture
+}
+
+#[test]
+fn field_decorator_assignments_check_and_build_in_both_modes() {
+    let prefix = "import { NMathArray } from '@delinoio/nmath';\nexport const a = new \
+                  NMathArray<'float64', [1]>([0]);\nexport let received: number[] = [];\n";
+    for (name, legacy, class_source) in [
+        (
+            "field-decorator-modern",
+            false,
+            "function dec(value: number): (field: undefined, context: ClassFieldDecoratorContext) \
+             => void { received = [value, a.values[0]]; return () => {}; }\nexport async function \
+             run() { class C { @dec(a[0] = 1) key = 2; } return new C(); }\n",
+        ),
+        (
+            "field-decorator-module",
+            false,
+            "function dec(value: number): (field: undefined, context: ClassFieldDecoratorContext) \
+             => void { received = [value, a.values[0]]; return () => {}; }\nexport class C { \
+             @dec(a[0] = 1) key = 2; }\n",
+        ),
+        (
+            "field-decorator-legacy",
+            true,
+            "function dec(value: number): PropertyDecorator { received = [value, a.values[0]]; \
+             return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) key = 2; \
+             } return new C(); }\n",
+        ),
+    ] {
+        let fixture = field_decorator_fixture(name, legacy, &format!("{prefix}{class_source}"));
+        let (code, checked) = run_json("check", &fixture);
+        assert_eq!(code, 0, "{name}: {checked:#}");
+        let (code, built) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{name}: {built:#}");
+        let output = fixture.read("dist/main.js");
+        assert_eq!(output.matches("__nmath.set(").count(), 1, "{output}");
+        // The pinned tsrs emitter places modern decorator expressions in a
+        // static initializer. Node 24 cannot parse await there; exercise the
+        // emitted legacy form until that compiler limitation is resolved.
+        if !legacy {
+            continue;
+        }
+        let runtime = Command::new("node")
+            .arg("--input-type=module")
+            .arg("-e")
+            .arg(
+                "import(process.argv[1]).then(async m => { const instance = m.run ? await m.run() \
+                 : new m.C(); console.log(JSON.stringify([m.received, m.a.values[0], \
+                 instance.key])); })",
+            )
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .expect("Node.js runs decorator fixture");
+        assert!(
+            runtime.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            "[[1,1],1,2]"
+        );
+    }
+}
+
+#[test]
+fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
+    for (name, source) in [
+        (
+            "decorator-sync",
+            "function f() { class C { @dec(a[0] = 1) key = 2; } }",
+        ),
+        (
+            "field-initializer",
+            "async function f() { class C { @dec(1) key = a[0] = 1; } }",
+        ),
+        (
+            "static-block",
+            "async function f() { class C { static { a[0] = 1; } } }",
+        ),
+        (
+            "parameter-initializer",
+            "async function f(x = (a[0] = 1)) {}",
+        ),
+    ] {
+        let source = format!(
+            "import {{ NMathArray }} from '@delinoio/nmath';\ndeclare const a: \
+             NMathArray<'float64', [1]>;\ndeclare function dec(value: number): (field: undefined, \
+             context: ClassFieldDecoratorContext) => void;\n{source}\n"
+        );
+        let fixture = field_decorator_fixture(name, false, &source);
+        let (code, result) = run_json("check", &fixture);
+        assert_eq!(code, 1, "{name}: {result:#}");
+        let assignment = source.find("a[0] = 1").unwrap();
+        let line = source[..assignment].bytes().filter(|b| *b == b'\n').count() + 1;
+        let column = assignment - source[..assignment].rfind('\n').map_or(0, |i| i + 1) + 1;
+        assert!(
+            result["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|diagnostic| {
+                    diagnostic["code"] == "NMATH_NTS_ASSIGN_REQUIRES_ASYNC"
+                        && diagnostic["line"] == line
+                        && diagnostic["column"] == column
+                }),
+            "{name}: {result:#}"
+        );
+    }
+}
+
 #[test]
 fn build_rewrites_mixed_module_imports_for_every_user_setting() {
     for setting in [None, Some(false), Some(true)] {
