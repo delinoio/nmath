@@ -472,20 +472,30 @@ fn field_decorator_assignments_check_build_and_execute_in_both_modes() {
 
 #[test]
 fn modern_field_decorator_preserves_class_evaluation_phases() {
-    for (name, members, expected) in [
+    for (name, members, expected, class_decorator) in [
         (
             "modern-phase-computed-first",
             "[key()]() {} @dec(0) first = 0; @dec(a[0] = 1) field = 2; @dec(2) last = 0;",
             "[\"heritage\",\"computed\",\"factory-0-0\",\"factory-1-1\",\"factory-2-1\",\"apply\",\
              \"apply\",\"apply\",\"static\"]",
+            false,
         ),
         (
             "modern-phase-decorator-first",
             "@dec(0) first = 0; @dec(a[0] = 1) field = 2; [key()]() {} @dec(2) last = 0;",
             "[\"heritage\",\"factory-0-0\",\"factory-1-1\",\"computed\",\"factory-2-1\",\"apply\",\
              \"apply\",\"apply\",\"static\"]",
+            false,
+        ),
+        (
+            "modern-phase-class-decorator",
+            "[key()]() {} @dec(0) first = 0; @dec(a[0] = 1) field = 2; @dec(2) last = 0;",
+            "[\"heritage\",\"computed\",\"factory-0-0\",\"factory-1-1\",\"factory-2-1\",\"apply\",\
+             \"apply\",\"apply\",\"class-apply\",\"static\"]",
+            true,
         ),
     ] {
+        let class_prefix = if class_decorator { "@classDec " } else { "" };
         let source = format!(
             "import {{ NMathArray }} from '@delinoio/nmath';\nimport {{ setCalls }} from \
              '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
@@ -494,10 +504,11 @@ fn modern_field_decorator_preserves_class_evaluation_phases() {
              events.push('computed'); return 'computed'; }}\nfunction dec(value: number): (field: \
              undefined, context: ClassFieldDecoratorContext) => void {{ \
              events.push(`factory-${{value}}-${{a.values[0]}}`); return () => {{ \
-             events.push('apply'); }}; }}\nexport async function run() {{ class C extends base() \
-             {{ {members} static state = events.push('static'); }} const instance = new C(); \
-             return [events, instance.field, a.values[0], setCalls, \
-             Object.getOwnPropertySymbols(C.prototype).length]; }}\n"
+             events.push('apply'); }}; }}\nfunction classDec(value: Function, context: \
+             ClassDecoratorContext) {{ events.push('class-apply'); }}\nexport async function \
+             run() {{ {class_prefix}class C extends base() {{ {members} static state = \
+             events.push('static'); }} const instance = new C(); return [events, instance.field, \
+             a.values[0], setCalls, Object.getOwnPropertySymbols(C.prototype).length]; }}\n"
         );
         let fixture = field_decorator_fixture(name, false, &source);
         let (code, checked) = run_json("check", &fixture);

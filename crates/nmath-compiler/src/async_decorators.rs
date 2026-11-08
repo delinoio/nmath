@@ -156,13 +156,20 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         let Some(at) = find_await_set(text, cursor) else {
             return Ok(None);
         };
-        let Some(class_at) = text[..at].rfind("return class ") else {
+        let return_class = text[..at].rfind("return class ");
+        let assigned_class = text[..at].rfind("= class ");
+        let Some(class_token) = return_class.into_iter().chain(assigned_class).max() else {
             cursor = at + "await __nmath".len();
             continue;
         };
-        let class_open = text[class_at..]
+        let class_at = line_start(text, class_token)
+            + text[line_start(text, class_token)..class_token]
+                .bytes()
+                .take_while(|byte| *byte == b' ' || *byte == b'\t')
+                .count();
+        let class_open = text[class_token..]
             .find('{')
-            .map(|offset| class_at + offset)
+            .map(|offset| class_token + offset)
             .ok_or("Generated class body is missing")?;
         let class_close =
             matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
@@ -207,10 +214,11 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         end: wrapper_at + "(() => {".len(),
         parts: vec![Part::New("await (async () => {".into())],
     }];
-    let static_at = text[class_open..class_close]
+    let mut static_cursor = class_open;
+    while let Some(static_at) = text[static_cursor..class_close]
         .find("static {")
-        .map(|offset| class_open + offset);
-    if let Some(static_at) = static_at {
+        .map(|offset| static_cursor + offset)
+    {
         let static_open = static_at + "static ".len();
         let static_close =
             matching_brace(text, static_open).ok_or("Generated decorator block is unbalanced")?;
@@ -294,7 +302,9 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                     "                delete this.prototype[{sentinel}];\n"
                 ))],
             });
+            break;
         }
+        static_cursor = static_close + 1;
     }
     apply(text, edits).map(Some)
 }
