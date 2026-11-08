@@ -302,6 +302,17 @@ fn real_dtype(dtype: DType) -> DType {
     }
 }
 
+fn determinant_from_phase_log(phase: C, log_abs: f64) -> C {
+    fn component(phase: f64, log_abs: f64) -> f64 {
+        if phase == 0.0 {
+            return phase;
+        }
+        (log_abs + phase.abs().ln()).exp().copysign(phase)
+    }
+
+    C::new(component(phase.re, log_abs), component(phase.im, log_abs))
+}
+
 /// Result shape and dtype of a factorization of `a` (..., m, n).
 fn infer_decomposition(op: LinalgOp, a: &[usize], ad: DType) -> Result<(Vec<usize>, DType)> {
     if a.len() < 2 {
@@ -665,9 +676,16 @@ pub fn execute(
             }
             let diagonal = lu[k * n + k];
             if op == LinalgOp::Det {
-                let magnitude = diagonal.norm();
-                determinant_phase *= diagonal / magnitude;
-                determinant_log_abs += magnitude.ln();
+                // Normalize by the largest component so a finite complex pivot
+                // does not overflow while its phase and log magnitude are
+                // extracted. Reconstruct each result component separately below
+                // because the scalar determinant magnitude may be
+                // unrepresentable.
+                let scale = diagonal.re.abs().max(diagonal.im.abs());
+                let normalized = C::new(diagonal.re / scale, diagonal.im / scale);
+                let magnitude = normalized.norm();
+                determinant_phase *= normalized / magnitude;
+                determinant_log_abs += scale.ln() + magnitude.ln();
             }
             for i in k + 1..n {
                 token.check()?;
@@ -687,7 +705,7 @@ pub fn execute(
             let determinant = if singular_determinant {
                 C::new(0., 0.)
             } else {
-                determinant_phase * determinant_log_abs.exp()
+                determinant_from_phase_log(determinant_phase, determinant_log_abs)
             };
             write(&mut output, batch_id, determinant);
             continue;

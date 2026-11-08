@@ -100,6 +100,36 @@ fn signs_phases_singular_and_empty_cases() {
 }
 
 #[test]
+fn finite_complex_components_survive_overflowing_magnitude() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+
+    let single = dense(vec![1, 1], Buffer::C128(vec![[1.3e308, 1.3e308]]));
+    let result = determinant(&single, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!(values[0][0].is_finite() && values[0][1].is_finite());
+    assert!((values[0][0] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    assert!((values[0][1] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    drop(result);
+
+    let diagonal = dense(
+        vec![2, 2],
+        Buffer::C128(vec![[1e200, 1e200], [0.0, 0.0], [0.0, 0.0], [1.3e108, 0.0]]),
+    );
+    let result = determinant(&diagonal, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!(values[0][0].is_finite() && values[0][1].is_finite());
+    assert!((values[0][0] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    assert!((values[0][1] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
 fn determinant_retains_batch_dtype_cancellation_and_budget() {
     let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
     let token = CancellationToken::new();

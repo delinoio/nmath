@@ -71,3 +71,32 @@ test("determinants retain compensated magnitudes and phases", async () => {
     await c.close();
   }
 });
+
+test("determinants retain finite complex components when magnitude overflows", async () => {
+  const c = context();
+  try {
+    const single = c.array([[new Complex(1.3e308, 1.3e308)]], {
+      dtype: "complex128",
+    });
+    const singleResult = await linalg.det(single).compute();
+    assert.ok(Number.isFinite(singleResult.real));
+    assert.ok(Number.isFinite(singleResult.imag));
+    assert.ok(Math.abs(singleResult.real - 1.3e308) / 1.3e308 < 1e-12);
+    assert.ok(Math.abs(singleResult.imag - 1.3e308) / 1.3e308 < 1e-12);
+
+    const diagonal = c.array(
+      [
+        [new Complex(1e200, 1e200), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(1.3e108, 0)],
+      ],
+      { dtype: "complex128" },
+    );
+    const diagonalResult = await linalg.det(diagonal).compute();
+    assert.ok(Number.isFinite(diagonalResult.real));
+    assert.ok(Number.isFinite(diagonalResult.imag));
+    assert.ok(Math.abs(diagonalResult.real - 1.3e308) / 1.3e308 < 1e-12);
+    assert.ok(Math.abs(diagonalResult.imag - 1.3e308) / 1.3e308 < 1e-12);
+  } finally {
+    await c.close();
+  }
+});
