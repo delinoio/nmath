@@ -44,18 +44,6 @@ fn line_end(text: &str, at: usize) -> usize {
         .map_or(text.len(), |index| at + index + 1)
 }
 
-fn is_identifier_char(ch: char) -> bool {
-    unicode_ident::is_xid_continue(ch) || ch == '$'
-}
-
-fn identifier_start(text: &str, end: usize) -> usize {
-    text[..end]
-        .char_indices()
-        .rev()
-        .find_map(|(index, ch)| (!is_identifier_char(ch)).then_some(index + ch.len_utf8()))
-        .unwrap_or(0)
-}
-
 fn skip_quoted(text: &str, start: usize, delimiter: u8) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut index = start + 1;
@@ -543,70 +531,50 @@ fn enclosing_downlevel_decorator_block(
     None
 }
 
+#[derive(Clone, Copy)]
 struct DecoratorAssignment {
     name_start: usize,
     name_end: usize,
     array_open: usize,
+    array_close: usize,
 }
 
-fn next_decorator_assignment(text: &str, from: usize, until: usize) -> Option<DecoratorAssignment> {
-    let mut search = from;
-    while let Some(offset) = text[search..until].find("_decorators") {
-        let marker = search + offset;
-        let mut name_end = marker + "_decorators".len();
-        search = name_end;
-        // The pinned emitter appends a numeric suffix when an outer binding
-        // already uses its generated name. Keep that suffix in every scan.
-        if text[name_end..until].starts_with('_') {
-            let digits = text[name_end + 1..until]
-                .bytes()
-                .take_while(u8::is_ascii_digit)
-                .count();
-            if digits == 0 {
-                continue;
-            }
-            name_end += 1 + digits;
-        }
-        if text[name_end..until].starts_with(" = [") {
-            return Some(DecoratorAssignment {
-                name_start: identifier_start(text, marker),
-                name_end,
-                array_open: name_end + 3,
-            });
-        }
-    }
-    None
-}
-
-fn decorator_assignment_before(
-    text: &str,
+fn next_decorator_assignment(
+    assignments: &[DecoratorAssignment],
     from: usize,
     until: usize,
 ) -> Option<DecoratorAssignment> {
-    let mut search = from;
-    let mut last = None;
-    while let Some(assignment) = next_decorator_assignment(text, search, until) {
-        search = assignment.array_open + 1;
-        last = Some(assignment);
-    }
-    last
+    let start = assignments.partition_point(|assignment| assignment.name_start < from);
+    assignments
+        .get(start)
+        .copied()
+        .filter(|assignment| assignment.array_open < until)
+}
+
+fn decorator_assignment_before(
+    assignments: &[DecoratorAssignment],
+    from: usize,
+    until: usize,
+) -> Option<DecoratorAssignment> {
+    let end = assignments.partition_point(|assignment| assignment.array_open < until);
+    assignments[..end]
+        .iter()
+        .rev()
+        .copied()
+        .find(|assignment| assignment.name_start >= from && until < assignment.array_close)
 }
 
 fn await_is_in_decorator_assignment(
-    text: &str,
+    assignments: &[DecoratorAssignment],
     await_at: usize,
     function_body: Option<usize>,
 ) -> bool {
-    let Some(assignment) = decorator_assignment_before(text, 0, await_at) else {
+    let Some(assignment) = decorator_assignment_before(assignments, 0, await_at) else {
         return false;
     };
-    let open = assignment.array_open;
-    if !matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close) {
-        return false;
-    }
     // A function body that starts inside the decorator array defers the call
     // until invocation. Literal contents cannot introduce a parser body node.
-    function_body.is_none_or(|start| start < open)
+    function_body.is_none_or(|start| start < assignment.array_open)
 }
 
 fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, String> {
@@ -647,12 +615,12 @@ fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, 
     })
 }
 
-fn awaited_helper_calls(text: &str) -> Vec<usize> {
+fn parsed_decorator_calls(text: &str) -> (Vec<usize>, Vec<DecoratorAssignment>) {
     use tsrs_ast::{Kind, SourceFileParseOptions};
     use tsrs_core::{ScriptKind, arena::Region, tspath};
 
     if !text.contains("await __nmath") {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
     // Parse the pinned emitter's JavaScript before relocating its invalid
     // static-block awaits. The parser still represents those awaits, while
@@ -671,7 +639,43 @@ fn awaited_helper_calls(text: &str) -> Vec<usize> {
     );
     let mut pending = vec![(parsed.as_node(), None::<usize>)];
     let mut positions = Vec::new();
+    let mut assignments = Vec::new();
     while let Some((node, function_body)) = pending.pop() {
+        if node.kind() == Kind::BinaryExpression {
+            let expression = node.as_binary_expression();
+            if expression.operator_token.kind() == Kind::EqualsToken
+                && expression.left.kind() == Kind::Identifier
+                && expression.right().kind() == Kind::ArrayLiteralExpression
+            {
+                let name_start = tsrs_scanner::skip_trivia(
+                    text,
+                    expression.left.pos().expect_source("decorator identifier"),
+                ) as usize;
+                let name_end = expression.left.end().expect_source("decorator identifier") as usize;
+                let name = &text[name_start..name_end];
+                // Match the pinned emitter's generated name, including its
+                // collision suffix, only on an actual array assignment node.
+                let generated = name.rsplit_once("_decorators").is_some_and(|(_, suffix)| {
+                    suffix.is_empty()
+                        || suffix.strip_prefix('_').is_some_and(|digits| {
+                            !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+                        })
+                });
+                if generated {
+                    assignments.push(DecoratorAssignment {
+                        name_start,
+                        name_end,
+                        array_open: tsrs_scanner::skip_trivia(
+                            text,
+                            expression.right().pos().expect_source("decorator array"),
+                        ) as usize,
+                        array_close: expression.right().end().expect_source("decorator array")
+                            as usize
+                            - 1,
+                    });
+                }
+            }
+        }
         if node.kind() == Kind::AwaitExpression {
             let at =
                 tsrs_scanner::skip_trivia(text, node.pos().expect_source("emitted await")) as usize;
@@ -680,10 +684,8 @@ fn awaited_helper_calls(text: &str) -> Vec<usize> {
                     let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
                     suffix = if digits > 0 { &rest[digits..] } else { "" };
                 }
-                if suffix.starts_with(".set(")
-                    && await_is_in_decorator_assignment(text, at, function_body)
-                {
-                    positions.push(at);
+                if suffix.starts_with(".set(") {
+                    positions.push((at, function_body));
                 }
             }
         }
@@ -704,29 +706,39 @@ fn awaited_helper_calls(text: &str) -> Vec<usize> {
             pending.push((child, child_body));
         }
     }
-    positions.sort_unstable();
-    positions
+    assignments.sort_unstable_by_key(|assignment| assignment.name_start);
+    let mut awaits: Vec<_> = positions
+        .into_iter()
+        .filter_map(|(at, body)| {
+            await_is_in_decorator_assignment(&assignments, at, body).then_some(at)
+        })
+        .collect();
+    awaits.sort_unstable();
+    (awaits, assignments)
 }
 
 pub(crate) struct Rewriter {
     awaits: Vec<usize>,
+    assignments: Vec<DecoratorAssignment>,
     cursor: usize,
 }
 
 impl Rewriter {
     pub fn new(text: &str) -> Self {
+        let (awaits, assignments) = if text.contains("__esDecorate(") {
+            parsed_decorator_calls(text)
+        } else {
+            (Vec::new(), Vec::new())
+        };
         Self {
-            awaits: if text.contains("__esDecorate(") {
-                awaited_helper_calls(text)
-            } else {
-                Vec::new()
-            },
+            awaits,
+            assignments,
             cursor: 0,
         }
     }
 
     pub fn rewrite(&mut self, text: &str) -> Result<Option<Rewrite>, String> {
-        let Some(rewrite) = rewrite(text, self.cursor, &self.awaits)? else {
+        let Some(rewrite) = rewrite(text, self.cursor, &self.awaits, &self.assignments)? else {
             return Ok(None);
         };
         // Copy spans preserve the helper calls themselves. Relocate their
@@ -746,12 +758,39 @@ impl Rewriter {
             })
             .collect::<Result<Vec<_>, _>>()?;
         self.awaits.sort_unstable();
+        // Assignment boundaries must follow the same copies as awaits. Keep
+        // parsing once per output, including when nested classes are moved.
+        let relocate = |at: usize| {
+            rewrite.copies.iter().find_map(|span| {
+                (span.old_start <= at && at < span.old_end)
+                    .then(|| span.new_start + at - span.old_start)
+            })
+        };
+        self.assignments = self
+            .assignments
+            .iter()
+            .filter_map(|assignment| {
+                Some(DecoratorAssignment {
+                    name_start: relocate(assignment.name_start)?,
+                    name_end: relocate(assignment.name_end - 1)? + 1,
+                    array_open: relocate(assignment.array_open)?,
+                    array_close: relocate(assignment.array_close)?,
+                })
+            })
+            .collect();
+        self.assignments
+            .sort_unstable_by_key(|assignment| assignment.name_start);
         self.cursor = rewrite.resume_at;
         Ok(Some(rewrite))
     }
 }
 
-fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>, String> {
+fn rewrite(
+    text: &str,
+    from: usize,
+    awaits: &[usize],
+    decorator_assignments: &[DecoratorAssignment],
+) -> Result<Option<Rewrite>, String> {
     if !text.contains("__esDecorate(") {
         return Ok(None);
     }
@@ -802,7 +841,9 @@ fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>,
             if at > class_close && !downlevel {
                 continue;
             }
-            let Some(assignment) = decorator_assignment_before(text, class_open, at) else {
+            let Some(assignment) =
+                decorator_assignment_before(decorator_assignments, class_open, at)
+            else {
                 continue;
             };
             let decorator_var = &text[assignment.name_start..assignment.name_end];
@@ -865,7 +906,8 @@ fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>,
             let mut assignments = Vec::new();
             let mut position = metadata_end;
             while position < static_close {
-                let Some(decorator) = next_decorator_assignment(text, position, static_close)
+                let Some(decorator) =
+                    next_decorator_assignment(decorator_assignments, position, static_close)
                 else {
                     break;
                 };
@@ -1015,7 +1057,7 @@ fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>,
 
 #[cfg(test)]
 mod tests {
-    use super::{awaited_helper_calls, matching_brace};
+    use super::{matching_brace, parsed_decorator_calls};
 
     #[test]
     fn matching_brace_ignores_regex_literals() {
@@ -1039,6 +1081,6 @@ mod tests {
     #[test]
     fn nested_decorator_callback_await_is_not_eager_assignment() {
         let text = "_decorators = [dec(async () => { await __nmath.set(a, 0, 1); })];";
-        assert!(awaited_helper_calls(text).is_empty());
+        assert!(parsed_decorator_calls(text).0.is_empty());
     }
 }
