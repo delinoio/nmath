@@ -155,6 +155,7 @@ impl Expr {
     pub fn binary(op: BinaryOp, lhs: &Expr, rhs: &Expr) -> Result<Expr> {
         let context_id = join_context(lhs.context_id(), rhs.context_id())?;
         let shape = broadcast_shapes(lhs.shape(), rhs.shape())?;
+        crate::layout::checked_size(&shape)?;
         if lhs.dtype().kind() == crate::dtype::DTypeKind::Other
             || rhs.dtype().kind() == crate::dtype::DTypeKind::Other
         {
@@ -1424,6 +1425,18 @@ mod tests {
             Expr::binary(BinaryOp::Add, &b, &c).unwrap_err().code,
             ErrorCode::ShapeBroadcast
         );
+    }
+
+    #[test]
+    fn binary_rejects_unrepresentable_empty_broadcast_at_construction() {
+        let left = Expr::input(&arr(1, vec![65_536, 65_536, 1, 1, 0], Buffer::U8(vec![])));
+        let right = Expr::input(&arr(1, vec![1, 1, 65_536, 65_536, 0], Buffer::U8(vec![])));
+        for op in [BinaryOp::Add, BinaryOp::Eq] {
+            assert_eq!(
+                Expr::binary(op, &left, &right).unwrap_err().code,
+                ErrorCode::ShapeMismatch
+            );
+        }
     }
 
     #[test]

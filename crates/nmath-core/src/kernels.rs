@@ -6,6 +6,7 @@ use crate::{
     buffer::{Buffer, DenseArray, Float16},
     dtype::{DType, DTypeKind},
     error::{Error, ErrorCode, Result},
+    layout::checked_size,
     memory::MemoryBudget,
     shape::{broadcast_shapes, broadcast_strides},
     sync::CancellationToken,
@@ -930,7 +931,12 @@ pub(crate) struct BroadcastPairs {
 }
 
 impl BroadcastPairs {
-    pub(crate) fn new(shape: &[usize], a_strides: Vec<isize>, b_strides: Vec<isize>) -> Self {
+    pub(crate) fn new(
+        shape: &[usize],
+        a_strides: Vec<isize>,
+        b_strides: Vec<isize>,
+        remaining: usize,
+    ) -> Self {
         Self {
             shape: shape.to_vec(),
             a_strides,
@@ -938,7 +944,7 @@ impl BroadcastPairs {
             index: vec![0; shape.len()],
             a: 0,
             b: 0,
-            remaining: shape.iter().product(),
+            remaining,
         }
     }
 }
@@ -1022,6 +1028,7 @@ pub fn binary(
         return crate::ufunc::binary(op, lhs, rhs, compute_dtype, budget, token);
     }
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
+    let size = checked_size(&shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;
     let work_dtype = if op.is_logical() {
         DType::Bool
@@ -1033,13 +1040,14 @@ pub fn binary(
     } else {
         compute_dtype
     };
-    let reservation = reserve_for(budget, result_dtype, shape.iter().product())?;
+    let reservation = reserve_for(budget, result_dtype, size)?;
     let (a, _a_reservation) = cast_operand(&lhs.buffer, work_dtype, budget, token)?;
     let (b, _b_reservation) = cast_operand(&rhs.buffer, work_dtype, budget, token)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
+        size,
     );
     if op.is_logical() {
         let (Buffer::Bool(x), Buffer::Bool(y)) = (a.as_ref(), b.as_ref()) else {
@@ -1684,8 +1692,13 @@ fn variance_loop<T: VarianceSample>(
 ) -> Result<Vec<f64>> {
     let mut mean = vec![[0.0f64; 2]; out_len];
     let mut counts = vec![0usize; out_len];
-    for (i, (slot, _)) in
-        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    for (i, (slot, _)) in BroadcastPairs::new(
+        shape,
+        out_strides.to_vec(),
+        vec![0; shape.len()],
+        values.len(),
+    )
+    .enumerate()
     {
         if i % CHUNK == 0 {
             token.check()?;
@@ -1702,8 +1715,13 @@ fn variance_loop<T: VarianceSample>(
         }
     }
     let mut squares = vec![0.0f64; out_len];
-    for (i, (slot, _)) in
-        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    for (i, (slot, _)) in BroadcastPairs::new(
+        shape,
+        out_strides.to_vec(),
+        vec![0; shape.len()],
+        values.len(),
+    )
+    .enumerate()
     {
         if i % CHUNK == 0 {
             token.check()?;
@@ -1858,12 +1876,13 @@ fn select_loop<T: Copy>(
     x: &[T],
     y: &[T],
     shape: &[usize],
+    size: usize,
     strides: [Vec<isize>; 3],
     token: &CancellationToken,
 ) -> Result<Vec<T>> {
     let [c_strides, x_strides, y_strides] = strides;
-    let picks = BroadcastPairs::new(shape, c_strides, x_strides);
-    let others = BroadcastPairs::new(shape, y_strides, vec![0; shape.len()]);
+    let picks = BroadcastPairs::new(shape, c_strides, x_strides, size);
+    let others = BroadcastPairs::new(shape, y_strides, vec![0; shape.len()], size);
     let mut out = Vec::with_capacity(picks.remaining);
     for (n, ((c, i), (j, _))) in picks.zip(others).enumerate() {
         if n % CHUNK == 0 {
@@ -1886,7 +1905,8 @@ pub fn select(
 ) -> Result<DenseArray> {
     validate_select(condition.dtype(), x.dtype(), y.dtype())?;
     let shape = broadcast_shapes(&broadcast_shapes(&condition.shape, &x.shape)?, &y.shape)?;
-    let reservation = reserve_for(budget, dtype, shape.iter().product())?;
+    let size = checked_size(&shape)?;
+    let reservation = reserve_for(budget, dtype, size)?;
     let (c, _c_reservation) = cast_operand(&condition.buffer, DType::Bool, budget, token)?;
     let (a, _a_reservation) = cast_operand(&x.buffer, dtype, budget, token)?;
     let (b, _b_reservation) = cast_operand(&y.buffer, dtype, budget, token)?;
@@ -1900,7 +1920,7 @@ pub fn select(
     ];
     macro_rules! pick {
         ($x:expr, $y:expr) => {
-            select_loop(c, $x, $y, &shape, strides, token)?.into()
+            select_loop(c, $x, $y, &shape, size, strides, token)?.into()
         };
     }
     let buffer = match (a.as_ref(), b.as_ref()) {
@@ -2220,7 +2240,12 @@ pub fn reduce(
         }
     }
     token.check()?;
-    let slots = BroadcastPairs::new(&input.shape, out_strides, vec![0; input.shape.len()]);
+    let slots = BroadcastPairs::new(
+        &input.shape,
+        out_strides,
+        vec![0; input.shape.len()],
+        input.buffer.len(),
+    );
     let count = if out_len == 0 {
         0
     } else {
@@ -3498,6 +3523,78 @@ mod tests {
     }
 
     #[test]
+    fn binary_rejects_unrepresentable_empty_broadcast_before_reserving() {
+        let budget = MemoryBudget::new(Device::Cpu, 0);
+        let token = CancellationToken::new();
+        let left_shape = vec![65_536, 65_536, 1, 1, 0];
+        let right_shape = vec![1, 1, 65_536, 65_536, 0];
+        let uint8 =
+            |shape| DenseArray::new(shape, Buffer::U8(vec![]), budget.reserve(0).unwrap()).unwrap();
+        let left = uint8(left_shape.clone());
+        let right = uint8(right_shape.clone());
+        for op in [BinaryOp::Add, BinaryOp::Eq] {
+            assert_eq!(
+                binary(op, &left, &right, DType::UInt8, &budget, &token)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ShapeMismatch
+            );
+        }
+        let string = |shape| {
+            DenseArray::new(
+                shape,
+                Buffer::Unicode {
+                    width: 1,
+                    values: vec![],
+                },
+                budget.reserve(0).unwrap(),
+            )
+            .unwrap()
+        };
+        assert_eq!(
+            binary(
+                BinaryOp::Add,
+                &string(left_shape),
+                &string(right_shape),
+                DType::Str(2),
+                &budget,
+                &token,
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::ShapeMismatch
+        );
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn binary_preserves_representable_empty_broadcasts() {
+        let (budget, token) = env();
+        for (left_shape, right_shape, right_buffer, output_shape) in [
+            (
+                vec![0, 3],
+                vec![1, 3],
+                Buffer::U8(vec![1, 2, 3]),
+                vec![0, 3],
+            ),
+            (
+                vec![65_536, 1, 0],
+                vec![1, 65_536, 0],
+                Buffer::U8(vec![]),
+                vec![65_536, 65_536, 0],
+            ),
+        ] {
+            let left = dense(left_shape, Buffer::U8(vec![]));
+            let right = dense(right_shape, right_buffer);
+            let result =
+                binary(BinaryOp::Add, &left, &right, DType::UInt8, &budget, &token).unwrap();
+            assert_eq!(result.shape, output_shape);
+            assert_eq!(result.buffer, Buffer::U8(vec![]));
+        }
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
     fn binary_charges_operand_casts() {
         // The int32 operand is cast to float64 (16 bytes) on top of the
         // 16-byte result; 24 bytes are not enough.
@@ -3571,12 +3668,13 @@ fn special_binary(
     token.check()?;
     let dtype = special_binary_dtype(op, lhs.dtype(), rhs.dtype())?;
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
-    let size = shape.iter().product();
+    let size = checked_size(&shape)?;
     let reservation = reserve_for(budget, dtype, size)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
+        size,
     );
     if let DType::Str(width) = dtype {
         let (

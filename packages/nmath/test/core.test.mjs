@@ -122,6 +122,83 @@ test("dtype promotion and shape errors are reported at construction", () => {
   throwsWith(() => i32.get(5), "NMATH_INDEX_OUT_OF_BOUNDS");
 });
 
+test("overflowing empty broadcasts reject before job admission and preserve the context", async () => {
+  const ctx = context({ cpuMemoryBudget: 0 });
+  const left = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [65_536, 65_536, 1, 1, 0],
+  });
+  const right = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [1, 1, 65_536, 65_536, 0],
+  });
+  const submitted = ctx.metrics().totalSubmitted;
+  throwsWith(() => left.add(right), "NMATH_SHAPE_MISMATCH");
+  throwsWith(() => left.add(right).sum(), "NMATH_SHAPE_MISMATCH");
+  assert.equal(ctx.metrics().totalSubmitted, submitted);
+  assert.equal(ctx.metrics().cpuMemory.used, 0n);
+
+  const largeLeft = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [65_536, 1, 0],
+  });
+  const largeRight = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [1, 65_536, 0],
+  });
+  const large = await largeLeft.add(largeRight).compute();
+  assert.deepEqual(large.shape, [65_536, 65_536, 0]);
+  assert.equal(large.dtype, "uint8");
+  assert.equal(large.toTypedArray().length, 0);
+  await ctx.close();
+
+  const smallContext = context();
+  const smallLeft = smallContext.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [0, 3],
+  });
+  const smallRight = smallContext.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const small = await smallLeft.add(smallRight).compute();
+  assert.deepEqual(small.shape, [0, 3]);
+  assert.equal(small.dtype, "uint8");
+  assert.equal(small.toTypedArray().length, 0);
+  await smallContext.close();
+
+  const budgeted = context({ cpuMemoryBudget: 5 });
+  const row = budgeted.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const column = budgeted.array(new Uint8Array([10, 20]), {
+    dtype: "uint8",
+    shape: [2, 1],
+  });
+  await rejectsWith(row.add(column).compute(), "NMATH_MEMORY_BUDGET_EXCEEDED");
+  assert.equal(budgeted.metrics().cpuMemory.used, 5n);
+  await budgeted.close();
+
+  const ordinary = context();
+  const ordinaryRow = ordinary.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const ordinaryColumn = ordinary.array(new Uint8Array([10, 20]), {
+    dtype: "uint8",
+    shape: [2, 1],
+  });
+  const result = await ordinaryRow.add(ordinaryColumn).compute();
+  assert.deepEqual(result.shape, [2, 3]);
+  assert.equal(result.dtype, "uint8");
+  assert.deepEqual(result.toArray(), [
+    [11, 12, 13],
+    [21, 22, 23],
+  ]);
+  await ordinary.close();
+});
+
 test("indexing reads are lazy; basic reads return shared views", async () => {
   const ctx = context();
   const a = ctx.array(
