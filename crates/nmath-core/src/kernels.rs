@@ -2340,6 +2340,30 @@ pub fn reduce_with_policy(
     // Borrow matching input storage. Widening for sum/mean is reserved before
     // conversion; no input-sized offset or i128 scratch vectors are needed.
     let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
+    fn contains_nan<T: Num>(values: &[T], token: &CancellationToken) -> Result<bool> {
+        for chunk in values.chunks(CHUNK) {
+            token.check()?;
+            if chunk.iter().any(|&value| value.nan()) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    // Keep the existing accumulation and budget path for clean floating data.
+    let policy = if policy == ReductionPolicy::SkipNan {
+        let has_nan = match values.as_ref() {
+            Buffer::F32(values) => contains_nan(values, token)?,
+            Buffer::F64(values) => contains_nan(values, token)?,
+            _ => unreachable!("the pandas policy admits only float32 and float64"),
+        };
+        if has_nan || (empty_reduction && matches!(op, ReduceOp::Min | ReduceOp::Max)) {
+            ReductionPolicy::SkipNan
+        } else {
+            ReductionPolicy::PropagateNan
+        }
+    } else {
+        policy
+    };
     let _seen_reservation = budget.reserve(if matches!(op, ReduceOp::Min | ReduceOp::Max) {
         out_len as u64
     } else {
@@ -2367,16 +2391,7 @@ pub fn reduce_with_policy(
         } else {
             vec![T::default(); out_len]
         };
-        let mut has_nan = false;
         if policy == ReductionPolicy::SkipNan {
-            for (i, value) in values.iter().enumerate() {
-                if i % CHUNK == 0 {
-                    token.check()?;
-                }
-                has_nan |= value.nan();
-            }
-        }
-        if policy == ReductionPolicy::SkipNan && (count == 0 || has_nan) {
             let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
                 vec![false; out_len]
             } else {

@@ -314,6 +314,22 @@ fn pandas_float_reductions_skip_nans_without_changing_core_policy() {
         ErrorCode::MemoryBudgetExceeded
     );
     assert_eq!(tiny.usage().used, 0);
+    let clean = DenseArray::new(vec![2], Buffer::F64(vec![1.0, 3.0]), Reservation::none()).unwrap();
+    let exact_budget = MemoryBudget::new(Device::Cpu, 41);
+    assert_eq!(
+        kernels::reduce_with_policy(
+            ReduceOp::Mean,
+            &clean,
+            None,
+            ReductionPolicy::SkipNan,
+            &exact_budget,
+            &token,
+        )
+        .unwrap()
+        .buffer
+        .get(0),
+        Scalar::Float(2.0)
+    );
     let cancelled = CancellationToken::new();
     cancelled.cancel();
     assert_eq!(
