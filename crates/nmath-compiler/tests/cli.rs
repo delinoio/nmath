@@ -790,6 +790,55 @@ fn generator_lowered_decorator_awaits_fail_without_publishing_output() {
 }
 
 #[test]
+fn awaited_fields_preserve_preceding_member_decorator_order() {
+    for awaited_member in ["field = 2", "accessor field = 2"] {
+        let source = format!(
+            r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+const events: unknown[] = [];
+function dec(value: string | number): any {{
+    events.push([value, a.values[0]]);
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{
+        @dec('method') method() {{}}
+        @dec('getter') get read() {{ return 4; }}
+        @dec('setter') set write(_value: number) {{}}
+        @dec(a[0] = 1) {awaited_member};
+        @dec('after') after() {{}}
+    }}
+    return [events, new C().field, setCalls];
+}}
+"#
+        );
+        let fixture = field_decorator_fixture("decorator-member-order", false, &source);
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{awaited_member}: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            r#"[[["method",0],["getter",0],["setter",0],[1,1],["after",1]],2,1]"#
+        );
+    }
+}
+
+#[test]
 fn modern_decorators_ignore_user_owned_array_assignments() {
     for member in ["field = 2", "accessor field = 2"] {
         for name in ["_saved_decorators", "_saved_decorators_1"] {

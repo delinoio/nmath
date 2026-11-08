@@ -531,6 +531,15 @@ fn enclosing_downlevel_decorator_block(
     None
 }
 
+#[derive(Clone, Copy)]
+enum DecoratorKind {
+    Field,
+    Accessor,
+    Method,
+    Getter,
+    Setter,
+}
+
 enum SuspensionKind {
     Await,
     Yield,
@@ -669,7 +678,7 @@ fn parsed_decorator_calls(
     let mut assignments = Vec::new();
     let mut classes = Vec::new();
     let mut returns = Vec::new();
-    let mut decorated_bindings = std::collections::HashSet::new();
+    let mut decorated_bindings = std::collections::HashMap::new();
     while let Some((node, function_body)) = pending.pop() {
         if node.kind() == Kind::ReturnStatement {
             if let (Some(body_open), Some(expression)) =
@@ -710,23 +719,33 @@ fn parsed_decorator_calls(
                 && arguments[2].kind() == Kind::Identifier
                 && arguments[3].kind() == Kind::ObjectLiteralExpression
             {
-                let field_or_accessor = arguments[3]
+                let kind = arguments[3]
                     .as_object_literal_expression()
                     .properties
                     .nodes()
                     .iter()
-                    .any(|property| {
+                    .find_map(|property| {
                         if property.kind() != Kind::PropertyAssignment {
-                            return false;
+                            return None;
                         }
                         let property = property.as_property_assignment();
-                        property.name().kind() == Kind::Identifier
-                            && property.name().text() == "kind"
-                            && property.initializer().kind() == Kind::StringLiteral
-                            && matches!(property.initializer().text(), "field" | "accessor")
+                        if property.name().kind() != Kind::Identifier
+                            || property.name().text() != "kind"
+                            || property.initializer().kind() != Kind::StringLiteral
+                        {
+                            return None;
+                        }
+                        match property.initializer().text() {
+                            "field" => Some(DecoratorKind::Field),
+                            "accessor" => Some(DecoratorKind::Accessor),
+                            "method" => Some(DecoratorKind::Method),
+                            "getter" => Some(DecoratorKind::Getter),
+                            "setter" => Some(DecoratorKind::Setter),
+                            _ => None,
+                        }
                     });
-                if field_or_accessor {
-                    decorated_bindings.insert((function_body, arguments[2].text()));
+                if let Some(kind) = kind {
+                    decorated_bindings.insert((function_body, arguments[2].text()), kind);
                 }
             }
         }
@@ -803,23 +822,28 @@ fn parsed_decorator_calls(
             pending.push((child, child_body));
         }
     }
-    // A matching suffix also occurs in user-owned arrays. Keep only bindings
-    // consumed by a real field/accessor decorator call in the same function
-    // body. This exposes the enclosing generated array and excludes deferred
-    // user callback assignments before classifying awaits.
+    // Only field/accessor arrays trigger repair. Retain all generated member
+    // arrays for the ordered prefix moved with a triggering assignment, so
+    // preceding method/getter/setter factories keep their original phase.
+    // User arrays with matching suffixes are excluded by actual binding uses.
+    let mut trigger_assignments = Vec::new();
     let mut assignments: Vec<_> = assignments
         .into_iter()
         .filter_map(|(assignment, body)| {
-            decorated_bindings
-                .contains(&(body, &text[assignment.name_start..assignment.name_end]))
-                .then_some(assignment)
+            let kind = decorated_bindings
+                .get(&(body, &text[assignment.name_start..assignment.name_end]))?;
+            if matches!(kind, DecoratorKind::Field | DecoratorKind::Accessor) {
+                trigger_assignments.push(assignment);
+            }
+            Some(assignment)
         })
         .collect();
     assignments.sort_unstable_by_key(|assignment| assignment.name_start);
+    trigger_assignments.sort_unstable_by_key(|assignment| assignment.name_start);
     let mut awaits = Vec::new();
     let mut unsupported_generator = false;
     for (at, body, kind) in positions {
-        if await_is_in_decorator_assignment(&assignments, at, body) {
+        if await_is_in_decorator_assignment(&trigger_assignments, at, body) {
             match kind {
                 SuspensionKind::Await => awaits.push(at),
                 SuspensionKind::Yield => unsupported_generator = true,
