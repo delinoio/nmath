@@ -182,7 +182,7 @@ fn statement_end(text: &str, start: usize, limit: usize) -> Option<usize> {
     None
 }
 
-fn matching_brace(text: &str, open: usize) -> Option<usize> {
+fn matching_delimiter(text: &str, open: usize, opening: u8, closing: u8) -> Option<usize> {
     let mut depth = 0usize;
     let mut quote = None;
     let mut escaped = false;
@@ -275,10 +275,10 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
             }
             can_start_regex = false;
             continue;
-        } else if byte == b'{' {
+        } else if byte == opening {
             depth += 1;
             can_start_regex = true;
-        } else if byte == b'}' {
+        } else if byte == closing {
             depth -= 1;
             if depth == 0 {
                 return Some(index);
@@ -311,6 +311,27 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
         index += 1;
     }
     None
+}
+
+fn matching_brace(text: &str, open: usize) -> Option<usize> {
+    matching_delimiter(text, open, b'{', b'}')
+}
+
+fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
+    let mut search = 0;
+    let mut marker = None;
+    while let Some(offset) = text[search..await_at].find("_decorators = [") {
+        marker = Some(search + offset);
+        search += offset + "_decorators = [".len();
+    }
+    let Some(marker) = marker else {
+        return false;
+    };
+    let Some(offset) = text[marker..await_at].find('[') else {
+        return false;
+    };
+    let open = marker + offset;
+    matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close)
 }
 
 fn apply(text: &str, mut edits: Vec<Edit>) -> Result<Rewrite, String> {
@@ -414,6 +435,10 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         }
+        if !await_is_in_decorator_assignment(text, at) {
+            cursor = at + "await __nmath".len();
+            continue;
+        }
         let sync = text[..class_at].rfind("(() => {");
         let asynchronous = text[..class_at].rfind("(async () => {");
         if asynchronous.is_some_and(|async_at| sync.is_none_or(|sync_at| async_at > sync_at)) {
@@ -432,7 +457,6 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         return Err("Generated class is outside its wrapper".into());
     }
     let mut edits = Vec::new();
-    let mut found_decorator_block = false;
     let mut static_cursor = class_open;
     while let Some(static_at) = text[static_cursor..class_close]
         .find("static {")
@@ -488,7 +512,6 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             let Some(last) = assignments.iter().rposition(|assignment| assignment.4) else {
                 return Ok(None);
             };
-            found_decorator_block = true;
             let sentinel = (0..)
                 .map(|index| format!("__nmath_decorator_sentinel_{index}"))
                 .find(|candidate| !text.contains(candidate))
@@ -537,13 +560,51 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         }
         static_cursor = static_close + 1;
     }
-    if !found_decorator_block {
-        return Ok(None);
-    }
+    let return_at = text[wrapper_open..class_open]
+        .rfind("return class ")
+        .map(|offset| wrapper_open + offset)
+        .or_else(|| {
+            text[class_close..wrapper_close]
+                .find("return ")
+                .map(|offset| class_close + offset)
+        })
+        .ok_or("Generated class wrapper return is missing")?;
+    let expression_start = return_at + "return".len();
+    let expression_start = expression_start
+        + text[expression_start..]
+            .len()
+            .saturating_sub(text[expression_start..].trim_start().len());
+    let return_end = statement_end(text, return_at, wrapper_close)
+        .ok_or("Generated class wrapper return is unbalanced")?;
+    let expression_end = return_at
+        + text[return_at..return_end]
+            .rfind(';')
+            .ok_or("Generated class wrapper return terminator is missing")?;
     edits.push(Edit {
         start: wrapper_at,
         end: wrapper_at + "(() => {".len(),
-        parts: vec![Part::New("await (async () => {".into())],
+        parts: vec![Part::New("(await (async () => {".into())],
+    });
+    edits.push(Edit {
+        start: expression_start,
+        end: expression_start,
+        parts: vec![Part::New("{ value: ".into())],
+    });
+    edits.push(Edit {
+        start: expression_end,
+        end: expression_end,
+        parts: vec![Part::New(" }".into())],
+    });
+    let invocation = text
+        .get(wrapper_close..wrapper_close + 4)
+        .ok_or("Generated class wrapper invocation is missing")?;
+    if invocation != "})()" {
+        return Err("Generated class wrapper invocation is malformed".into());
+    }
+    edits.push(Edit {
+        start: wrapper_close + 4,
+        end: wrapper_close + 4,
+        parts: vec![Part::New(").value".into())],
     });
     apply(text, edits).map(Some)
 }

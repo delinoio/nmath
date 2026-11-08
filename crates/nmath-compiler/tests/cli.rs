@@ -629,6 +629,36 @@ fn multiline_decorator_assignments_are_relocated_as_complete_expressions() {
 }
 
 #[test]
+fn thenable_decorated_class_constructors_are_not_assimilated() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec(a[0] = 1) field = 2; static then(resolve: (value: \
+                  number) => void) { resolve(123); } } const instance = new C(); return [typeof \
+                  C, instance.field, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-thenable", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the thenable constructor fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[\"function\",2,1,1]"
+    );
+}
+
+#[test]
 fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
     for (name, source) in [
         (
