@@ -1,8 +1,9 @@
 use std::{sync::mpsc, time::Duration};
 
 use nmath_core::{
-    BinaryOp, Buffer, CancellationToken, Context, ContextOptions, Device, ErrorCode,
-    ExecutionStatus, Expr, Result, Scalar, Selector, Value, context::JobOutput, io::WriteMode,
+    BinaryOp, Buffer, CancellationToken, Context, ContextOptions, DType, Device, ErrorCode,
+    ExecutionStatus, Expr, NdArray, Result, Scalar, Selector, Value, context::JobOutput,
+    io::WriteMode, layout::CopyPolicy,
 };
 
 fn ctx(jobs: usize, queue: usize) -> Context {
@@ -33,6 +34,17 @@ fn dense_values(out: JobOutput) -> Buffer {
 fn wait(rx: &Outcome) -> Result<JobOutput> {
     rx.recv_timeout(Duration::from_secs(10))
         .expect("job did not finish")
+}
+
+fn compute_view(context: &Context, expr: &Expr) -> NdArray {
+    let (done, rx) = channel();
+    context
+        .compute(expr, Device::Cpu, CancellationToken::new(), done)
+        .unwrap();
+    let JobOutput::Value(Value::View(view)) = wait(&rx).unwrap() else {
+        panic!("expected a layout view")
+    };
+    view
 }
 
 /// A job that occupies a slot until the test drops `_turn`: an `assign` on a
@@ -380,6 +392,140 @@ fn cross_context_values_need_explicit_copy() {
     assert_eq!(copy.context_id(), b_ctx.id());
     assert!(!copy.shares_storage(&a));
     assert_eq!(b_ctx.metrics().cpu_memory.used, 8);
+}
+
+#[test]
+fn scalar_layout_results_retain_the_executing_context() {
+    let context = ctx(1, 2);
+    let other = ctx(1, 2);
+    for policy in [CopyPolicy::IfNeeded, CopyPolicy::Always, CopyPolicy::Never] {
+        let expr = Expr::reshape(&Expr::scalar(Scalar::Int(1)), &[1], policy).unwrap();
+        let view = compute_view(&context, &expr);
+        assert_eq!(view.context_id(), context.id());
+        assert_eq!(view.shape(), &[1]);
+        assert_eq!(view.dtype(), DType::Int64);
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![1]));
+
+        let (done, rx) = channel();
+        context
+            .compute(
+                &Expr::input(&view),
+                Device::Cpu,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert_eq!(dense_values(wait(&rx).unwrap()), Buffer::I64(vec![1]));
+
+        let target = context.array(vec![1], Buffer::I64(vec![0])).unwrap();
+        let (done, rx) = channel();
+        context
+            .assign(
+                &target,
+                vec![],
+                &Expr::input(&view),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        wait(&rx).unwrap();
+        assert_eq!(target.to_buffer(), Buffer::I64(vec![1]));
+
+        let (done, rx) = channel();
+        context
+            .assign(
+                &view,
+                vec![],
+                &Expr::scalar(Scalar::Int(4)),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        wait(&rx).unwrap();
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![4]));
+
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .compute(
+                    &Expr::input(&view),
+                    Device::Cpu,
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .assign(
+                    &view,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(8)),
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        let foreign_target = other.array(vec![1], Buffer::I64(vec![0])).unwrap();
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .assign(
+                    &foreign_target,
+                    vec![],
+                    &Expr::input(&view),
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![4]));
+        assert_eq!(foreign_target.to_buffer(), Buffer::I64(vec![0]));
+    }
+
+    let transposed = compute_view(
+        &context,
+        &Expr::transpose(&Expr::scalar(Scalar::Int(2)), None).unwrap(),
+    );
+    assert_eq!(transposed.context_id(), context.id());
+    assert!(transposed.shape().is_empty());
+    assert_eq!(transposed.dtype(), DType::Int64);
+    assert_eq!(transposed.to_buffer(), Buffer::I64(vec![2]));
+
+    let sum = Expr::binary(
+        BinaryOp::Add,
+        &Expr::scalar(Scalar::Int(2)),
+        &Expr::scalar(Scalar::Int(3)),
+    )
+    .unwrap();
+    let arithmetic_layout = Expr::reshape(&sum, &[1], CopyPolicy::IfNeeded).unwrap();
+    let arithmetic = compute_view(&context, &arithmetic_layout);
+    assert_eq!(arithmetic.context_id(), context.id());
+    assert_eq!(arithmetic.shape(), &[1]);
+    assert_eq!(arithmetic.dtype(), DType::Int64);
+    assert_eq!(arithmetic.to_buffer(), Buffer::I64(vec![5]));
+    let (done, rx) = channel();
+    context
+        .compute(
+            &Expr::input(&arithmetic),
+            Device::Cpu,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    assert_eq!(dense_values(wait(&rx).unwrap()), Buffer::I64(vec![5]));
+
+    drop(transposed);
+    drop(arithmetic);
+    assert_eq!(context.metrics().cpu_memory.used, 0);
+    assert_eq!(other.metrics().cpu_memory.used, 0);
 }
 
 #[test]

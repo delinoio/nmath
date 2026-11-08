@@ -628,7 +628,8 @@ fn run_job(
             );
             // Snapshots and returned host arrays use CPU memory even for GPU
             // jobs.
-            let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
+            let mut env =
+                JobEnv::new_for_context(inner.id, device, inner.cpu.clone(), token.clone());
             env.gpu_budget = Some(inner.gpu.clone());
             let mut result = token.check().and_then(|()| work(&mut env));
 
