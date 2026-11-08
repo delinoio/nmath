@@ -338,7 +338,7 @@ impl Context {
         let source = source.clone();
         let id = self.id();
         let work: Work = Box::new(move |env| {
-            let snap = source.snapshot(&env.budget)?;
+            let snap = source.snapshot_cancellable(&env.budget, &env.token)?;
             Ok(JobOutput::Array(NdArray::from_dense(id, snap)))
         });
         self.submit(OperationKind::Copy, "copy", Device::Cpu, token, work, done)
@@ -355,7 +355,7 @@ impl Context {
         self.ensure_owned(Some(array.context_id()))?;
         let array = array.clone();
         let work: Work = Box::new(move |env| {
-            let snap = array.snapshot(&env.budget)?;
+            let snap = array.snapshot_cancellable(&env.budget, &env.token)?;
             let bytes = io::encode_npy(&snap.shape, &snap.buffer)?;
             io::write_atomic(&path, &bytes, mode, &env.token)?;
             Ok(JobOutput::Unit)

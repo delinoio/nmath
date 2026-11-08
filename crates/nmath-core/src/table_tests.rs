@@ -348,8 +348,7 @@ fn batched_rejection_and_cancellation_release_all_charges() {
     let c = context(100_000);
     let a = c.array(vec![4096], Buffer::I64(vec![1; 4096])).unwrap();
     let baseline = c.metrics().cpu_memory.used;
-    // Snapshot and its offsets fit, but the completed result plus a batch do
-    // not.
+    // The snapshot fits, but the completed result plus a batch do not.
     let error = run(&c, source(&a)).err().unwrap();
     assert_eq!(error.code, ErrorCode::MemoryBudgetExceeded);
     c.close();
