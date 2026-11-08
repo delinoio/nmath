@@ -38,6 +38,32 @@ const preserveTarget: Expr<"float32", [number, 4]> = dynamic.reshape([n, 4]);
 declare const axes: number[];
 const dynamicPermutation: Expr<"float32", [number, number, number]> =
   dynamic.transpose(axes);
+const matrix = c.zeros([2, 3], "float32");
+const omitted: Expr<"float32", [3, 2]> = matrix.transpose();
+const explicitUndefined: Expr<"float32", [3, 2]> = transpose(matrix, undefined);
+const identity: Expr<"float32", [2, 3]> = matrix.transpose([0, 1]);
+const matrixReverse: Expr<"float32", [3, 2]> = transpose(matrix, [1, 0]);
+function checkOptionalAxes(axes: readonly [0, 1] | undefined) {
+  const method = matrix.transpose(axes);
+  const wrapper = transpose(matrix, axes);
+  const methodShape: [2, 3] | [3, 2] = method.shape;
+  const wrapperShape: [2, 3] | [3, 2] = wrapper.shape;
+  // @ts-expect-error the omitted-axis branch reverses the dimensions
+  const methodIdentity: [2, 3] = method.shape;
+  // @ts-expect-error the omitted-axis branch reverses the dimensions
+  const wrapperIdentity: [2, 3] = wrapper.shape;
+  void [methodShape, wrapperShape, methodIdentity, wrapperIdentity];
+}
+function checkOptionalReverse(axes: readonly [1, 0] | undefined) {
+  const method: Expr<"float32", [3, 2]> = matrix.transpose(axes);
+  const wrapper: Expr<"float32", [3, 2]> = transpose(matrix, axes);
+  void [method, wrapper];
+}
+function checkThreeDimensionalAxes(axes: readonly [0, 2, 1] | undefined) {
+  const method: Expr<"complex64", [4, 3, 2] | [2, 4, 3]> = a.transpose(axes);
+  const wrapper: Expr<"complex64", [4, 3, 2] | [2, 4, 3]> = transpose(a, axes);
+  void [method, wrapper];
+}
 declare const shape: number[];
 const dynamicTarget: Expr<"complex64", number[]> = a.reshape(shape);
 // @ts-expect-error known total size differs
@@ -80,6 +106,13 @@ void [
   dynamicReshape,
   preserveTarget,
   dynamicPermutation,
+  omitted,
+  explicitUndefined,
+  identity,
+  matrixReverse,
+  checkOptionalAxes,
+  checkOptionalReverse,
+  checkThreeDimensionalAxes,
   dynamicTarget,
 ];
 type Equal<A, B> =
