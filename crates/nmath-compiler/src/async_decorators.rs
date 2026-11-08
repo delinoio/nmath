@@ -769,7 +769,8 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                 let end = statement_end(text, assignment_start, static_close)
                     .ok_or("Generated decorator assignment is unbalanced")?;
                 let assignment = &text[assignment_start..end];
-                if !assignment.contains("__esDecorate(") {
+                if !assignment.contains("__esDecorate(") || find_await_set(assignment, 0).is_some()
+                {
                     let value_end = assignment_start + assignment.rfind(';').unwrap();
                     assignments.push((
                         assignment_start,

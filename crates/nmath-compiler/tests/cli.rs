@@ -622,6 +622,41 @@ fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
 }
 
 #[test]
+fn modern_field_decorator_relocates_outer_assignments_with_nested_classes() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(_value: any): any { return () => {}; }\nexport async \
+                  function run() { class Outer { @dec(class Inner { @dec(a[0] = 1) inner = 2; }) \
+                  outer = 3; } return [new Outer().outer, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-nested-class", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the nested-class fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the nested-class fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[3,1,1]");
+}
+
+#[test]
 fn modern_field_decorators_rewrite_each_class_and_runtime_alias() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst __nmath = 0;\nconst a = new \
