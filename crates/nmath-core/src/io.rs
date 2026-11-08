@@ -613,8 +613,10 @@ mod tests {
         }
 
         let dest = direct.join(max_name(limit, "npy"));
-        let tmp = temp_path(&dest).unwrap();
-        let short_tmp = temp_path(&direct.join("short.npy")).unwrap();
+        // Hold naming inputs fixed: independent calls can cross decimal-width
+        // boundaries. Maximum values also exercise the component-length bound.
+        let tmp = temp_path_at(&dest, u128::MAX, u64::MAX).unwrap();
+        let short_tmp = temp_path_at(&direct.join("short.npy"), u128::MAX, u64::MAX).unwrap();
         assert_eq!(tmp.parent(), dest.parent());
         assert_eq!(
             tmp.file_name().unwrap().len(),
