@@ -1,6 +1,9 @@
 //! Shapes, broadcasting and index selectors.
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::{
+    error::{Error, ErrorCode, Result},
+    sync::CancellationToken,
+};
 
 /// NumPy broadcasting of two shapes.
 pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
@@ -201,14 +204,19 @@ pub fn resolve_slice(
 /// places the advanced dimension first; otherwise it stays in place.
 fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
     let array_axis = selectors.iter().position(|s| !s.is_basic())?;
-    let advanced: Vec<usize> = selectors
+    let mut advanced = selectors
         .iter()
         .enumerate()
         .filter(|(_, s)| !matches!(s, Selector::Slice { .. }))
-        .map(|(axis, _)| axis)
-        .collect();
-    let (first, last) = (advanced[0], advanced[advanced.len() - 1]);
-    (last - first + 1 != advanced.len()).then_some(array_axis)
+        .map(|(axis, _)| axis);
+    let first = advanced.next().expect("array selector is present");
+    let mut last = first;
+    let mut count = 1;
+    for axis in advanced {
+        last = axis;
+        count += 1;
+    }
+    (last - first + 1 != count).then_some(array_axis)
 }
 
 /// Output shape of indexing `shape` with `selectors`. Integer-array and mask
@@ -305,6 +313,143 @@ pub fn validate_selectors(shape: &[usize], selectors: &[Selector]) -> Result<()>
         }
     }
     Ok(())
+}
+
+/// Rank-sized state for walking one mask without rescanning from its start for
+/// each selected element.
+pub(crate) struct MaskCursor {
+    count: usize,
+    last_index: Option<usize>,
+    position: usize,
+}
+
+impl MaskCursor {
+    pub(crate) fn new(mask: &[bool], token: &CancellationToken) -> Result<Self> {
+        let mut count = 0;
+        for (position, &selected) in mask.iter().enumerate() {
+            if position % 1024 == 0 {
+                token.check()?;
+            }
+            count += usize::from(selected);
+        }
+        Ok(Self {
+            count,
+            last_index: None,
+            position: 0,
+        })
+    }
+
+    fn position_for(
+        &mut self,
+        mask: &[bool],
+        advanced_index: usize,
+        token: &CancellationToken,
+    ) -> Result<usize> {
+        let target = if self.count == 1 { 0 } else { advanced_index };
+        if self.last_index == Some(target) {
+            return Ok(self.position);
+        }
+        let (start, mut selected) = match self.last_index {
+            Some(previous) if previous < target => (self.position + 1, previous + 1),
+            _ => (0, 0),
+        };
+        for (position, &include) in mask.iter().enumerate().skip(start) {
+            if position % 1024 == 0 {
+                token.check()?;
+            }
+            if include {
+                if selected == target {
+                    self.last_index = Some(target);
+                    self.position = position;
+                    return Ok(position);
+                }
+                selected += 1;
+            }
+        }
+        unreachable!("validated mask selection")
+    }
+}
+
+/// Maps one C-order result position to its source without allocating a
+/// selection-sized offsets vector. The caller validates selectors and shape.
+pub(crate) fn indexed_offset(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    result_shape: &[usize],
+    result_index: usize,
+    mask_cursors: &mut [MaskCursor],
+    token: &CancellationToken,
+) -> Result<usize> {
+    fn coordinate(index: usize, shape: &[usize], axis: usize) -> usize {
+        let trailing = shape[axis + 1..].iter().product::<usize>();
+        index / trailing % shape[axis]
+    }
+
+    let separated = separated_advanced_axis(selectors).is_some();
+    let first_array = selectors.iter().position(|selector| !selector.is_basic());
+    let advanced_axis = if separated {
+        0
+    } else {
+        (0..first_array.unwrap_or(0))
+            .filter(|&axis| matches!(selectors.get(axis), None | Some(Selector::Slice { .. })))
+            .count()
+    };
+    let advanced_index = first_array.map(|_| coordinate(result_index, result_shape, advanced_axis));
+    let mut result_axis = usize::from(separated);
+    let mut mask_axis = 0;
+    let mut offset = base;
+
+    for (axis, (&len, &stride)) in shape.iter().zip(strides).enumerate() {
+        let position = match selectors.get(axis) {
+            None => {
+                let position = coordinate(result_index, result_shape, result_axis);
+                result_axis += 1;
+                position
+            }
+            Some(Selector::Index(index)) => {
+                if *index < 0 {
+                    (*index + len as i64) as usize
+                } else {
+                    *index as usize
+                }
+            }
+            Some(Selector::Slice { start, stop, step }) => {
+                let (start, step, _) =
+                    resolve_slice(*start, *stop, *step, len).expect("validated slice");
+                let position = coordinate(result_index, result_shape, result_axis);
+                result_axis += 1;
+                (start + position as isize * step) as usize
+            }
+            Some(Selector::Indices(indices)) => {
+                if first_array == Some(axis) && !separated {
+                    result_axis += 1;
+                }
+                let k = if indices.len() == 1 {
+                    0
+                } else {
+                    advanced_index.expect("advanced axis")
+                };
+                let index = indices[k];
+                if index < 0 {
+                    (index + len as i64) as usize
+                } else {
+                    index as usize
+                }
+            }
+            Some(Selector::Mask(mask)) => {
+                if first_array == Some(axis) && !separated {
+                    result_axis += 1;
+                }
+                let cursor = &mut mask_cursors[mask_axis];
+                mask_axis += 1;
+                cursor.position_for(mask, advanced_index.expect("advanced axis"), token)?
+            }
+        };
+        offset += position as isize * stride;
+    }
+    Ok(offset as usize)
 }
 
 /// For every output element in C order, the linear element offset inside a
@@ -407,6 +552,68 @@ pub fn index_offsets(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn direct_index_traversal_preserves_selector_order() {
+        let shape = [2, 3, 4];
+        let strides = contiguous_strides(&shape);
+        let slice = Selector::Slice {
+            start: None,
+            stop: None,
+            step: Some(-2),
+        };
+        let cases = [
+            vec![
+                Selector::Indices(vec![1, 0]),
+                slice.clone(),
+                Selector::Indices(vec![3, 0]),
+            ],
+            vec![
+                Selector::Index(1),
+                slice.clone(),
+                Selector::Indices(vec![3, 0]),
+            ],
+            vec![
+                Selector::Mask(vec![true, false]),
+                Selector::Indices(vec![2, 0]),
+                slice.clone(),
+            ],
+            vec![
+                slice.clone(),
+                Selector::Mask(vec![true, false, true]),
+                Selector::Index(0),
+            ],
+            vec![Selector::Index(1), slice],
+        ];
+        for selectors in cases {
+            let result_shape = index_shape(&shape, &selectors).unwrap();
+            let expected = index_offsets(&shape, &strides, 0, &selectors).unwrap();
+            let token = CancellationToken::new();
+            let mut masks = selectors
+                .iter()
+                .filter_map(|selector| match selector {
+                    Selector::Mask(mask) => Some(MaskCursor::new(mask, &token).unwrap()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let actual = (0..expected.len())
+                .map(|index| {
+                    indexed_offset(
+                        &shape,
+                        &strides,
+                        0,
+                        &selectors,
+                        &result_shape,
+                        index,
+                        &mut masks,
+                        &token,
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{selectors:?}");
+        }
+    }
 
     #[test]
     fn broadcasting_matches_numpy() {

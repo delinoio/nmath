@@ -12,7 +12,7 @@ use crate::{
     dtype::DType,
     error::{Error, ErrorCode, Result},
     kernels::{self, BinaryOp, ReduceOp, ScanOp, ShiftOp, UnaryOp, VarianceOp},
-    memory::{Device, MemoryBudget, Reservation},
+    memory::{Device, MemoryBudget},
     random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
     sync::CancellationToken,
@@ -1076,11 +1076,8 @@ impl JobEnv {
             }
             ExprKind::Index(e, selectors) => {
                 let v = self.eval_node(e)?;
-                let tmp = NdArray::from_dense(
-                    0,
-                    DenseArray::new(v.shape.clone(), v.buffer.clone(), Reservation::none())?,
-                );
-                tmp.take(selectors, &budget)
+                let tmp = NdArray::from_dense(0, v);
+                tmp.take_cancellable(selectors, &budget, &token)
             }
             ExprKind::Transpose(..) | ExprKind::Reshape(..) => {
                 let array = self.owned_layout_unshared(expr)?;
@@ -1117,6 +1114,7 @@ impl JobEnv {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::Reservation;
 
     fn arr(ctx: u64, shape: Vec<usize>, buffer: Buffer) -> NdArray {
         NdArray::from_dense(
@@ -1474,6 +1472,51 @@ mod tests {
         .unwrap();
         let picked = Expr::index(&doubled, vec![Selector::Indices(vec![-1, 0])]).unwrap();
         assert_eq!(eval(&picked).buffer, Buffer::I64(vec![80, 20]));
+    }
+
+    #[test]
+    fn indexed_materialization_keeps_only_budgeted_data() {
+        let budget = MemoryBudget::new(Device::Cpu, 4);
+        let a = NdArray::from_dense(
+            1,
+            DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
+        );
+        let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
+        let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
+        env.freeze(&expr).unwrap();
+        let result = env.eval(&expr).unwrap();
+        assert_eq!(budget.usage().peak, 4);
+        assert_eq!(budget.usage().used, 3);
+        let Value::View(result) = result else {
+            panic!("index result should own a view")
+        };
+        assert_eq!(result.to_buffer(), Buffer::U8(vec![7]));
+        drop(result);
+        drop(env);
+        drop(expr);
+        drop(a);
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn indexed_materialization_failure_releases_temporary_charge() {
+        let budget = MemoryBudget::new(Device::Cpu, 3);
+        let a = NdArray::from_dense(
+            1,
+            DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
+        );
+        let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
+        let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
+        env.freeze(&expr).unwrap();
+        assert_eq!(
+            env.eval(&expr).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(budget.usage().used, 2);
+        drop(env);
+        drop(expr);
+        drop(a);
+        assert_eq!(budget.usage().used, 0);
     }
 
     #[test]
