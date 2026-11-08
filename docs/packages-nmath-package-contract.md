@@ -190,6 +190,8 @@ Errors use the existing stable codes and English recovery guidance. Table schema
 
 `ctx.loadNpz(path, { signal }?)` returns `Promise<Map<string, NMathArray<ComputableDType, number[]>>>`. Member names remain Map keys, including names such as `__proto__`; they are never assigned as object properties. Rank-zero members remain arrays and expose their scalar through `item()`. Callers dispose each returned array when finished. Empty archives return an empty Map.
 
+NPY `ctx.load` and NPZ `ctx.loadNpz` reject a file with any dimension above the unsigned 32-bit JS shape limit (`4294967295`) with `NMATH_IO_FORMAT`. An NPZ archive rejects as a whole; no partial Map is returned. The maximum dimension remains exact for empty arrays, and array and expression shape getters never wrap larger native dimensions.
+
 The NumPy entry point exports these explicit JS adaptations:
 
 ```ts

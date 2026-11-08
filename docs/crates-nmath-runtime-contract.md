@@ -168,6 +168,8 @@ GPU initialization occurs only on an execution worker after admission. Native ba
 
 Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input accepts little- or big-endian components and C or Fortran order; the loader converts Fortran input to logical C order. Header, shape and payload-length validation applies before decoded allocation. Float16 also accepts both byte orders and Fortran input. Other real dtypes retain their existing input restrictions. NPZ members use the same NPY codec and inherit its dtype and layout support.
 
+The core retains its `usize` shape domain for decoded NPY and NPZ arrays. The Node binding rejects a loaded NPY array or any NPZ member with a dimension above `4294967295` as `NMATH_IO_FORMAT` before fulfilling the file-load Promise. It releases all decoded arrays and reservations on rejection, including earlier valid NPZ members. Shape getters use checked unsigned 32-bit conversion so no array or expression reports a wrapped dimension.
+
 ## Security
 
 - NMath uses the calling process's file permissions. It has no authentication, tenancy or sandbox.
