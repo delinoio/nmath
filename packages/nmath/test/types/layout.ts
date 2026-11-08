@@ -66,6 +66,18 @@ function checkThreeDimensionalAxes(axes: readonly [0, 2, 1] | undefined) {
 }
 declare const shape: number[];
 const dynamicTarget: Expr<"complex64", number[]> = a.reshape(shape);
+function reshapeUnion(target: readonly [-1 | 2]) {
+  const source = c.zeros([6], "float64");
+  const direct: Expr<"float64", [number]> = source.reshape(target);
+  const wrapped: Expr<"float64", [number]> = reshape(source, target);
+  return [direct, wrapped];
+}
+function reshapeUnionWithKnownAxis(target: readonly [-1 | 3, 2]) {
+  const result: Expr<"float64", [number, 2]> = c
+    .zeros([6], "float64")
+    .reshape(target);
+  return result;
+}
 // @ts-expect-error known total size differs
 a.reshape([5, 5]);
 // @ts-expect-error inferred dimension cannot divide the original size
@@ -114,6 +126,8 @@ void [
   checkOptionalReverse,
   checkThreeDimensionalAxes,
   dynamicTarget,
+  reshapeUnion,
+  reshapeUnionWithKnownAxis,
 ];
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -123,3 +137,20 @@ type Assert<T extends true> = T;
 type Arithmetic = Assert<Equal<ReshapeShape<[123, 456], [12, -1]>, [12, 4674]>>;
 type Invalid = Assert<Equal<TransposeShape<[2, 3], [-3, 0]>, never>>;
 type Empty = Assert<Equal<ReshapeShape<[0], [-1]>, [0]>>;
+type UnionInference = Assert<
+  Equal<ReshapeShape<readonly [6], readonly [-1 | 2]>, [number]>
+>;
+type UnionIncludesInferred = Assert<
+  6 extends ReshapeShape<readonly [6], readonly [-1 | 2]>[0] ? true : false
+>;
+type UnionExcludesSentinel = Assert<
+  Equal<Extract<ReshapeShape<readonly [6], readonly [-1 | 2]>[0], -1>, never>
+>;
+type UnionWithKnownAxis = Assert<
+  Equal<ReshapeShape<readonly [6], readonly [-1 | 3, 2]>, [number, 2]>
+>;
+type FixedInference = Assert<Equal<ReshapeShape<[6], [-1]>, [6]>>;
+type FixedReshape = Assert<Equal<ReshapeShape<[6], [2, 3]>, [2, 3]>>;
+type FixedInvalid = Assert<Equal<ReshapeShape<[6], [2, 2]>, never>>;
+type DynamicDimension = Assert<Equal<ReshapeShape<[6], [number]>, [number]>>;
+type UnknownRank = Assert<Equal<ReshapeShape<[6], number[]>, number[]>>;

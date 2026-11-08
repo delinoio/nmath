@@ -737,7 +737,7 @@ a.dispose();
 
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
-Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. If a transpose axes value can be `undefined`, its result shape includes the default reversal as well as the explicit permutation. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. If a transpose axes value can be `undefined`, its result shape includes the default reversal as well as the explicit permutation. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
 
 ### Ranges, identity matrices and `_like` arrays
 
