@@ -338,6 +338,7 @@ export class LazyFrame {
         column,
         options.descending ?? false,
         options.nullsLast ?? false,
+        false,
       ),
     );
   }

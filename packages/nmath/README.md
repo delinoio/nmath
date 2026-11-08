@@ -287,7 +287,9 @@ const totals = await frame.pivotTable('key', 'sub', 'value', {aggfunc: 'sum'});
 
 Pandas `pivot` requires unique row/column pairs; `pivotTable` aggregates duplicates and defaults to `mean`. Polars provides `pivot(on, index, values, aggregate?)` on `DataFrame` and `LazyFrame`, where the default is unique pairs and `collect()` materializes the result. Keys and values must be numeric or boolean; invalid keys are excluded. Pandas sorts both axes ascending, while Polars keeps first-appearance order. The row key stays a regular column, and generated value columns use the string form of each column key. Missing cells are null. Multiple keys and string/temporal pivots remain targets.
 
-Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Polars `groupBy` retains NaN keys and null groups.
+Pandas `sortValues` places float32/float64 NaNs and masked nulls last by default, including when sorting descending. Pass `{ nullsLast: false }` to place them first. Equal and missing rows keep their input order, and labels stay aligned. Polars sorting keeps its numeric NaN order.
+
+Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Sorted retained NaN and null groups follow pandas missing placement. Polars `groupBy` retains NaN keys and null groups.
 
 ### NPZ files
 
@@ -408,6 +410,8 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 `random(shape, dtype?)` and `standard_normal(shape, dtype?)` accept float32 or float64 and default to float64. `uniform(low, high, shape)`, `normal(loc, scale, shape)` and `exponential(scale, shape)` return float64. All distribution parameters are scalars. Use `[]` as the shape for a scalar result.
 
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
+
+If a dtype argument or option can be `undefined`, TypeScript includes the default dtype in the result type. Narrow the result dtype before assuming a specific typed array. A definitely present dtype keeps its exact result type.
 
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
 
@@ -668,6 +672,8 @@ console.log(await a.var(undefined, 1).compute()); // 1.1428571428571428
 
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
 
+Determinants preserve finite complex components when the overall complex magnitude is not representable. Wider extreme-scale and non-finite numerical behavior remains outside the documented acceptance boundary.
+
 `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, and `fft.irfft` accept `{ n?, axis?, norm? }`. The default axis is `-1`; normalization is `"backward"`, `"forward"`, or `"ortho"`. Length crops or zero-pads input. `rfft` requires real input. `irfft` defaults to `2 * (inputLength - 1)`; pass `n` to recover an odd original length. Call `.compute()` to execute on CPU. GPU execution and `out` buffers are unsupported. Complex output uses `Complex` values and interleaved typed arrays.
 
 `fft.fft2(a, { s?, axes?, norm? })` and `fft.ifft2` transform the last two axes by default; `fft.fftn` and `fft.ifftn` transform every axis. `axes` selects and orders the transformed axes, and `s` crops or zero-pads each selected axis. The helpers compose the one-axis transforms, so normalization and dtype rules match the single-axis functions. `fft.fftshift` and `fft.ifftshift` roll all axes by default, or the listed `axes`, for every dtype. `fft.fftfreq(context, n, d?)` and `fft.rfftfreq(context, n, d?)` create `float64` arrays in the given context; `n` must be a positive unsigned 32-bit integer and `d` must be finite. Other linear-algebra and FFT functions remain compatibility targets.
@@ -737,7 +743,7 @@ a.dispose();
 
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
-Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
 
 ### Ranges, identity matrices and `_like` arrays
 
