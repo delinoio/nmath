@@ -237,7 +237,11 @@ fn build_publishes_near_limit_output_names() {
 
     let previous: Vec<_> = suffixes
         .iter()
-        .map(|suffix| fixture.read(&format!("dist/{stem}{suffix}")))
+        .map(|suffix| {
+            let content = format!("rollback previous {suffix}");
+            fixture.write(&format!("dist/{stem}{suffix}"), &content);
+            content
+        })
         .collect();
     fixture.write("src/z.nts", "export const blocked = 1;\n");
     std::fs::create_dir(fixture.path("dist/z.js")).unwrap();
