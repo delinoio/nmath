@@ -302,6 +302,187 @@ fn real_dtype(dtype: DType) -> DType {
     }
 }
 
+#[derive(Clone, Copy)]
+struct SignedLog {
+    sign: f64,
+    mantissa: f64,
+    exponent: f64,
+}
+
+impl SignedLog {
+    fn zero() -> Self {
+        Self {
+            sign: 0.0,
+            mantissa: 0.0,
+            exponent: 0.0,
+        }
+    }
+
+    fn from_value(value: f64) -> Self {
+        if value == 0.0 {
+            Self::zero()
+        } else if !value.is_finite() {
+            Self {
+                sign: value.signum(),
+                mantissa: value,
+                exponent: 0.0,
+            }
+        } else {
+            let bits = value.abs().to_bits();
+            let raw_exponent = (bits >> 52) & 0x7ff;
+            if raw_exponent == 0 {
+                let fraction = bits & ((1_u64 << 52) - 1);
+                let highest_bit = 63 - fraction.leading_zeros();
+                Self {
+                    sign: value.signum(),
+                    mantissa: fraction as f64 / (1_u64 << highest_bit) as f64,
+                    exponent: highest_bit as f64 - 1074.0,
+                }
+            } else {
+                let fraction = bits & ((1_u64 << 52) - 1);
+                Self {
+                    sign: value.signum(),
+                    mantissa: 1.0 + fraction as f64 / (1_u64 << 52) as f64,
+                    exponent: raw_exponent as f64 - 1023.0,
+                }
+            }
+        }
+    }
+
+    fn normalized(sign: f64, mut mantissa: f64, mut exponent: f64) -> Self {
+        if mantissa == 0.0 {
+            return Self::zero();
+        }
+        if !mantissa.is_finite() {
+            return Self {
+                sign,
+                mantissa,
+                exponent,
+            };
+        }
+        while mantissa >= 2.0 {
+            mantissa *= 0.5;
+            exponent += 1.0;
+        }
+        while mantissa < 1.0 {
+            mantissa *= 2.0;
+            exponent -= 1.0;
+        }
+        Self {
+            sign,
+            mantissa,
+            exponent,
+        }
+    }
+
+    fn neg(self) -> Self {
+        Self {
+            sign: -self.sign,
+            mantissa: self.mantissa,
+            exponent: self.exponent,
+        }
+    }
+
+    fn add(self, other: Self) -> Self {
+        if self.sign == 0.0 {
+            return other;
+        }
+        if other.sign == 0.0 {
+            return self;
+        }
+        if self.sign == other.sign {
+            let (large, small) = if self.exponent >= other.exponent {
+                (self, other)
+            } else {
+                (other, self)
+            };
+            let difference = small.exponent - large.exponent;
+            if difference < -1074.0 {
+                return large;
+            }
+            return Self::normalized(
+                large.sign,
+                large.mantissa + small.mantissa * 2_f64.powf(difference),
+                large.exponent,
+            );
+        }
+        let (large, small) = if self.exponent > other.exponent
+            || (self.exponent == other.exponent && self.mantissa >= other.mantissa)
+        {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        let difference = small.exponent - large.exponent;
+        if difference < -1074.0 {
+            return large;
+        }
+        let mantissa = large.mantissa - small.mantissa * 2_f64.powf(difference);
+        Self::normalized(large.sign, mantissa, large.exponent)
+    }
+
+    fn mul(self, other: Self) -> Self {
+        if self.sign == 0.0 || other.sign == 0.0 {
+            Self::zero()
+        } else {
+            Self::normalized(
+                self.sign * other.sign,
+                self.mantissa * other.mantissa,
+                self.exponent + other.exponent,
+            )
+        }
+    }
+
+    fn value(self) -> f64 {
+        if self.sign == 0.0 {
+            0.0
+        } else {
+            let magnitude = if self.exponent >= -1022.0 {
+                self.mantissa * 2_f64.powf(self.exponent)
+            } else {
+                let scaled = self.mantissa * 2_f64.powf(self.exponent + 1074.0);
+                f64::from_bits(scaled.round_ties_even() as u64)
+            };
+            self.sign * magnitude
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LogComplex {
+    re: SignedLog,
+    im: SignedLog,
+}
+
+impl LogComplex {
+    fn one() -> Self {
+        Self {
+            re: SignedLog::from_value(1.0),
+            im: SignedLog::zero(),
+        }
+    }
+
+    fn neg(self) -> Self {
+        Self {
+            re: self.re.neg(),
+            im: self.im.neg(),
+        }
+    }
+
+    fn mul_assign(&mut self, rhs: C) {
+        let re = self.re;
+        let im = self.im;
+        let rhs_re = SignedLog::from_value(rhs.re);
+        let rhs_im = SignedLog::from_value(rhs.im);
+        self.re = re.mul(rhs_re).add(im.mul(rhs_im).neg());
+        self.im = re.mul(rhs_im).add(im.mul(rhs_re));
+    }
+
+    fn value(self) -> C {
+        C::new(self.re.value(), self.im.value())
+    }
+}
+
 /// Result shape and dtype of a factorization of `a` (..., m, n).
 fn infer_decomposition(op: LinalgOp, a: &[usize], ad: DType) -> Result<(Vec<usize>, DType)> {
     if a.len() < 2 {
@@ -631,7 +812,8 @@ pub fn execute(
                 rhs[i * n + i] = C::new(1., 0.);
             }
         }
-        let mut determinant = C::new(1., 0.);
+        let mut determinant_product = LogComplex::one();
+        let mut singular_determinant = false;
         for k in 0..n {
             token.check()?;
             let mut pivot = k;
@@ -642,7 +824,7 @@ pub fn execute(
             }
             if lu[pivot * n + k] == C::new(0., 0.) {
                 if op == LinalgOp::Det {
-                    determinant = C::new(0., 0.);
+                    singular_determinant = true;
                     break;
                 }
                 return Err(Error::new(
@@ -657,10 +839,20 @@ pub fn execute(
                 for j in 0..cols {
                     rhs.swap(k * cols + j, pivot * cols + j);
                 }
-                determinant = -determinant;
+                if op == LinalgOp::Det {
+                    determinant_product = determinant_product.neg();
+                }
             }
             let diagonal = lu[k * n + k];
-            determinant *= diagonal;
+            if op == LinalgOp::Det {
+                // Accumulate real and imaginary components in signed log form.
+                // A shared normalized phase can underflow a tiny component (for
+                // example, 1e-100 / 1e308) before reconstruction can recover
+                // it. Component-wise logs avoid both that loss
+                // and an overflowing intermediate complex
+                // magnitude.
+                determinant_product.mul_assign(diagonal);
+            }
             for i in k + 1..n {
                 token.check()?;
                 let factor = lu[i * n + k].fdiv(diagonal);
@@ -676,6 +868,11 @@ pub fn execute(
             }
         }
         if op == LinalgOp::Det {
+            let determinant = if singular_determinant {
+                C::new(0., 0.)
+            } else {
+                determinant_product.value()
+            };
             write(&mut output, batch_id, determinant);
             continue;
         }
