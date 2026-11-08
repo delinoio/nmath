@@ -331,7 +331,38 @@ fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
         return false;
     };
     let open = marker + offset;
-    matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close)
+    if !matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close) {
+        return false;
+    }
+    let mut search = open + 1;
+    while let Some(offset) = text[search..await_at].find("=>") {
+        let arrow = search + offset;
+        let body_start = text[arrow + 2..]
+            .bytes()
+            .position(|byte| !byte.is_ascii_whitespace())
+            .map(|offset| arrow + 2 + offset);
+        if let Some(body_start) = body_start
+            && text.as_bytes().get(body_start) == Some(&b'{')
+            && matching_brace(text, body_start).is_some_and(|close| await_at < close)
+        {
+            return false;
+        }
+        search = arrow + 2;
+    }
+    search = open + 1;
+    while let Some(offset) = text[search..await_at].find("function") {
+        let function_at = search + offset;
+        let body_start = text[function_at + "function".len()..await_at]
+            .find('{')
+            .map(|offset| function_at + "function".len() + offset);
+        if let Some(body_start) = body_start
+            && matching_brace(text, body_start).is_some_and(|close| await_at < close)
+        {
+            return false;
+        }
+        search = function_at + "function".len();
+    }
+    true
 }
 
 fn apply(text: &str, mut edits: Vec<Edit>) -> Result<Rewrite, String> {
@@ -622,5 +653,13 @@ mod tests {
         let open = text.find("class C {").unwrap() + "class C ".len();
         let close = matching_brace(text, open).unwrap();
         assert_eq!(close, text.rfind('}').unwrap());
+    }
+
+    #[test]
+    fn nested_decorator_callback_await_is_not_eager_assignment() {
+        let text =
+            "_decorators = [dec(async () => { await __nmath.set(a, 0, 1); })];";
+        let await_at = text.find("await __nmath").unwrap();
+        assert!(!await_is_in_decorator_assignment(text, await_at));
     }
 }
