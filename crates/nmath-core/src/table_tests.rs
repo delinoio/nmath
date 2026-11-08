@@ -176,13 +176,60 @@ fn budgets_contexts_exact_wide_keys_and_empty() {
     assert_eq!(out.columns[1].values.buffer, Buffer::I64(vec![2, 1]));
     let a = c.array(vec![0], Buffer::I64(vec![])).unwrap();
     assert_eq!(
-        run(&c, Plan::Sort(Box::new(source(&a)), 0, false, true))
-            .unwrap()
-            .rows,
+        run(
+            &c,
+            Plan::Sort(Box::new(source(&a)), 0, false, true, Flavor::Polars)
+        )
+        .unwrap()
+        .rows,
         0
     );
     c.close();
     other.close();
+}
+#[test]
+fn pandas_sort_places_nan_and_invalid_rows_without_changing_polars_order() {
+    let c = context(8192);
+    let keys = c
+        .array(
+            vec![7],
+            Buffer::F64(vec![2.0, f64::NAN, 1.0, f64::NAN, 2.0, 99.0, 1.0]),
+        )
+        .unwrap();
+    let valid = c
+        .array(
+            vec![7],
+            Buffer::Bool(vec![true, true, true, true, true, false, true]),
+        )
+        .unwrap();
+    let companion = c.array(vec![7], Buffer::I32((0..7).collect())).unwrap();
+    let source = || {
+        Plan::Source(vec![
+            Column {
+                values: Expr::input(&keys),
+                valid: Some(Expr::input(&valid)),
+            },
+            Column {
+                values: Expr::input(&companion),
+                valid: None,
+            },
+        ])
+    };
+    for (flavor, descending, nulls_last, expected) in [
+        (Flavor::Pandas, false, true, vec![2, 6, 0, 4, 1, 3, 5]),
+        (Flavor::Pandas, false, false, vec![1, 3, 5, 2, 6, 0, 4]),
+        (Flavor::Pandas, true, true, vec![0, 4, 2, 6, 1, 3, 5]),
+        (Flavor::Pandas, true, false, vec![1, 3, 5, 0, 4, 2, 6]),
+        (Flavor::Polars, true, true, vec![1, 3, 0, 4, 2, 6, 5]),
+    ] {
+        let result = run(
+            &c,
+            Plan::Sort(Box::new(source()), 0, descending, nulls_last, flavor),
+        )
+        .unwrap();
+        assert_eq!(result.columns[1].values.buffer, Buffer::I32(expected));
+    }
+    c.close();
 }
 #[test]
 fn pandas_group_excludes_nan_without_changing_polars_or_null_groups() {
@@ -342,7 +389,7 @@ fn running_cancellation_releases_intermediates() {
     let token = CancellationToken::new();
     compute(
         &c,
-        Plan::Sort(Box::new(source(&a)), 0, false, true),
+        Plan::Sort(Box::new(source(&a)), 0, false, true, Flavor::Polars),
         token.clone(),
         Box::new(move |r| tx.send(r).unwrap()),
     )

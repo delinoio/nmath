@@ -287,7 +287,9 @@ const totals = await frame.pivotTable('key', 'sub', 'value', {aggfunc: 'sum'});
 
 Pandas `pivot` requires unique row/column pairs; `pivotTable` aggregates duplicates and defaults to `mean`. Polars provides `pivot(on, index, values, aggregate?)` on `DataFrame` and `LazyFrame`, where the default is unique pairs and `collect()` materializes the result. Keys and values must be numeric or boolean; invalid keys are excluded. Pandas sorts both axes ascending, while Polars keeps first-appearance order. The row key stays a regular column, and generated value columns use the string form of each column key. Missing cells are null. Multiple keys and string/temporal pivots remain targets.
 
-Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Polars `groupBy` retains NaN keys and null groups.
+Pandas `sortValues` places float32/float64 NaNs and masked nulls last by default, including when sorting descending. Pass `{ nullsLast: false }` to place them first. Equal and missing rows keep their input order, and labels stay aligned. Polars sorting keeps its numeric NaN order.
+
+Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Sorted retained NaN and null groups follow pandas missing placement. Polars `groupBy` retains NaN keys and null groups.
 
 ### NPZ files
 
