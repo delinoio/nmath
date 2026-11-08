@@ -212,10 +212,7 @@ impl Context {
     pub fn array(&self, shape: Vec<usize>, buffer: Buffer) -> Result<NdArray> {
         self.ensure_open()?;
         let reservation = self.inner.cpu.reserve(buffer.byte_len())?;
-        Ok(NdArray::from_dense(
-            self.id(),
-            DenseArray::new(shape, buffer, reservation)?,
-        ))
+        NdArray::from_dense(self.id(), DenseArray::new(shape, buffer, reservation)?)
     }
 
     pub fn generator(&self, seed: u128) -> Generator {
@@ -339,7 +336,7 @@ impl Context {
         let id = self.id();
         let work: Work = Box::new(move |env| {
             let snap = source.snapshot(&env.budget)?;
-            Ok(JobOutput::Array(NdArray::from_dense(id, snap)))
+            Ok(JobOutput::Array(NdArray::from_dense(id, snap)?))
         });
         self.submit(OperationKind::Copy, "copy", Device::Cpu, token, work, done)
     }
@@ -382,7 +379,7 @@ impl Context {
             Ok(JobOutput::Array(NdArray::from_dense(
                 id,
                 DenseArray::new(shape, buffer, reservation)?,
-            )))
+            )?))
         });
         self.submit(
             OperationKind::FileRead,
@@ -1508,8 +1505,8 @@ mod random_tests {
         assert_eq!(generator.current(), initial);
 
         let scalar = Expr::random(ctx.id(), &generator, vec![]);
-        let zero = Expr::random(ctx.id(), &generator, vec![usize::MAX, 2, 0]);
-        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[usize::MAX, 2, 0][..], 0)] {
+        let zero = Expr::random(ctx.id(), &generator, vec![0, 3, 4]);
+        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[0, 3, 4][..], 0)] {
             assert_eq!(expr.dtype(), crate::DType::Float64);
             let JobOutput::Value(Value::Dense(value)) = compute(&ctx, expr).unwrap() else {
                 panic!("random compute did not return a dense value");

@@ -64,6 +64,7 @@ CPU boolean `matmul` uses OR of AND products. Each output stops scanning its inn
 ### Arrays and storage
 
 - `Storage` is a reference-counted contiguous buffer owned by one context. Arrays are `(storage, offset, shape, strides, dtype)` views.
+- Creating storage, including generated and decoded results, checks every signed C-order stride product before exposing an array. Unrepresentable layouts fail with `NMATH_SHAPE_MISMATCH` even when an axis is zero and the payload has no elements. Rejection releases any managed reservation; representable empty layouts remain valid.
 - A shared view reflects later changes to its storage. An execution snapshot copies or pins the visible bytes when a job starts, so later writes do not affect a running job.
 - Every storage records its byte size against its context's CPU or GPU budget until the last reference drops.
 
@@ -115,7 +116,7 @@ Reduction and matrix-multiplication kernels borrow operands whose dtype already 
 - PCG64 state includes the cached upper uint32 word and its validity flag. Small-integer distribution buffers are local to one call. Each execution reads the last successful state and independently advances it. FIFO guards remain held through the scheduler's final cancellation decision and state commit. Error or pre-completion cancellation discards pending state. An array assignment that has published its atomic write completes successfully; a later cancellation cannot undo the array or generator commit.
 - Normal and exponential use the pinned NumPy Ziggurat routines and constants. Arithmetic preserves the pinned oracle's contracted multiply-add behavior. Exact cross-platform transcendental results still require platform-specific acceptance.
 - Array-valued parameter broadcasting, `out`, alternative bit generators, SeedSequence spawning/array entropy, state import/export and other distributions remain compatibility targets. The supported seeding interface accepts an explicit nonnegative integer of at most 128 bits.
-- CPU random evaluation checks the element count, dtype-specific byte count and vector capacity before reserving or allocating the result. Unrepresentable sizes fail through the job callback with `NMATH_MEMORY_BUDGET_EXCEEDED`; a zero-length dimension produces an empty result even when other dimensions are large. Failed jobs do not advance generator state.
+- CPU random evaluation checks the element count, dtype-specific byte count and vector capacity before reserving or allocating the result. Unrepresentable allocation sizes fail through the job callback with `NMATH_MEMORY_BUDGET_EXCEEDED`. A zero-length dimension produces an empty result when its signed layout is representable; an unrepresentable layout fails with `NMATH_SHAPE_MISMATCH`. Failed jobs do not advance generator state.
 
 ### Measurements
 

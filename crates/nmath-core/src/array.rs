@@ -9,10 +9,11 @@ use crate::{
     buffer::{Buffer, DenseArray, Scalar},
     dtype::DType,
     error::{Error, ErrorCode, Result},
+    layout::checked_strides,
     memory::{MemoryBudget, Reservation},
     shape::{
-        Selector, broadcast_shapes, broadcast_strides, contiguous_strides, for_each_offset,
-        index_offsets, index_shape, normalize_index, resolve_slice,
+        Selector, broadcast_shapes, broadcast_strides, for_each_offset, index_offsets, index_shape,
+        normalize_index, resolve_slice,
     },
     sync::{CancellationToken, FifoGuard, FifoLock, Ticket},
 };
@@ -47,9 +48,9 @@ pub struct NdArray {
 impl NdArray {
     /// Wraps an owned dense array (already charged to its budget) as new
     /// storage.
-    pub fn from_dense(context_id: u64, dense: DenseArray) -> NdArray {
-        let strides = contiguous_strides(&dense.shape);
-        NdArray {
+    pub fn from_dense(context_id: u64, dense: DenseArray) -> Result<NdArray> {
+        let strides = checked_strides(&dense.shape)?;
+        Ok(NdArray {
             storage: Arc::new(Storage {
                 id: NEXT_STORAGE_ID.fetch_add(1, Ordering::Relaxed),
                 context_id,
@@ -60,7 +61,7 @@ impl NdArray {
             offset: 0,
             shape: dense.shape,
             strides,
-        }
+        })
     }
 
     pub fn shape(&self) -> &[usize] {
@@ -315,10 +316,26 @@ mod tests {
             1,
             DenseArray::new(shape, Buffer::F64(values), Reservation::none()).unwrap(),
         )
+        .unwrap()
     }
 
     fn slice(start: Option<i64>, stop: Option<i64>, step: Option<i64>) -> Selector {
         Selector::Slice { start, stop, step }
+    }
+
+    #[test]
+    fn direct_dense_storage_conversion_rejects_overflow_and_releases_reservation() {
+        let budget = MemoryBudget::new(Device::Cpu, 0);
+        let dense = DenseArray {
+            shape: vec![0, u32::MAX as usize, u32::MAX as usize],
+            buffer: Buffer::F64(vec![]),
+            reservation: budget.reserve(0).unwrap(),
+        };
+        assert_eq!(
+            NdArray::from_dense(1, dense).unwrap_err().code,
+            ErrorCode::ShapeMismatch
+        );
+        assert_eq!(budget.usage().used, 0);
     }
 
     #[test]

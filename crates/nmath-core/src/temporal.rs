@@ -206,7 +206,8 @@ mod tests {
         let array = NdArray::from_dense(
             1,
             DenseArray::new(vec![2], source, budget.reserve(16).unwrap()).unwrap(),
-        );
+        )
+        .unwrap();
         let view = array
             .view(&[Selector::Slice {
                 start: None,

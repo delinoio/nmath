@@ -3211,8 +3211,8 @@ mod tests {
         ] {
             assert_eq!(crate::shape::matmul_shape(&a, &b).unwrap_err().code, code);
         }
-        let overflow_left = dense(vec![usize::MAX, 0], Buffer::I32(vec![]));
-        let overflow_right = dense(vec![0, 2], Buffer::I32(vec![]));
+        let overflow_left = dense(vec![isize::MAX as usize / 2, 0], Buffer::I32(vec![]));
+        let overflow_right = dense(vec![0, 3], Buffer::I32(vec![]));
         assert_eq!(
             matmul(
                 &overflow_left,

@@ -489,6 +489,80 @@ fn npy_jobs_round_trip_atomically() {
 }
 
 #[test]
+fn empty_storage_rejects_unrepresentable_strides_without_losing_the_context() {
+    let c = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 0,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let wide = u32::MAX as usize;
+    for shape in [
+        vec![0, wide, wide],
+        vec![wide, 0, wide],
+        vec![wide, wide, 0],
+    ] {
+        assert_eq!(
+            c.array(shape, Buffer::F64(vec![])).unwrap_err().code,
+            ErrorCode::ShapeMismatch
+        );
+        assert_eq!(c.metrics().cpu_memory.used, 0);
+        assert_eq!(c.metrics().total_submitted, 0);
+    }
+    let empty = c.array(vec![0, 3, 4], Buffer::F64(vec![])).unwrap();
+    assert_eq!(empty.shape(), &[0, 3, 4]);
+    assert_eq!(empty.to_buffer(), Buffer::F64(vec![]));
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+    c.close();
+
+    let c = ctx(1, 0);
+    let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let ordinary = c.array(vec![2, 3], Buffer::F64(values.clone())).unwrap();
+    assert_eq!(ordinary.shape(), &[2, 3]);
+    assert_eq!(ordinary.to_buffer(), Buffer::F64(values));
+    assert_eq!(ordinary.dtype(), nmath_core::DType::Float64);
+    drop(ordinary);
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+    c.close();
+}
+
+#[test]
+fn generated_and_loaded_empty_storage_rejects_unrepresentable_strides() {
+    let c = ctx(1, 0);
+    let wide = u32::MAX as usize;
+    let generator = c.generator(42);
+    let original = generator.current();
+    let expr = Expr::random(c.id(), &generator, vec![0, wide, wide]);
+    let (done, rx) = channel();
+    c.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+        .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeMismatch);
+    assert_eq!(generator.current(), original);
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+
+    let dir = tempfile::tempdir().unwrap();
+    for (index, shape) in [vec![0, wide, wide], vec![wide, wide, 0]]
+        .into_iter()
+        .enumerate()
+    {
+        let path = dir.path().join(format!("empty-{index}.npy"));
+        std::fs::write(
+            &path,
+            nmath_core::io::encode_npy(&shape, &Buffer::F64(vec![])).unwrap(),
+        )
+        .unwrap();
+        let (done, rx) = channel();
+        c.load_npy(path, CancellationToken::new(), done).unwrap();
+        assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeMismatch);
+        assert_eq!(c.metrics().cpu_memory.used, 0);
+    }
+    let valid = c.array(vec![0, 3, 4], Buffer::F64(vec![])).unwrap();
+    assert_eq!(valid.shape(), &[0, 3, 4]);
+    c.close();
+}
+
+#[test]
 fn close_does_not_deadlock_on_jobs_started_from_the_queue() {
     let c = ctx(1, 4);
     let blocker = occupy(&c);

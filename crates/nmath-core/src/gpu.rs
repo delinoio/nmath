@@ -260,8 +260,8 @@ impl<'a> Runtime<'a> {
         let b = self.upload(&right.buffer)?;
         let expression = Expr::binary(
             crate::kernels::BinaryOp::Mul,
-            &Expr::input(&NdArray::from_dense(0, left)),
-            &Expr::input(&NdArray::from_dense(0, right)),
+            &Expr::input(&NdArray::from_dense(0, left)?),
+            &Expr::input(&NdArray::from_dense(0, right)?),
         )?;
         let result = self.run(&expression, &a, Some(&b))?;
         let _host = self.cpu.reserve(8)?;

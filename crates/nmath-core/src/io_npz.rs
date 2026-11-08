@@ -384,20 +384,20 @@ pub struct NpzArrays {
     _metadata: Reservation,
 }
 impl NpzArchive {
-    pub(crate) fn into_context(self, id: u64) -> NpzArrays {
-        NpzArrays {
+    pub(crate) fn into_context(self, id: u64) -> Result<NpzArrays> {
+        Ok(NpzArrays {
             arrays: self
                 .arrays
                 .into_iter()
                 .map(|entry| {
-                    (
+                    Ok((
                         entry.name,
-                        crate::array::NdArray::from_dense(id, entry.array),
-                    )
+                        crate::array::NdArray::from_dense(id, entry.array)?,
+                    ))
                 })
-                .collect(),
+                .collect::<Result<Vec<_>>>()?,
             _metadata: self._metadata,
-        }
+        })
     }
 }
 

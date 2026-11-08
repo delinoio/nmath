@@ -68,8 +68,10 @@ pub fn checked_strides(shape: &[usize]) -> Result<Vec<isize>> {
     let mut stride = 1isize;
     for (axis, &dim) in shape.iter().enumerate().rev() {
         strides[axis] = stride;
+        let dim =
+            isize::try_from(dim.max(1)).map_err(|_| invalid("The array strides are too large."))?;
         stride = stride
-            .checked_mul(dim.max(1) as isize)
+            .checked_mul(dim)
             .ok_or_else(|| invalid("The array strides are too large."))?;
     }
     Ok(strides)

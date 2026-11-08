@@ -184,8 +184,8 @@ fn validation_budget_cancellation_and_gpu_admission() {
             .code,
         ErrorCode::Cancelled
     );
-    let a = NdArray::from_dense(1, c);
-    let b = NdArray::from_dense(2, x);
+    let a = NdArray::from_dense(1, c).unwrap();
+    let b = NdArray::from_dense(2, x).unwrap();
     assert_eq!(
         Expr::polynomial(opts, &Expr::input(&a), &Expr::input(&b))
             .unwrap_err()
@@ -201,8 +201,8 @@ fn validation_budget_cancellation_and_gpu_admission() {
 }
 #[test]
 fn lazy_polynomial_uses_execution_snapshots_for_both_operands() {
-    let c = NdArray::from_dense(1, dense(&[2], Buffer::I32(vec![1, 2])));
-    let x = NdArray::from_dense(1, dense(&[2], Buffer::I32(vec![3, 4])));
+    let c = NdArray::from_dense(1, dense(&[2], Buffer::I32(vec![1, 2]))).unwrap();
+    let x = NdArray::from_dense(1, dense(&[2], Buffer::I32(vec![3, 4]))).unwrap();
     let expr = Expr::polynomial(options(false, false), &Expr::input(&c), &Expr::input(&x)).unwrap();
     let write = |a: &NdArray, value| {
         let token = CancellationToken::new();
@@ -336,7 +336,7 @@ fn derivative_validation_budgets_cancellation_and_snapshots() {
             .code,
         ErrorCode::Cancelled
     );
-    let c = NdArray::from_dense(1, c);
+    let c = NdArray::from_dense(1, c).unwrap();
     let expression = Expr::polynomial_derivative(opts, &Expr::input(&c)).unwrap();
     assert_eq!(expression.operation_id(), "polynomial.polyder");
     assert_eq!(

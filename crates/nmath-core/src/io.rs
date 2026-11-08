@@ -251,10 +251,14 @@ fn decode_npy_with<R>(
                 .map_err(|_| format_error("malformed shape"))
         })
         .collect::<Result<Vec<_>>>()?;
-    let count = shape
-        .iter()
-        .try_fold(1usize, |acc, &d| acc.checked_mul(d))
-        .ok_or_else(|| format_error("shape overflows"))?;
+    let count = if shape.contains(&0) {
+        0
+    } else {
+        shape
+            .iter()
+            .try_fold(1usize, |acc, &d| acc.checked_mul(d))
+            .ok_or_else(|| format_error("shape overflows"))?
+    };
     let data = &bytes[header_start + header_len..];
     let expected = count
         .checked_mul(dtype.item_size())
