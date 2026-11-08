@@ -130,6 +130,21 @@ test("determinants retain finite complex components when magnitude overflows", a
     );
     const cancellationResult = await linalg.det(cancellation).compute();
     assert.ok(Math.abs(cancellationResult.real - 0.0001220703125) < 1e-12);
+
+    const nearLimit = c.array(
+      [
+        [1e6, 0],
+        [0, 1.7976931348623154e302],
+      ],
+      { dtype: "float64" },
+    );
+    const nearLimitResult = await linalg.det(nearLimit).compute();
+    assert.ok(Number.isFinite(nearLimitResult));
+    assert.ok(
+      Math.abs(nearLimitResult - 1.7976931348623155e308) /
+        1.7976931348623155e308 <
+        1e-12,
+    );
   } finally {
     await c.close();
   }

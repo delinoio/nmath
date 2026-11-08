@@ -168,6 +168,24 @@ fn finite_complex_components_survive_overflowing_magnitude() {
 }
 
 #[test]
+fn near_limit_finite_determinants_do_not_overflow_reconstruction() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let near_limit = dense(
+        vec![2, 2],
+        Buffer::F64(vec![1e6, 0.0, 0.0, 1.7976931348623154e302]),
+    );
+    let result = determinant(&near_limit, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!(values[0].is_finite());
+    assert!((values[0] - 1.7976931348623155e308).abs() / 1.7976931348623155e308 < 1e-12);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
 fn determinant_retains_batch_dtype_cancellation_and_budget() {
     let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
     let token = CancellationToken::new();

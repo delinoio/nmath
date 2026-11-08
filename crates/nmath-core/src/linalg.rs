@@ -436,7 +436,7 @@ impl SignedLog {
         if self.sign == 0.0 {
             0.0
         } else {
-            self.sign * (self.mantissa.ln() + self.exponent * std::f64::consts::LN_2).exp()
+            self.sign * self.mantissa * 2_f64.powf(self.exponent)
         }
     }
 }
