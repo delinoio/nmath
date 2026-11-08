@@ -147,6 +147,23 @@ fn finite_complex_components_survive_overflowing_magnitude() {
     assert!((values[0][0] - 1.3e308).abs() / 1.3e308 < 1e-12);
     assert!((values[0][1] - 1.3e308).abs() / 1.3e308 < 1e-12);
     drop(result);
+
+    let cancellation = dense(
+        vec![2, 2],
+        Buffer::C128(vec![
+            [1048576.0, 1048576.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [1048576.0, 1048575.9999999999],
+        ]),
+    );
+    let result = determinant(&cancellation, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] - 0.0001220703125).abs() < 1e-12);
+    drop(result);
+
     assert_eq!(budget.usage().used, 0);
 }
 

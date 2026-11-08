@@ -305,32 +305,80 @@ fn real_dtype(dtype: DType) -> DType {
 #[derive(Clone, Copy)]
 struct SignedLog {
     sign: f64,
-    log_abs: f64,
+    mantissa: f64,
+    exponent: f64,
 }
 
 impl SignedLog {
     fn zero() -> Self {
         Self {
             sign: 0.0,
-            log_abs: f64::NEG_INFINITY,
+            mantissa: 0.0,
+            exponent: 0.0,
         }
     }
 
     fn from_value(value: f64) -> Self {
         if value == 0.0 {
             Self::zero()
-        } else {
+        } else if !value.is_finite() {
             Self {
                 sign: value.signum(),
-                log_abs: value.abs().ln(),
+                mantissa: value,
+                exponent: 0.0,
             }
+        } else {
+            let bits = value.abs().to_bits();
+            let raw_exponent = (bits >> 52) & 0x7ff;
+            let (fraction, exponent) = if raw_exponent == 0 {
+                let scaled = value.abs() * 2_f64.powi(1074);
+                let scaled_bits = scaled.to_bits();
+                (
+                    scaled_bits & ((1_u64 << 52) - 1),
+                    ((scaled_bits >> 52) & 0x7ff) as f64 - 1023.0 - 1074.0,
+                )
+            } else {
+                (bits & ((1_u64 << 52) - 1), raw_exponent as f64 - 1023.0)
+            };
+            Self {
+                sign: value.signum(),
+                mantissa: 1.0 + fraction as f64 / (1_u64 << 52) as f64,
+                exponent,
+            }
+        }
+    }
+
+    fn normalized(sign: f64, mut mantissa: f64, mut exponent: f64) -> Self {
+        if mantissa == 0.0 {
+            return Self::zero();
+        }
+        if !mantissa.is_finite() {
+            return Self {
+                sign,
+                mantissa,
+                exponent,
+            };
+        }
+        while mantissa >= 2.0 {
+            mantissa *= 0.5;
+            exponent += 1.0;
+        }
+        while mantissa < 1.0 {
+            mantissa *= 2.0;
+            exponent -= 1.0;
+        }
+        Self {
+            sign,
+            mantissa,
+            exponent,
         }
     }
 
     fn neg(self) -> Self {
         Self {
             sign: -self.sign,
-            log_abs: self.log_abs,
+            mantissa: self.mantissa,
+            exponent: self.exponent,
         }
     }
 
@@ -342,38 +390,45 @@ impl SignedLog {
             return self;
         }
         if self.sign == other.sign {
-            let (large, small) = if self.log_abs >= other.log_abs {
-                (self.log_abs, other.log_abs)
+            let (large, small) = if self.exponent >= other.exponent {
+                (self, other)
             } else {
-                (other.log_abs, self.log_abs)
+                (other, self)
             };
-            return Self {
-                sign: self.sign,
-                log_abs: large + (small - large).exp().ln_1p(),
-            };
+            let difference = small.exponent - large.exponent;
+            if difference < -1074.0 {
+                return large;
+            }
+            return Self::normalized(
+                large.sign,
+                large.mantissa + small.mantissa * 2_f64.powf(difference),
+                large.exponent,
+            );
         }
-        if self.log_abs == other.log_abs {
-            return Self::zero();
-        }
-        let (large, small, sign) = if self.log_abs > other.log_abs {
-            (self.log_abs, other.log_abs, self.sign)
+        let (large, small) = if self.exponent > other.exponent
+            || (self.exponent == other.exponent && self.mantissa >= other.mantissa)
+        {
+            (self, other)
         } else {
-            (other.log_abs, self.log_abs, other.sign)
+            (other, self)
         };
-        Self {
-            sign,
-            log_abs: large + (-(small - large).exp()).ln_1p(),
+        let difference = small.exponent - large.exponent;
+        if difference < -1074.0 {
+            return large;
         }
+        let mantissa = large.mantissa - small.mantissa * 2_f64.powf(difference);
+        Self::normalized(large.sign, mantissa, large.exponent)
     }
 
     fn mul(self, other: Self) -> Self {
         if self.sign == 0.0 || other.sign == 0.0 {
             Self::zero()
         } else {
-            Self {
-                sign: self.sign * other.sign,
-                log_abs: self.log_abs + other.log_abs,
-            }
+            Self::normalized(
+                self.sign * other.sign,
+                self.mantissa * other.mantissa,
+                self.exponent + other.exponent,
+            )
         }
     }
 
@@ -381,7 +436,7 @@ impl SignedLog {
         if self.sign == 0.0 {
             0.0
         } else {
-            self.sign * self.log_abs.exp()
+            self.sign * (self.mantissa.ln() + self.exponent * std::f64::consts::LN_2).exp()
         }
     }
 }
