@@ -694,15 +694,10 @@ fn rollback(committed: &[(PathBuf, Option<PathBuf>)]) {
 static NEXT_ARTIFACT_ID: AtomicU64 = AtomicU64::new(0);
 
 fn artifact_path(target: &Path, extension: &str) -> PathBuf {
-    let name = target
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
     let id = NEXT_ARTIFACT_ID.fetch_add(1, Ordering::Relaxed);
-    target.with_file_name(format!(
-        ".{name}.nmath-{}-{id}.{extension}",
-        std::process::id()
-    ))
+    // The target may already use the full filesystem component limit.
+    // Keep reservation names independent of its basename in the same directory.
+    target.with_file_name(format!(".nmath-{}-{id}.{extension}", std::process::id()))
 }
 
 fn backup_path(target: &Path) -> PathBuf {
