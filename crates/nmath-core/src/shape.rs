@@ -1,6 +1,23 @@
 //! Shapes, broadcasting and index selectors.
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::{
+    error::{Error, ErrorCode, Result},
+    memory::{MemoryBudget, Reservation},
+};
+
+pub(crate) fn index_scratch_overflow() -> Error {
+    Error::new(
+        ErrorCode::MemoryBudgetExceeded,
+        "Index scratch exceeds the addressable allocation size.",
+    )
+}
+
+fn scratch_bytes(count: usize, element_size: usize) -> Result<usize> {
+    count
+        .checked_mul(element_size)
+        .filter(|&bytes| bytes <= isize::MAX as usize)
+        .ok_or_else(index_scratch_overflow)
+}
 
 /// NumPy broadcasting of two shapes.
 pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
@@ -201,14 +218,17 @@ pub fn resolve_slice(
 /// places the advanced dimension first; otherwise it stays in place.
 fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
     let array_axis = selectors.iter().position(|s| !s.is_basic())?;
-    let advanced: Vec<usize> = selectors
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| !matches!(s, Selector::Slice { .. }))
-        .map(|(axis, _)| axis)
-        .collect();
-    let (first, last) = (advanced[0], advanced[advanced.len() - 1]);
-    (last - first + 1 != advanced.len()).then_some(array_axis)
+    let mut first = None;
+    let mut last = 0;
+    let mut count = 0;
+    for (axis, selector) in selectors.iter().enumerate() {
+        if !matches!(selector, Selector::Slice { .. }) {
+            first.get_or_insert(axis);
+            last = axis;
+            count += 1;
+        }
+    }
+    (last - first.expect("an array selector is present") + 1 != count).then_some(array_axis)
 }
 
 /// Output shape of indexing `shape` with `selectors`. Integer-array and mask
@@ -315,12 +335,72 @@ pub fn index_offsets(
     base: isize,
     selectors: &[Selector],
 ) -> Result<Vec<usize>> {
+    index_offsets_inner(shape, strides, base, selectors, None).map(|offsets| offsets.values)
+}
+
+pub(crate) struct BudgetedOffsets {
+    pub values: Vec<usize>,
+    // Field drop order releases the vector before its charge.
+    _reservation: Reservation,
+}
+
+pub(crate) fn index_offsets_budgeted(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    budget: &MemoryBudget,
+) -> Result<BudgetedOffsets> {
+    index_offsets_inner(shape, strides, base, selectors, Some(budget))
+}
+
+fn index_offsets_inner(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    budget: Option<&MemoryBudget>,
+) -> Result<BudgetedOffsets> {
     validate_selectors(shape, selectors)?;
     // Per axis, the source positions it contributes; a dropped integer axis
     // contributes exactly one.
     let separated = separated_advanced_axis(selectors);
     let first_array = selectors.iter().position(|s| !s.is_basic());
-    let mut arrays: Vec<(Vec<isize>, isize)> = Vec::new();
+    let advanced_count = selectors.iter().filter(|s| !s.is_basic()).count();
+    let block_len = advanced_length(selectors)?.unwrap_or(0);
+    let mut position_count = 0usize;
+    for (axis, &len) in shape.iter().enumerate() {
+        let count = match selectors.get(axis) {
+            None => len,
+            Some(Selector::Index(i)) => {
+                normalize_index(*i, len, axis)?;
+                1
+            }
+            Some(Selector::Slice { start, stop, step }) => {
+                resolve_slice(*start, *stop, *step, len)?.2
+            }
+            Some(Selector::Indices(ix)) => ix.len(),
+            Some(Selector::Mask(mask)) => mask.iter().filter(|&&selected| selected).count(),
+        };
+        position_count = position_count
+            .checked_add(count)
+            .ok_or_else(index_scratch_overflow)?;
+    }
+    let axis_bytes = scratch_bytes(shape.len(), std::mem::size_of::<(Vec<isize>, isize)>())?;
+    let array_bytes = scratch_bytes(advanced_count, std::mem::size_of::<(Vec<isize>, isize)>())?;
+    let cursor_bytes = scratch_bytes(shape.len(), std::mem::size_of::<usize>())?;
+    let working_bytes = scratch_bytes(position_count, std::mem::size_of::<isize>())?
+        .checked_add(scratch_bytes(block_len, std::mem::size_of::<isize>())?)
+        .and_then(|n| n.checked_add(axis_bytes))
+        .and_then(|n| n.checked_add(array_bytes))
+        .and_then(|n| n.checked_add(cursor_bytes))
+        .filter(|&n| n <= isize::MAX as usize)
+        .ok_or_else(index_scratch_overflow)?;
+    let _working_charge = match budget {
+        Some(budget) => budget.reserve(working_bytes as u64)?,
+        None => Reservation::none(),
+    };
+    let mut arrays: Vec<(Vec<isize>, isize)> = Vec::with_capacity(advanced_count);
     let mut block_slot = None;
     let mut axes: Vec<(Vec<isize>, isize)> = Vec::with_capacity(shape.len());
     for (axis, &len) in shape.iter().enumerate() {
@@ -331,16 +411,23 @@ pub fn index_offsets(
                 let (s, st, n) = resolve_slice(*start, *stop, *step, len)?;
                 (0..n as isize).map(|k| s + k * st).collect()
             }
-            Some(Selector::Indices(ix)) => ix
-                .iter()
-                .map(|&i| normalize_index(i, len, axis).map(|v| v as isize))
-                .collect::<Result<_>>()?,
-            Some(Selector::Mask(m)) => m
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| **b)
-                .map(|(i, _)| i as isize)
-                .collect(),
+            Some(Selector::Indices(ix)) => {
+                let mut positions = Vec::with_capacity(ix.len());
+                for &index in ix {
+                    positions.push(normalize_index(index, len, axis)? as isize);
+                }
+                positions
+            }
+            Some(Selector::Mask(m)) => {
+                let mut positions = Vec::with_capacity(m.iter().filter(|&&b| b).count());
+                positions.extend(
+                    m.iter()
+                        .enumerate()
+                        .filter(|(_, b)| **b)
+                        .map(|(i, _)| i as isize),
+                );
+                positions
+            }
         };
         if matches!(
             selectors.get(axis),
@@ -367,19 +454,33 @@ pub fn index_offsets(
         // Broadcast the array selectors together: each block entry is the sum
         // of the selected offsets on every advanced axis.
         let len = advanced_length(selectors)?.expect("an array selector is present");
-        axes[slot].0 = (0..len)
-            .map(|k| {
+        let mut positions = Vec::with_capacity(len);
+        for k in 0..len {
+            positions.push(
                 arrays
                     .iter()
                     .map(|(p, s)| p[if p.len() == 1 { 0 } else { k }] * s)
-                    .sum()
-            })
-            .collect();
+                    .sum(),
+            );
+        }
+        axes[slot].0 = positions;
     }
-    let mut out = Vec::new();
+    let out_len = axes.iter().try_fold(1usize, |n, (positions, _)| {
+        n.checked_mul(positions.len())
+            .ok_or_else(index_scratch_overflow)
+    })?;
+    let out_bytes = scratch_bytes(out_len, std::mem::size_of::<usize>())?;
+    let out_charge = match budget {
+        Some(budget) => budget.reserve(out_bytes as u64)?,
+        None => Reservation::none(),
+    };
+    let mut out = Vec::with_capacity(out_len);
     let mut cursor = vec![0usize; axes.len()];
     if axes.iter().any(|(p, _)| p.is_empty()) {
-        return Ok(out);
+        return Ok(BudgetedOffsets {
+            values: out,
+            _reservation: out_charge,
+        });
     }
     loop {
         let offset: isize = base
@@ -392,7 +493,10 @@ pub fn index_offsets(
         let mut axis = axes.len();
         loop {
             if axis == 0 {
-                return Ok(out);
+                return Ok(BudgetedOffsets {
+                    values: out,
+                    _reservation: out_charge,
+                });
             }
             axis -= 1;
             cursor[axis] += 1;
@@ -407,6 +511,21 @@ pub fn index_offsets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::Device;
+
+    #[test]
+    fn budgeted_offsets_reject_unaddressable_capacity_before_allocation() {
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let result = index_offsets_budgeted(&[usize::MAX], &[1], 0, &[], &budget);
+        assert!(matches!(
+            result,
+            Err(Error {
+                code: ErrorCode::MemoryBudgetExceeded,
+                ..
+            })
+        ));
+        assert_eq!(budget.usage().used, 0);
+    }
 
     #[test]
     fn broadcasting_matches_numpy() {

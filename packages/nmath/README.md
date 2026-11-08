@@ -287,7 +287,9 @@ const totals = await frame.pivotTable('key', 'sub', 'value', {aggfunc: 'sum'});
 
 Pandas `pivot` requires unique row/column pairs; `pivotTable` aggregates duplicates and defaults to `mean`. Polars provides `pivot(on, index, values, aggregate?)` on `DataFrame` and `LazyFrame`, where the default is unique pairs and `collect()` materializes the result. Keys and values must be numeric or boolean; invalid keys are excluded. Pandas sorts both axes ascending, while Polars keeps first-appearance order. The row key stays a regular column, and generated value columns use the string form of each column key. Missing cells are null. Multiple keys and string/temporal pivots remain targets.
 
-Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Polars `groupBy` retains NaN keys and null groups.
+Pandas `sortValues` places float32/float64 NaNs and masked nulls last by default, including when sorting descending. Pass `{ nullsLast: false }` to place them first. Equal and missing rows keep their input order, and labels stay aligned. Polars sorting keeps its numeric NaN order.
+
+Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Sorted retained NaN and null groups follow pandas missing placement. Polars `groupBy` retains NaN keys and null groups.
 
 ### NPZ files
 
@@ -739,7 +741,7 @@ a.dispose();
 
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
-Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
 
 ### Ranges, identity matrices and `_like` arrays
 
