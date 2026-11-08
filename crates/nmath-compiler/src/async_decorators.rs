@@ -1073,8 +1073,10 @@ fn rewrite(
         + text[return_at..return_end]
             .rfind(';')
             .ok_or("Generated class wrapper return terminator is missing")?;
-    let value_prefix = if downlevel { "{ value: (" } else { "{ value: " };
-    let value_suffix = if downlevel { ") }" } else { " }" };
+    // An array element does not infer an anonymous class name, unlike an
+    // object property. It still boxes thenable constructors during awaiting.
+    let value_prefix = if downlevel { "[(" } else { "[" };
+    let value_suffix = if downlevel { ")]" } else { "]" };
     edits.push(Edit {
         start: wrapper_at,
         end: wrapper_at + "(() => {".len(),
@@ -1099,7 +1101,7 @@ fn rewrite(
     edits.push(Edit {
         start: wrapper_close + 4,
         end: wrapper_close + 4,
-        parts: vec![Part::New(").value".into())],
+        parts: vec![Part::New(")[0]".into())],
     });
     apply(text, edits, wrapper_at).map(Some)
 }

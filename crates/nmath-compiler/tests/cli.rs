@@ -1001,6 +1001,51 @@ fn modern_field_decorator_does_not_use_shadowed_global_this() {
 }
 
 #[test]
+fn modern_field_decorator_preserves_anonymous_class_names() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any { return () => {}; }
+async function anonymous() {
+    return class { @dec(a[0] = 1) field = 2; static observedName = this.name; };
+}
+async function named() {
+    return class Named { @dec(a[0] = 2) field = 3; static observedName = this.name; };
+}
+async function inferred() {
+    const Inferred = class { @dec(a[0] = 3) field = 4; static observedName = this.name; };
+    return Inferred;
+}
+export async function run() {
+    const A = await anonymous(); const B = await named(); const C = await inferred();
+    return [A.name, A.observedName, new A().field,
+            B.name, B.observedName, new B().field,
+            C.name, C.observedName, new C().field, a.values[0]];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-anonymous-name", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .args([
+            "--input-type=module",
+            "-e",
+            "import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))",
+        ])
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .unwrap();
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"["","",2,"Named","Named",3,"Inferred","Inferred",4,3]"#
+    );
+}
+
+#[test]
 fn modern_auto_accessor_decorator_await_is_relocated() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
