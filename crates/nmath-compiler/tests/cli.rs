@@ -584,6 +584,49 @@ fn modern_field_decorator_keeps_the_enclosing_wrapper_with_callback_decorators()
 }
 
 #[test]
+fn modern_field_decorator_ignores_preceding_undecorated_inner_class() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+import { setCalls } from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any { return () => {}; }
+export async function run() {
+    let Inner: any;
+    class C { @dec((Inner = class Inner {}, a[0] = 1)) field = 2; }
+    return [new C().field, a.values[0], setCalls, Inner.name];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-inner-class", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the inner-class fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the inner-class fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"[2,1,1,"Inner"]"#
+    );
+}
+
+#[test]
 fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \

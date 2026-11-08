@@ -698,70 +698,73 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         wrapper_at,
         wrapper_open,
         wrapper_close,
-    ) = loop {
+    ) = 'awaits: loop {
         let Some(at) = find_await_set(text, cursor) else {
             return Ok(None);
         };
-        let return_class = text[..at].rfind("return class ");
-        let assigned_class = text[..at].rfind("= class ");
-        let Some(class_token) = return_class.into_iter().chain(assigned_class).max() else {
-            cursor = at + "await __nmath".len();
-            continue;
-        };
-        let class_at = line_start(text, class_token)
-            + text[line_start(text, class_token)..class_token]
-                .bytes()
-                .take_while(|byte| *byte == b' ' || *byte == b'\t')
-                .count();
-        let class_open = text[class_token..]
-            .find('{')
-            .map(|offset| class_token + offset)
-            .ok_or("Generated class body is missing")?;
-        let class_close =
-            matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
-        let Some((wrapper_at, wrapper_open, wrapper_close, asynchronous_wrapper)) =
-            enclosing_wrapper(text, class_at)
-        else {
-            cursor = at + "await __nmath".len();
-            continue;
-        };
-        let downlevel =
-            enclosing_downlevel_decorator_block(text, class_close, wrapper_close, at).is_some();
-        if at > class_close && !downlevel {
-            cursor = at + "await __nmath".len();
-            continue;
+        let mut class_search = at;
+        loop {
+            let return_class = text[..class_search].rfind("return class ");
+            let assigned_class = text[..class_search].rfind("= class ");
+            let Some(class_token) = return_class.into_iter().chain(assigned_class).max() else {
+                cursor = at + "await __nmath".len();
+                continue 'awaits;
+            };
+            // A decorator argument can contain an earlier, already closed
+            // class. Try its enclosing candidates before discarding
+            // this awaited assignment.
+            class_search = class_token;
+            let class_at = line_start(text, class_token)
+                + text[line_start(text, class_token)..class_token]
+                    .bytes()
+                    .take_while(|byte| *byte == b' ' || *byte == b'\t')
+                    .count();
+            let class_open = text[class_token..]
+                .find('{')
+                .map(|offset| class_token + offset)
+                .ok_or("Generated class body is missing")?;
+            let class_close =
+                matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
+            let Some((wrapper_at, wrapper_open, wrapper_close, asynchronous_wrapper)) =
+                enclosing_wrapper(text, class_at)
+            else {
+                continue;
+            };
+            let downlevel =
+                enclosing_downlevel_decorator_block(text, class_close, wrapper_close, at).is_some();
+            if at > class_close && !downlevel {
+                continue;
+            }
+            let Some(assignment) = decorator_assignment_before(text, class_open, at) else {
+                continue;
+            };
+            let decorator_var = &text[assignment.name_start..assignment.name_end];
+            let field_call = format!("{decorator_var}, {{ kind: \"field\"");
+            let accessor_call = format!("{decorator_var}, {{ kind: \"accessor\"");
+            if !text[class_open..wrapper_close].contains(&field_call)
+                && !text[class_open..wrapper_close].contains(&accessor_call)
+            {
+                continue;
+            }
+            if !await_is_in_decorator_assignment(text, at) {
+                cursor = at + "await __nmath".len();
+                continue 'awaits;
+            }
+            if asynchronous_wrapper {
+                cursor = at + "await __nmath".len();
+                continue 'awaits;
+            }
+            break 'awaits (
+                at,
+                class_at,
+                class_open,
+                class_close,
+                downlevel,
+                wrapper_at,
+                wrapper_open,
+                wrapper_close,
+            );
         }
-        let Some(assignment) = decorator_assignment_before(text, class_open, at) else {
-            cursor = at + "await __nmath".len();
-            continue;
-        };
-        let decorator_var = &text[assignment.name_start..assignment.name_end];
-        let field_call = format!("{decorator_var}, {{ kind: \"field\"");
-        let accessor_call = format!("{decorator_var}, {{ kind: \"accessor\"");
-        if !text[class_open..wrapper_close].contains(&field_call)
-            && !text[class_open..wrapper_close].contains(&accessor_call)
-        {
-            cursor = at + "await __nmath".len();
-            continue;
-        }
-        if !await_is_in_decorator_assignment(text, at) {
-            cursor = at + "await __nmath".len();
-            continue;
-        }
-        if asynchronous_wrapper {
-            cursor = at + "await __nmath".len();
-            continue;
-        }
-        break (
-            at,
-            class_at,
-            class_open,
-            class_close,
-            downlevel,
-            wrapper_at,
-            wrapper_open,
-            wrapper_close,
-        );
     };
     if wrapper_close < class_close {
         return Err("Generated class is outside its wrapper".into());
