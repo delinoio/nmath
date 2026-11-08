@@ -637,7 +637,16 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         return Ok(None);
     }
     let mut cursor = 0;
-    let (await_at, class_at, class_open, class_close, downlevel) = loop {
+    let (
+        await_at,
+        class_at,
+        class_open,
+        class_close,
+        downlevel,
+        wrapper_at,
+        wrapper_open,
+        wrapper_close,
+    ) = loop {
         let Some(at) = find_await_set(text, cursor) else {
             return Ok(None);
         };
@@ -658,7 +667,8 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             .ok_or("Generated class body is missing")?;
         let class_close =
             matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
-        let Some((_, _, wrapper_close, asynchronous_wrapper)) = enclosing_wrapper(text, class_at)
+        let Some((wrapper_at, wrapper_open, wrapper_close, asynchronous_wrapper)) =
+            enclosing_wrapper(text, class_at)
         else {
             cursor = at + "await __nmath".len();
             continue;
@@ -695,14 +705,17 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         }
-        break (at, class_at, class_open, class_close, downlevel);
+        break (
+            at,
+            class_at,
+            class_open,
+            class_close,
+            downlevel,
+            wrapper_at,
+            wrapper_open,
+            wrapper_close,
+        );
     };
-    let wrapper_at = text[..class_at]
-        .rfind("(() => {")
-        .ok_or("Generated class wrapper is missing")?;
-    let wrapper_open = wrapper_at + "(() => ".len();
-    let wrapper_close =
-        matching_brace(text, wrapper_open).ok_or("Generated class wrapper is unbalanced")?;
     if wrapper_close < class_close {
         return Err("Generated class is outside its wrapper".into());
     }
