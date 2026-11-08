@@ -663,7 +663,7 @@ pub fn execute(
             determinant *= diagonal;
             for i in k + 1..n {
                 token.check()?;
-                let factor = lu[i * n + k] / diagonal;
+                let factor = lu[i * n + k].fdiv(diagonal);
                 lu[i * n + k] = factor;
                 for j in k + 1..n {
                     let v = lu[k * n + j];
@@ -686,7 +686,7 @@ pub fn execute(
                 for k in i + 1..n {
                     v -= lu[i * n + k] * rhs[k * cols + j];
                 }
-                rhs[i * cols + j] = v / lu[i * n + i];
+                rhs[i * cols + j] = v.fdiv(lu[i * n + i]);
             }
         }
         for (i, &v) in rhs.iter().enumerate() {
