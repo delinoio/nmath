@@ -59,6 +59,7 @@ Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ct
 - Results with rank 0 are JS scalars: `number` for floating and 32-bit-or-smaller integer dtypes, `bigint` for 64-bit integers, `boolean` and `string`. Complex values use the lossless `Complex` class. Other results are `NMathArray` values.
 - Explicit lossy conversions: `toNumber()`, `toDate()`.
 - Weak operand scalars follow NumPy NEP 50 with a fixed JS mapping: `number` acts as a Python `float`, `bigint` as a Python `int` and `boolean` as a Python `bool`. `Complex` acts as a Python `complex` weak operand.
+- Exact `bigint` backed `int64` and `uint64` arrays cast or assign to `float32` and `complex64` with direct destination rounding. A weak `bigint` operand or scalar assignment retains NumPy's scalar conversion through `float64` before single-precision rounding.
 
 Float16 arrays use `Float16Array` for numeric typed-array exchange when the Node.js 24 runtime provides it. Scalar reads return `number`. `ctx.arrayFromFloat16Bits(bits: Uint16Array, { shape? })` and `array.toFloat16Bits()` exchange exact IEEE-754 binary16 encodings, including NaN payloads. Both methods copy storage and preserve the existing budget and disposal rules. Numeric creation and `toTypedArray()` require `Float16Array`; they report an explicit error when it is unavailable. There is no float32 storage substitution. Public dtype promotion, reductions, casts and compiler helper signatures retain float16 where the runtime rules require it.
 

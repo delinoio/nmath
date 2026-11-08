@@ -309,7 +309,7 @@ impl Context {
                     // Assignment copies values, so view-valued expressions
                     // (basic indexing of an input)
                     // materialize from the frozen snapshot.
-                    let dense = env.eval_dense(&value)?;
+                    let dense = env.eval_assignment_value(&value, target.dtype())?;
                     // String width and temporal unit casts allocate a full
                     // source buffer. Hold its reservation
                     // until the atomic write finishes.

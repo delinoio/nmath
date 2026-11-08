@@ -407,6 +407,29 @@ impl Buffer {
         if self.dtype() == dtype {
             return Ok(each_buffer!(self, v => map_elements(v, token, |x| x)?.into()));
         }
+        // Array casts round wide integers directly to the destination
+        // component. A float64 intermediate can turn a value just above
+        // a float32 midpoint into an exact tie and select the wrong
+        // float32 neighbor.
+        match (self, dtype) {
+            (Buffer::I64(values), DType::Float32) => {
+                return Ok(Buffer::F32(map_elements(values, token, |x| x as f32)?));
+            }
+            (Buffer::U64(values), DType::Float32) => {
+                return Ok(Buffer::F32(map_elements(values, token, |x| x as f32)?));
+            }
+            (Buffer::I64(values), DType::Complex64) => {
+                return Ok(Buffer::C64(map_elements(values, token, |x| {
+                    [x as f32, 0.0]
+                })?));
+            }
+            (Buffer::U64(values), DType::Complex64) => {
+                return Ok(Buffer::C64(map_elements(values, token, |x| {
+                    [x as f32, 0.0]
+                })?));
+            }
+            _ => {}
+        }
         // NumPy's half casts saturate at the conversion width. Small integer
         // targets narrow the signed 32-bit conversion; wide unsigned targets
         // saturate negative values at zero.
@@ -807,6 +830,55 @@ mod tests {
         );
         let big = Buffer::I64(vec![i64::MAX]);
         assert_eq!(big.cast(DType::Int64).unwrap(), big);
+    }
+
+    #[test]
+    fn wide_integer_array_casts_round_once_to_single_precision() {
+        let midpoint = (1_i64 << 62) + (1_i64 << 38);
+        let signed = Buffer::I64(vec![
+            midpoint + 1,
+            -(midpoint + 1),
+            midpoint,
+            midpoint - 1,
+            0,
+        ]);
+        let unsigned = Buffer::U64(vec![midpoint as u64 + 1, (1_u64 << 63) + (1_u64 << 39) + 1]);
+        for (input, expected) in [
+            (
+                &signed,
+                vec![0x5e800001, 0xde800001, 0x5e800000, 0x5e800000, 0],
+            ),
+            (&unsigned, vec![0x5e800001, 0x5f000001]),
+        ] {
+            let Buffer::F32(real) = input.cast(DType::Float32).unwrap() else {
+                panic!("expected float32 storage");
+            };
+            assert_eq!(
+                real.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected
+            );
+            let Buffer::C64(complex) = input.cast(DType::Complex64).unwrap() else {
+                panic!("expected complex64 storage");
+            };
+            for (components, bits) in complex.iter().zip(expected) {
+                assert_eq!(components[0].to_bits(), bits);
+                assert_eq!(components[1].to_bits(), 0);
+            }
+        }
+        assert_eq!(
+            signed.cast(DType::Float64).unwrap(),
+            Buffer::F64(vec![
+                (midpoint + 1) as f64,
+                -(midpoint + 1) as f64,
+                midpoint as f64,
+                (midpoint - 1) as f64,
+                0.0,
+            ])
+        );
+        assert_eq!(
+            Buffer::I32(vec![16_777_217]).cast(DType::Float32).unwrap(),
+            Buffer::F32(vec![16_777_216.0])
+        );
     }
 
     #[test]
