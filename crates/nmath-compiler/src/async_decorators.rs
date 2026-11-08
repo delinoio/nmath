@@ -857,11 +857,6 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         .rfind("return class ")
         .map(|offset| wrapper_open + offset)
         .or_else(|| {
-            text[wrapper_open..class_open]
-                .rfind("return ")
-                .map(|offset| wrapper_open + offset)
-        })
-        .or_else(|| {
             text[class_close..wrapper_close]
                 .find("return ")
                 .map(|offset| class_close + offset)
