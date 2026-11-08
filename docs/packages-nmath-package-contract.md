@@ -291,7 +291,7 @@ The NumPy entry point exports `linalg.solve(a, b)`, `linalg.inv(a)`, `linalg.det
 
 `linalg.eig(a)` returns `[eigenvalues, eigenvectors]` with NumPy field names and `linalg.eigvals(a)` returns the eigenvalues. `LinalgComplexResult` maps single precision to complex64 and other inputs to complex128; results are always complex, unlike NumPy's data-dependent real result for real input with all-real eigenvalues. Eigenvalue order is unspecified.
 
-Linalg declarations preserve batch/result shape and reject known nonsquare matrices and incompatible solve core dimensions. FFT declarations preserve unchanged dimensions for omitted or positive literal axes and axis `-1`. Real-transform axis lengths and other negative/dynamic axis inference remain conservative; exact inference for those forms remains a target. These APIs do not establish full linear-algebra or FFT family coverage.
+Linalg declarations preserve batch/result shape and reject known nonsquare matrices and incompatible solve core dimensions. Open-rank shapes, including required-prefix and required-suffix tuples, defer unresolved matrix and solve core dimensions to native validation; known nonsquare trailing dimensions and known incompatible core dimensions still reject at type checking. Solve result shapes remain dynamic when either input rank is open. FFT declarations preserve unchanged dimensions for omitted or positive literal axes and axis `-1`. Real-transform axis lengths and other negative/dynamic axis inference remain conservative; exact inference for those forms remains a target. These APIs do not establish full linear-algebra or FFT family coverage.
 
 ### Partial counterpart evidence
 
