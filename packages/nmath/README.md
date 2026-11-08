@@ -98,6 +98,8 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+Array creation keeps an exact tuple shape when `shape` is required in the options. When the options can omit `shape`, `ctx.array`, `numpy.array` and `ctx.arrayFromFloat16Bits` use a conservative `number[]` result shape because the input data can determine the actual shape.
+
 When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
 
 ```ts

@@ -81,6 +81,8 @@ The FFT entry point adds `fft2`, `ifft2`, `fftn`, `ifftn`, `fftshift`, `ifftshif
 
 `NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
 
+Core and NumPy array creation, and exact float16 bit creation, keep an exact tuple shape only when the options require `shape`. An optional or possibly undefined `shape` returns a conservative `number[]` shape because the runtime can infer its shape from the input data. Dtype inference and explicit shape validation are unchanged.
+
 `compute()` returns a dtype-specific JS scalar for a known rank-zero shape and an `NMathArray` for a provably nonempty shape. When the shape can be empty, including mutable or readonly unknown-rank arrays, its result type includes both alternatives. Callers must narrow such a result before using array methods.
 `numpy.arange` returns a `[number]` array with the explicitly selected supported dtype. An omitted or `undefined` dtype selects `float64`. When a dtype argument can be `undefined`, its result dtype includes both the explicit dtype and the `float64` fallback, so typed-array export reflects both possible storage types.
 
