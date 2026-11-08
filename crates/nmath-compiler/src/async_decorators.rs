@@ -592,7 +592,11 @@ fn decorator_assignment_before(
     last
 }
 
-fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
+fn await_is_in_decorator_assignment(
+    text: &str,
+    await_at: usize,
+    function_body: Option<usize>,
+) -> bool {
     let Some(assignment) = decorator_assignment_before(text, 0, await_at) else {
         return false;
     };
@@ -600,35 +604,9 @@ fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
     if !matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close) {
         return false;
     }
-    let mut search = open + 1;
-    while let Some(offset) = text[search..await_at].find("=>") {
-        let arrow = search + offset;
-        let body_start = text[arrow + 2..]
-            .bytes()
-            .position(|byte| !byte.is_ascii_whitespace())
-            .map(|offset| arrow + 2 + offset);
-        if let Some(body_start) = body_start
-            && text.as_bytes().get(body_start) == Some(&b'{')
-            && matching_brace(text, body_start).is_some_and(|close| await_at < close)
-        {
-            return false;
-        }
-        search = arrow + 2;
-    }
-    search = open + 1;
-    while let Some(offset) = text[search..await_at].find("function") {
-        let function_at = search + offset;
-        let body_start = text[function_at + "function".len()..await_at]
-            .find('{')
-            .map(|offset| function_at + "function".len() + offset);
-        if let Some(body_start) = body_start
-            && matching_brace(text, body_start).is_some_and(|close| await_at < close)
-        {
-            return false;
-        }
-        search = function_at + "function".len();
-    }
-    true
+    // A function body that starts inside the decorator array defers the call
+    // until invocation. Literal contents cannot introduce a parser body node.
+    function_body.is_none_or(|start| start < open)
 }
 
 fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, String> {
@@ -691,9 +669,9 @@ fn awaited_helper_calls(text: &str) -> Vec<usize> {
         text,
         ScriptKind::JS,
     );
-    let mut pending = vec![parsed.as_node()];
+    let mut pending = vec![(parsed.as_node(), None::<usize>)];
     let mut positions = Vec::new();
-    while let Some(node) = pending.pop() {
+    while let Some((node, function_body)) = pending.pop() {
         if node.kind() == Kind::AwaitExpression {
             let at =
                 tsrs_scanner::skip_trivia(text, node.pos().expect_source("emitted await")) as usize;
@@ -702,12 +680,29 @@ fn awaited_helper_calls(text: &str) -> Vec<usize> {
                     let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
                     suffix = if digits > 0 { &rest[digits..] } else { "" };
                 }
-                if suffix.starts_with(".set(") {
+                if suffix.starts_with(".set(")
+                    && await_is_in_decorator_assignment(text, at, function_body)
+                {
                     positions.push(at);
                 }
             }
         }
-        pending.extend(node.iter_children());
+        let body = if tsrs_ast::is_function_like(node) {
+            node.body()
+        } else {
+            None
+        };
+        for child in node.iter_children() {
+            let child_body = if Some(child) == body {
+                Some(
+                    tsrs_scanner::skip_trivia(text, child.pos().expect_source("function body"))
+                        as usize,
+                )
+            } else {
+                function_body
+            };
+            pending.push((child, child_body));
+        }
     }
     positions.sort_unstable();
     positions
@@ -817,10 +812,6 @@ fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>,
                 && !text[class_open..wrapper_close].contains(&accessor_call)
             {
                 continue;
-            }
-            if !await_is_in_decorator_assignment(text, at) {
-                cursor = at + "await __nmath".len();
-                continue 'awaits;
             }
             if asynchronous_wrapper {
                 cursor = at + "await __nmath".len();
@@ -1024,7 +1015,7 @@ fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>,
 
 #[cfg(test)]
 mod tests {
-    use super::{await_is_in_decorator_assignment, matching_brace};
+    use super::{awaited_helper_calls, matching_brace};
 
     #[test]
     fn matching_brace_ignores_regex_literals() {
@@ -1048,7 +1039,6 @@ mod tests {
     #[test]
     fn nested_decorator_callback_await_is_not_eager_assignment() {
         let text = "_decorators = [dec(async () => { await __nmath.set(a, 0, 1); })];";
-        let await_at = text.find("await __nmath").unwrap();
-        assert!(!await_is_in_decorator_assignment(text, await_at));
+        assert!(awaited_helper_calls(text).is_empty());
     }
 }
