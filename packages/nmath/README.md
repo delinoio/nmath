@@ -411,6 +411,8 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
 
+If a dtype argument or option can be `undefined`, TypeScript includes the default dtype in the result type. Narrow the result dtype before assuming a specific typed array. A definitely present dtype keeps its exact result type.
+
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
 
 ### Product and index reductions
