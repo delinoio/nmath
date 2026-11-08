@@ -218,7 +218,7 @@ assertTrue<
 assertTrue<
   Equal<typeof helperFloatPositive, Expr<"float32", readonly [2, 3]>>
 >();
-assertTrue<Equal<typeof helperIntegerNegative, Expr<"int32", [3]>>>();
+assertTrue<Equal<typeof helperIntegerNegative, Expr<"int32", readonly [3]>>>();
 assertTrue<Equal<typeof helperComplexNegative, Expr<"complex64", []>>>();
 assertTrue<Equal<typeof helperComplexPositive, Expr<"complex64", []>>>();
 assertTrue<
