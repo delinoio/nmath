@@ -1133,6 +1133,63 @@ export async function run() {{
 }
 
 #[test]
+fn modern_field_decorator_ignores_literal_class_markers() {
+    for label in [
+        r#""return class {""#,
+        "`return class {`",
+        r#"`outer ${"return class {"}`"#,
+        r#"/return class [{]/"#,
+        "1 /* return class { */",
+    ] {
+        for callback in [
+            "async () => { a[0] = 2; return 2; }",
+            "async function () { a[0] = 2; return 2; }",
+            "async () => a[0] = 2",
+        ] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let saved: () => Promise<number>;
+function dec(_label: unknown, value: {{ value: number, callback: () => Promise<number> }}): any {{
+    saved = value.callback;
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec({label}, {{ value: a[0] = 1, callback: {callback} }}) field = 2; }}
+    const before = [new C().field, a.values[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-class-text", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{label} {callback}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{label} {callback}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,2,2]"
+            );
+        }
+    }
+}
+
+#[test]
 fn modern_field_decorators_ignore_helper_text_in_literals() {
     for extension in ["nts", "ts"] {
         for value in [

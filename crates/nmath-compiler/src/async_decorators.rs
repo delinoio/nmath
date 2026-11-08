@@ -532,6 +532,13 @@ fn enclosing_downlevel_decorator_block(
 }
 
 #[derive(Clone, Copy)]
+struct GeneratedClass {
+    start: usize,
+    open: usize,
+    close: usize,
+}
+
+#[derive(Clone, Copy)]
 struct DecoratorAssignment {
     name_start: usize,
     name_end: usize,
@@ -615,12 +622,14 @@ fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, 
     })
 }
 
-fn parsed_decorator_calls(text: &str) -> (Vec<usize>, Vec<DecoratorAssignment>) {
+fn parsed_decorator_calls(
+    text: &str,
+) -> (Vec<usize>, Vec<DecoratorAssignment>, Vec<GeneratedClass>) {
     use tsrs_ast::{Kind, SourceFileParseOptions};
     use tsrs_core::{ScriptKind, arena::Region, tspath};
 
     if !text.contains("await __nmath") {
-        return (Vec::new(), Vec::new());
+        return (Vec::new(), Vec::new(), Vec::new());
     }
     // Parse the pinned emitter's JavaScript before relocating its invalid
     // static-block awaits. The parser still represents those awaits, while
@@ -640,7 +649,24 @@ fn parsed_decorator_calls(text: &str) -> (Vec<usize>, Vec<DecoratorAssignment>) 
     let mut pending = vec![(parsed.as_node(), None::<usize>)];
     let mut positions = Vec::new();
     let mut assignments = Vec::new();
+    let mut classes = Vec::new();
     while let Some((node, function_body)) = pending.pop() {
+        if node.kind() == Kind::ClassExpression {
+            let start = tsrs_scanner::skip_trivia(text, node.pos().expect_source("class")) as usize;
+            let open = node
+                .as_class_expression()
+                .members()
+                .pos()
+                .expect_source("class members") as usize
+                - 1;
+            let close = node.end().expect_source("class") as usize - 1;
+            // Use parser boundaries: class-like text in literals and braces
+            // in heritage expressions cannot identify the generated class.
+            if text.as_bytes().get(open) == Some(&b'{') && text.as_bytes().get(close) == Some(&b'}')
+            {
+                classes.push(GeneratedClass { start, open, close });
+            }
+        }
         if node.kind() == Kind::BinaryExpression {
             let expression = node.as_binary_expression();
             if expression.operator_token.kind() == Kind::EqualsToken
@@ -714,31 +740,41 @@ fn parsed_decorator_calls(text: &str) -> (Vec<usize>, Vec<DecoratorAssignment>) 
         })
         .collect();
     awaits.sort_unstable();
-    (awaits, assignments)
+    classes.sort_unstable_by_key(|class| class.start);
+    (awaits, assignments, classes)
 }
 
 pub(crate) struct Rewriter {
     awaits: Vec<usize>,
     assignments: Vec<DecoratorAssignment>,
+    classes: Vec<GeneratedClass>,
     cursor: usize,
 }
 
 impl Rewriter {
     pub fn new(text: &str) -> Self {
-        let (awaits, assignments) = if text.contains("__esDecorate(") {
+        let (awaits, assignments, classes) = if text.contains("__esDecorate(") {
             parsed_decorator_calls(text)
         } else {
-            (Vec::new(), Vec::new())
+            (Vec::new(), Vec::new(), Vec::new())
         };
         Self {
             awaits,
             assignments,
+            classes,
             cursor: 0,
         }
     }
 
     pub fn rewrite(&mut self, text: &str) -> Result<Option<Rewrite>, String> {
-        let Some(rewrite) = rewrite(text, self.cursor, &self.awaits, &self.assignments)? else {
+        let Some(rewrite) = rewrite(
+            text,
+            self.cursor,
+            &self.awaits,
+            &self.assignments,
+            &self.classes,
+        )?
+        else {
             return Ok(None);
         };
         // Copy spans preserve the helper calls themselves. Relocate their
@@ -780,6 +816,18 @@ impl Rewriter {
             .collect();
         self.assignments
             .sort_unstable_by_key(|assignment| assignment.name_start);
+        self.classes = self
+            .classes
+            .iter()
+            .filter_map(|class| {
+                Some(GeneratedClass {
+                    start: relocate(class.start)?,
+                    open: relocate(class.open)?,
+                    close: relocate(class.close)?,
+                })
+            })
+            .collect();
+        self.classes.sort_unstable_by_key(|class| class.start);
         self.cursor = rewrite.resume_at;
         Ok(Some(rewrite))
     }
@@ -790,6 +838,7 @@ fn rewrite(
     from: usize,
     awaits: &[usize],
     decorator_assignments: &[DecoratorAssignment],
+    classes: &[GeneratedClass],
 ) -> Result<Option<Rewrite>, String> {
     if !text.contains("__esDecorate(") {
         return Ok(None);
@@ -810,27 +859,21 @@ fn rewrite(
         };
         let mut class_search = at;
         loop {
-            let return_class = text[..class_search].rfind("return class ");
-            let assigned_class = text[..class_search].rfind("= class ");
-            let Some(class_token) = return_class.into_iter().chain(assigned_class).max() else {
+            let end = classes.partition_point(|class| class.start < class_search);
+            let Some(class) = classes[..end].last() else {
                 cursor = at + "await __nmath".len();
                 continue 'awaits;
             };
-            // A decorator argument can contain an earlier, already closed
-            // class. Try its enclosing candidates before discarding
-            // this awaited assignment.
-            class_search = class_token;
-            let class_at = line_start(text, class_token)
-                + text[line_start(text, class_token)..class_token]
+            // Earlier inner classes can already be closed. Walk real parsed
+            // class candidates until the enclosing generated class is found.
+            class_search = class.start;
+            let class_at = line_start(text, class.start)
+                + text[line_start(text, class.start)..class.start]
                     .bytes()
                     .take_while(|byte| *byte == b' ' || *byte == b'\t')
                     .count();
-            let class_open = text[class_token..]
-                .find('{')
-                .map(|offset| class_token + offset)
-                .ok_or("Generated class body is missing")?;
-            let class_close =
-                matching_brace(text, class_open).ok_or("Generated class body is unbalanced")?;
+            let class_open = class.open;
+            let class_close = class.close;
             let Some((wrapper_at, wrapper_open, wrapper_close, asynchronous_wrapper)) =
                 enclosing_wrapper(text, class_at)
             else {
