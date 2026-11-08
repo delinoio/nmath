@@ -432,3 +432,83 @@ fn failed_build_keeps_existing_outputs() {
     let entries: Vec<_> = std::fs::read_dir(fixture.path("dist")).unwrap().collect();
     assert_eq!(entries.len(), 1);
 }
+
+#[cfg(unix)]
+#[test]
+fn failed_build_restores_live_and_dangling_output_symlinks() {
+    for (label, link_target) in [("live", "old.txt"), ("dangling", "missing-relative.txt")] {
+        let fixture = Fixture::new(&format!("rollback-symlink-{label}"));
+        fixture.write("src/main.nts", "export const answer: number = 42;\n");
+        fixture.write("dist/main.js.map/sentinel", "directory sentinel");
+        if label == "live" {
+            fixture.write("dist/old.txt", "original referent");
+        }
+        let output = fixture.path("dist/main.js");
+        std::os::unix::fs::symlink(link_target, &output).unwrap();
+
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 1, "{result:#}");
+        assert_eq!(codes(&result), ["NMATH_COMPILER_EMIT"]);
+        assert_eq!(result["outputFiles"], Value::Array(Vec::new()));
+        assert_eq!(
+            std::fs::read_link(&output).unwrap(),
+            std::path::Path::new(link_target)
+        );
+        assert_eq!(
+            fixture.read("dist/main.js.map/sentinel"),
+            "directory sentinel"
+        );
+        if label == "live" {
+            assert_eq!(fixture.read("dist/old.txt"), "original referent");
+        } else {
+            assert!(!fixture.path("dist/missing-relative.txt").exists());
+        }
+        assert!(
+            std::fs::read_dir(fixture.path("dist"))
+                .unwrap()
+                .all(|entry| !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(".nmath-"))
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn successful_build_replaces_output_symlink_and_removes_owned_backup() {
+    let fixture = Fixture::new("build-symlink-success");
+    fixture.write("src/main.nts", "export const answer: number = 42;\n");
+    fixture.write("dist/old.txt", "original referent");
+    let output = fixture.path("dist/main.js");
+    std::os::unix::fs::symlink("old.txt", &output).unwrap();
+
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    assert_eq!(result["ok"], Value::Bool(true));
+    assert!(
+        result["outputFiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|path| path.as_str().unwrap().ends_with("/main.js"))
+    );
+    assert!(
+        !std::fs::symlink_metadata(&output)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(fixture.read("dist/main.js").contains("answer = 42"));
+    assert_eq!(fixture.read("dist/old.txt"), "original referent");
+    assert!(
+        std::fs::read_dir(fixture.path("dist"))
+            .unwrap()
+            .all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains(".nmath-"))
+    );
+}

@@ -649,24 +649,49 @@ fn reserve_backup_copy(
     }
 }
 
-/// Reserves a link to an existing regular target, then replaces it with `temp`.
+#[cfg(unix)]
+fn reserve_symlink_backup(target: &Path) -> std::io::Result<PathBuf> {
+    reserve_symlink_backup_with(target, || backup_path(target))
+}
+
+#[cfg(unix)]
+fn reserve_symlink_backup_with(
+    target: &Path,
+    mut candidate: impl FnMut() -> PathBuf,
+) -> std::io::Result<PathBuf> {
+    let link_target = std::fs::read_link(target)?;
+    loop {
+        let path = candidate();
+        // Recreate the link entry at an exclusive recovery name. A hard link
+        // may refer to the link's referent on some platforms.
+        match std::os::unix::fs::symlink(&link_target, &path) {
+            Ok(()) => return Ok(path),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+/// Reserves recovery for an existing regular file or Unix symlink, then
+/// replaces it with `temp`.
 /// On failure the target is left as it was.
 fn replace_with_backup(temp: &Path, target: &Path) -> std::io::Result<Option<PathBuf>> {
     let backup = match std::fs::symlink_metadata(target) {
-        Ok(meta) if meta.is_file() => {
-            let backup = reserve_backup(target)?;
-            if let Err(err) = std::fs::remove_file(target) {
-                let _ = std::fs::remove_file(&backup);
-                return Err(err);
-            }
-            Some(backup)
-        }
-        // A directory or other non-file target makes the rename below fail and
-        // is never moved.
+        Ok(meta) if meta.is_file() => Some(reserve_backup(target)?),
+        #[cfg(unix)]
+        Ok(meta) if meta.file_type().is_symlink() => Some(reserve_symlink_backup(target)?),
+        // A directory or other unsupported target makes the rename below fail
+        // and is never moved.
         Ok(_) => None,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => return Err(err),
     };
+    if let Some(backup) = &backup {
+        if let Err(err) = std::fs::remove_file(target) {
+            let _ = std::fs::remove_file(backup);
+            return Err(err);
+        }
+    }
     if let Err(err) = std::fs::rename(temp, target) {
         if let Some(backup) = &backup {
             if let Err(restore_err) = std::fs::rename(backup, target) {
@@ -1294,6 +1319,106 @@ mod tests {
             "previous output"
         );
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "previous output");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_commit_restores_live_and_dangling_symlink_outputs() {
+        for (label, link_target) in [("live", "old.txt"), ("dangling", "missing-relative.txt")] {
+            let dir = publication_dir(label);
+            let output = dir.join("a.js");
+            let blocked = dir.join("b.js");
+            let referent = dir.join("old.txt");
+            if label == "live" {
+                std::fs::write(&referent, "original referent").unwrap();
+            }
+            std::os::unix::fs::symlink(link_target, &output).unwrap();
+            std::fs::create_dir(&blocked).unwrap();
+            std::fs::write(blocked.join("sentinel"), "directory sentinel").unwrap();
+            let writes = BTreeMap::from([
+                (normalize(&output), "emitted output".to_string()),
+                (normalize(&blocked), "cannot replace directory".to_string()),
+            ]);
+
+            let diagnostic = commit_outputs(&writes).unwrap_err();
+            assert_eq!(diagnostic.code, CompilerCode::Emit);
+            assert_eq!(std::fs::read_link(&output).unwrap(), Path::new(link_target));
+            assert_eq!(
+                std::fs::read_to_string(blocked.join("sentinel")).unwrap(),
+                "directory sentinel"
+            );
+            if label == "live" {
+                assert_eq!(
+                    std::fs::read_to_string(&referent).unwrap(),
+                    "original referent"
+                );
+            } else {
+                assert!(!dir.join(link_target).exists());
+            }
+            assert_eq!(
+                std::fs::read_dir(&dir).unwrap().count(),
+                if label == "live" { 3 } else { 2 },
+                "no owned publication artifacts remain"
+            );
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn successful_commit_replaces_symlink_without_changing_referent() {
+        let dir = publication_dir("successful-symlink");
+        let output = dir.join("a.js");
+        let referent = dir.join("old.txt");
+        std::fs::write(&referent, "original referent").unwrap();
+        std::os::unix::fs::symlink("old.txt", &output).unwrap();
+        let writes = BTreeMap::from([(normalize(&output), "emitted output".to_string())]);
+
+        assert_eq!(commit_outputs(&writes).unwrap(), vec![normalize(&output)]);
+        assert!(
+            !std::fs::symlink_metadata(&output)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "emitted output");
+        assert_eq!(
+            std::fs::read_to_string(&referent).unwrap(),
+            "original referent"
+        );
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_backup_reservation_keeps_occupied_candidate() {
+        let dir = publication_dir("symlink-backup-collision");
+        let output = dir.join("a.js");
+        std::os::unix::fs::symlink("missing-relative.txt", &output).unwrap();
+        let occupied = dir.join("occupied.bak");
+        let available = dir.join("available.bak");
+        std::fs::write(&occupied, "unrelated backup").unwrap();
+        let mut candidates = [occupied.clone(), available.clone()].into_iter();
+
+        assert_eq!(
+            reserve_symlink_backup_with(&output, || candidates.next().unwrap()).unwrap(),
+            available
+        );
+        assert_eq!(
+            std::fs::read_to_string(&occupied).unwrap(),
+            "unrelated backup"
+        );
+        assert_eq!(
+            std::fs::read_link(&available).unwrap(),
+            Path::new("missing-relative.txt")
+        );
+        assert_eq!(
+            std::fs::read_link(&output).unwrap(),
+            Path::new("missing-relative.txt")
+        );
+        assert!(!dir.join("missing-relative.txt").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
