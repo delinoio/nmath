@@ -669,25 +669,94 @@ fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, 
     })
 }
 
-fn find_await_set(text: &str, from: usize) -> Option<usize> {
-    let mut cursor = from;
-    while let Some(offset) = text[cursor..].find("await __nmath") {
-        let at = cursor + offset;
-        let after_name = at + "await __nmath".len();
-        let mut suffix = &text[after_name..];
-        if let Some(rest) = suffix.strip_prefix('_') {
-            let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
-            suffix = if digits > 0 { &rest[digits..] } else { "" };
-        }
-        if suffix.starts_with(".set(") {
-            return Some(at);
-        }
-        cursor = after_name;
+fn awaited_helper_calls(text: &str) -> Vec<usize> {
+    use tsrs_ast::{Kind, SourceFileParseOptions};
+    use tsrs_core::{ScriptKind, arena::Region, tspath};
+
+    if !text.contains("await __nmath") {
+        return Vec::new();
     }
-    None
+    // Parse the pinned emitter's JavaScript before relocating its invalid
+    // static-block awaits. The parser still represents those awaits, while
+    // literal text, comments and regular expressions never become await nodes.
+    // Keep this temporary tree out of the surrounding compilation arena.
+    let region = Region::new((text.len() * 16).clamp(64 << 10, 64 << 20));
+    let _scope = region.enter();
+    let parsed = tsrs_parser::parse_source_file(
+        SourceFileParseOptions {
+            file_name: "/__nmath__/decorators.js".into(),
+            path: tspath::to_path("/__nmath__/decorators.js", "", true),
+            external_module_indicator_options: Default::default(),
+        },
+        text,
+        ScriptKind::JS,
+    );
+    let mut pending = vec![parsed.as_node()];
+    let mut positions = Vec::new();
+    while let Some(node) = pending.pop() {
+        if node.kind() == Kind::AwaitExpression {
+            let at =
+                tsrs_scanner::skip_trivia(text, node.pos().expect_source("emitted await")) as usize;
+            if let Some(mut suffix) = text[at..].strip_prefix("await __nmath") {
+                if let Some(rest) = suffix.strip_prefix('_') {
+                    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+                    suffix = if digits > 0 { &rest[digits..] } else { "" };
+                }
+                if suffix.starts_with(".set(") {
+                    positions.push(at);
+                }
+            }
+        }
+        pending.extend(node.iter_children());
+    }
+    positions.sort_unstable();
+    positions
 }
 
-pub(crate) fn rewrite(text: &str, from: usize) -> Result<Option<Rewrite>, String> {
+pub(crate) struct Rewriter {
+    awaits: Vec<usize>,
+    cursor: usize,
+}
+
+impl Rewriter {
+    pub fn new(text: &str) -> Self {
+        Self {
+            awaits: if text.contains("__esDecorate(") {
+                awaited_helper_calls(text)
+            } else {
+                Vec::new()
+            },
+            cursor: 0,
+        }
+    }
+
+    pub fn rewrite(&mut self, text: &str) -> Result<Option<Rewrite>, String> {
+        let Some(rewrite) = rewrite(text, self.cursor, &self.awaits)? else {
+            return Ok(None);
+        };
+        // Copy spans preserve the helper calls themselves. Relocate their
+        // parsed positions so later passes do not parse already repaired code.
+        self.awaits = self
+            .awaits
+            .iter()
+            .map(|at| {
+                rewrite
+                    .copies
+                    .iter()
+                    .find(|span| span.old_start <= *at && *at < span.old_end)
+                    .map(|span| span.new_start + at - span.old_start)
+                    .ok_or_else(|| {
+                        "Awaited helper was lost during decorator relocation".to_string()
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.awaits.sort_unstable();
+        self.cursor = rewrite.resume_at;
+        Ok(Some(rewrite))
+    }
+}
+
+fn rewrite(text: &str, from: usize, awaits: &[usize]) -> Result<Option<Rewrite>, String> {
     if !text.contains("__esDecorate(") {
         return Ok(None);
     }
@@ -702,7 +771,7 @@ pub(crate) fn rewrite(text: &str, from: usize) -> Result<Option<Rewrite>, String
         wrapper_open,
         wrapper_close,
     ) = 'awaits: loop {
-        let Some(at) = find_await_set(text, cursor) else {
+        let Some(at) = awaits.iter().copied().find(|at| *at >= cursor) else {
             return Ok(None);
         };
         let mut class_search = at;
@@ -814,15 +883,15 @@ pub(crate) fn rewrite(text: &str, from: usize) -> Result<Option<Rewrite>, String
                 let end = statement_end(text, assignment_start, static_close)
                     .ok_or("Generated decorator assignment is unbalanced")?;
                 let assignment = &text[assignment_start..end];
-                if !assignment.contains("__esDecorate(") || find_await_set(assignment, 0).is_some()
-                {
+                let has_await = awaits.iter().any(|at| assignment_start <= *at && *at < end);
+                if !assignment.contains("__esDecorate(") || has_await {
                     let value_end = assignment_start + assignment.rfind(';').unwrap();
                     assignments.push((
                         assignment_start,
                         end,
                         assignment_name_start,
                         value_end,
-                        find_await_set(assignment, 0).is_some(),
+                        has_await,
                     ));
                 }
                 position = end;
@@ -831,7 +900,8 @@ pub(crate) fn rewrite(text: &str, from: usize) -> Result<Option<Rewrite>, String
                 return Ok(None);
             };
             // Start from this expression instead of retesting every sentinel
-            // allocated to earlier classes. Still reject names present in input.
+            // allocated to earlier classes. Still reject names present in
+            // input.
             let sentinel = (await_at..)
                 .map(|index| format!("__nmath_decorator_sentinel_{index}"))
                 .find(|candidate| !text.contains(candidate))

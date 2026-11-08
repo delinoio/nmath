@@ -627,6 +627,49 @@ export async function run() {
 }
 
 #[test]
+fn modern_field_decorator_keeps_awaits_in_template_expressions() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+import { setCalls } from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let seen = "";
+function dec(value: string): any { seen = value; return () => {}; }
+export async function run() {
+    class C { @dec(`await __nmath.set( ${a[0] = 1}`) field = 2; }
+    return [new C().field, a.values[0], setCalls, seen];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-template-await", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the template-await fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the template-await fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"[2,1,1,"await __nmath.set( 1"]"#
+    );
+}
+
+#[test]
 fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
@@ -979,6 +1022,54 @@ fn nested_template_literals_do_not_break_decorator_rewrite() {
         String::from_utf8(runtime.stdout).unwrap().trim(),
         "[\"outer}\",1,1]"
     );
+}
+
+#[test]
+fn modern_field_decorators_ignore_helper_text_in_literals() {
+    for extension in ["nts", "ts"] {
+        for value in [
+            r#""await __nmath.set(""#,
+            r#"`await __nmath.set(`"#,
+            r#"`outer ${"await __nmath.set("}`"#,
+            r#"/await __nmath.set(a)/"#,
+            r#"1 /* await __nmath.set( */"#,
+        ] {
+            let source = format!(
+                "function dec(_value: any): any {{ return () => {{}}; }}\nexport function run() \
+                 {{ class C {{ @dec({value}) field = 0; }} return new C().field; }}\n"
+            );
+            let fixture = field_decorator_fixture("decorator-literal-helper", false, &source);
+            if extension == "ts" {
+                std::fs::rename(fixture.path("src/main.nts"), fixture.path("src/main.ts")).unwrap();
+            }
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{extension} {value}: {result:#}");
+            let checked = Command::new("node")
+                .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+                .output()
+                .unwrap();
+            assert!(
+                checked.status.success(),
+                "{extension} {value}: {}",
+                String::from_utf8_lossy(&checked.stderr)
+            );
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(m => console.log(m.run()))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "0");
+        }
+    }
 }
 
 #[test]
