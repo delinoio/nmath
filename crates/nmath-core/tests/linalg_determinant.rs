@@ -186,6 +186,20 @@ fn near_limit_finite_determinants_do_not_overflow_reconstruction() {
 }
 
 #[test]
+fn subnormal_pivots_retain_their_scale() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let subnormal = dense(vec![1, 1], Buffer::F64(vec![1e-310]));
+    let result = determinant(&subnormal, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!((values[0] - 1e-310).abs() / 1e-310 < 1e-12);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
 fn determinant_retains_batch_dtype_cancellation_and_budget() {
     let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
     let token = CancellationToken::new();

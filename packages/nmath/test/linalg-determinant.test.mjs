@@ -149,3 +149,14 @@ test("determinants retain finite complex components when magnitude overflows", a
     await c.close();
   }
 });
+
+test("determinants retain subnormal pivot scale", async () => {
+  const c = context();
+  try {
+    const subnormal = c.array([[1e-310]], { dtype: "float64" });
+    const result = await linalg.det(subnormal).compute();
+    assert.ok(Math.abs(result - 1e-310) / 1e-310 < 1e-12);
+  } finally {
+    await c.close();
+  }
+});

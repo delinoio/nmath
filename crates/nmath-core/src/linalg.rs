@@ -330,20 +330,21 @@ impl SignedLog {
         } else {
             let bits = value.abs().to_bits();
             let raw_exponent = (bits >> 52) & 0x7ff;
-            let (fraction, exponent) = if raw_exponent == 0 {
-                let scaled = value.abs() * 2_f64.powi(1074);
-                let scaled_bits = scaled.to_bits();
-                (
-                    scaled_bits & ((1_u64 << 52) - 1),
-                    ((scaled_bits >> 52) & 0x7ff) as f64 - 1023.0 - 1074.0,
-                )
+            if raw_exponent == 0 {
+                let fraction = bits & ((1_u64 << 52) - 1);
+                let highest_bit = 63 - fraction.leading_zeros();
+                Self {
+                    sign: value.signum(),
+                    mantissa: fraction as f64 / (1_u64 << highest_bit) as f64,
+                    exponent: highest_bit as f64 - 1074.0,
+                }
             } else {
-                (bits & ((1_u64 << 52) - 1), raw_exponent as f64 - 1023.0)
-            };
-            Self {
-                sign: value.signum(),
-                mantissa: 1.0 + fraction as f64 / (1_u64 << 52) as f64,
-                exponent,
+                let fraction = bits & ((1_u64 << 52) - 1);
+                Self {
+                    sign: value.signum(),
+                    mantissa: 1.0 + fraction as f64 / (1_u64 << 52) as f64,
+                    exponent: raw_exponent as f64 - 1023.0,
+                }
             }
         }
     }
