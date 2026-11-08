@@ -476,36 +476,151 @@ fn read_checked_with<R>(
     token: &CancellationToken,
     reserve: impl FnOnce(u64) -> Result<R>,
 ) -> Result<(Vec<u8>, R)> {
-    let stamp = |m: &fs::Metadata| (m.len(), m.modified().ok());
-    let file = File::open(path).map_err(io_error)?;
-    let before = stamp(&file.metadata().map_err(io_error)?);
+    let mut file = File::open(path).map_err(io_error)?;
+    let before = metadata_stamp(&file.metadata().map_err(io_error)?);
+    read_opened(path, &mut file, before, token, reserve)
+}
+
+fn metadata_stamp(metadata: &fs::Metadata) -> (u64, Option<SystemTime>) {
+    (metadata.len(), metadata.modified().ok())
+}
+
+fn read_opened<R>(
+    path: &Path,
+    file: &mut File,
+    before: (u64, Option<SystemTime>),
+    token: &CancellationToken,
+    reserve: impl FnOnce(u64) -> Result<R>,
+) -> Result<(Vec<u8>, R)> {
     let reservation = reserve(before.0)?;
-    let mut bytes = Vec::with_capacity(before.0 as usize);
-    // Read at most one byte past the recorded size so a growing file cannot
-    // allocate beyond the reservation; the extra byte reports the change.
-    let mut file = file.take(before.0.saturating_add(1));
-    let mut chunk = vec![0u8; before.0.saturating_add(1).min(1 << 20) as usize];
-    loop {
-        token.check()?;
-        let n = file.read(&mut chunk).map_err(io_error)?;
-        if n == 0 {
-            break;
-        }
-        bytes.extend_from_slice(&chunk[..n]);
-    }
-    let after = stamp(&fs::metadata(path).map_err(io_error)?);
-    if before != after || bytes.len() as u64 != before.0 {
-        return Err(Error::new(
-            ErrorCode::IoModified,
-            "The input file changed while it was read.",
-        ));
+    let size = usize::try_from(before.0)
+        .map_err(|_| Error::new(ErrorCode::IoFailed, "The input file is too large to read."))?;
+    let mut bytes = vec![0u8; size];
+    read_fixed(file, &mut bytes, token)?;
+    let after = metadata_stamp(&fs::metadata(path).map_err(io_error)?);
+    if before != after {
+        return Err(io_modified());
     }
     Ok((bytes, reservation))
 }
 
+fn io_modified() -> Error {
+    Error::new(
+        ErrorCode::IoModified,
+        "The input file changed while it was read.",
+    )
+}
+
+fn read_fixed(reader: &mut impl Read, bytes: &mut [u8], token: &CancellationToken) -> Result<()> {
+    for chunk in bytes.chunks_mut(1 << 20) {
+        let mut remaining = chunk;
+        while !remaining.is_empty() {
+            token.check()?;
+            let n = reader.read(remaining).map_err(io_error)?;
+            if n == 0 {
+                return Err(io_modified());
+            }
+            remaining = &mut remaining[n..];
+        }
+    }
+    token.check()?;
+    // The probe stays on the stack, so appended input cannot grow the charged
+    // buffer.
+    let mut extra = [0u8; 1];
+    if reader.read(&mut extra).map_err(io_error)? != 0 {
+        return Err(io_modified());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::{Cursor, Seek, SeekFrom},
+        time::UNIX_EPOCH,
+    };
+
     use super::*;
+
+    #[test]
+    fn fixed_reader_rejects_growth_and_truncation_without_resizing() {
+        let token = CancellationToken::new();
+        for input in [&b"abc"[..], &b"a"[..]] {
+            let mut bytes = vec![0u8; 2];
+            let capacity = bytes.capacity();
+            let err = read_fixed(&mut Cursor::new(input), &mut bytes, &token).unwrap_err();
+            assert_eq!(err.code, ErrorCode::IoModified);
+            assert_eq!(bytes.capacity(), capacity);
+        }
+        let mut bytes = vec![0u8; 2];
+        read_fixed(&mut Cursor::new(b"ab"), &mut bytes, &token).unwrap();
+        assert_eq!(bytes, b"ab");
+    }
+
+    #[test]
+    fn fixed_reader_cancellation_releases_the_input_charge() {
+        struct CancellingReader<'a> {
+            token: &'a CancellationToken,
+            reads: usize,
+        }
+        impl Read for CancellingReader<'_> {
+            fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+                self.reads += 1;
+                if self.reads == 1 {
+                    self.token.cancel();
+                }
+                out[0] = 1;
+                Ok(1)
+            }
+        }
+        let budget = MemoryBudget::new(crate::memory::Device::Cpu, 2 << 20);
+        let token = CancellationToken::new();
+        let result = (|| {
+            let _charge = budget.reserve(2 << 20)?;
+            let mut bytes = vec![0u8; 2 << 20];
+            read_fixed(
+                &mut CancellingReader {
+                    token: &token,
+                    reads: 0,
+                },
+                &mut bytes,
+                &token,
+            )
+        })();
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn checked_reader_detects_file_changes_after_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("input.npy");
+        let token = CancellationToken::new();
+        for change in 0..3 {
+            fs::write(&path, b"ab").unwrap();
+            let mut file = File::options().read(true).write(true).open(&path).unwrap();
+            let before = metadata_stamp(&file.metadata().unwrap());
+            match change {
+                0 => {
+                    file.seek(SeekFrom::End(0)).unwrap();
+                    file.write_all(b"c").unwrap();
+                }
+                1 => {
+                    file.set_len(1).unwrap();
+                }
+                _ => {
+                    file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH))
+                        .unwrap();
+                }
+            }
+            file.rewind().unwrap();
+            let budget = MemoryBudget::new(crate::memory::Device::Cpu, 2);
+            let err = read_opened(&path, &mut file, before, &token, |len| budget.reserve(len))
+                .unwrap_err();
+            assert_eq!(err.code, ErrorCode::IoModified);
+            assert_eq!(budget.usage().used, 0);
+        }
+    }
 
     #[test]
     fn npy_round_trip() {
