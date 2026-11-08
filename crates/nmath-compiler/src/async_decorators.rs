@@ -524,12 +524,21 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             matching_brace(text, static_open).ok_or("Generated decorator block is unbalanced")?;
         if await_at > static_open && await_at < static_close {
             let metadata_at = text[static_open..static_close]
-                .find("const _metadata = ")
+                .find("const _metadata")
                 .map(|offset| static_open + offset)
                 .ok_or("Generated decorator metadata is missing")?;
             let metadata_start = line_start(text, metadata_at);
             let metadata_end = line_end(text, metadata_at);
             let metadata_value_start = metadata_at + "const ".len();
+            let metadata_name_end = text[metadata_value_start..]
+                .bytes()
+                .position(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')))
+                .map(|offset| metadata_value_start + offset)
+                .ok_or("Generated metadata identifier is missing")?;
+            if !text[metadata_name_end..].trim_start().starts_with('=') {
+                return Err("Generated decorator metadata declaration is malformed".into());
+            }
+            let metadata_identifier = &text[metadata_value_start..metadata_name_end];
             let metadata_value_end = text[metadata_value_start..metadata_end]
                 .rfind(';')
                 .map(|offset| metadata_value_start + offset)
@@ -577,7 +586,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
                 start: class_at,
                 end: class_at,
                 parts: vec![Part::New(format!(
-                    "let _metadata; let {sentinel};\n        "
+                    "let {metadata_identifier}; let {sentinel};\n        "
                 ))],
             });
             edits.push(Edit {
@@ -668,7 +677,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::matching_brace;
+    use super::{await_is_in_decorator_assignment, matching_brace};
 
     #[test]
     fn matching_brace_ignores_regex_literals() {
