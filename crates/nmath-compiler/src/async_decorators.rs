@@ -541,20 +541,60 @@ fn enclosing_downlevel_decorator_block(
     None
 }
 
-fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
-    let mut search = 0;
-    let mut marker = None;
-    while let Some(offset) = text[search..await_at].find("_decorators = [") {
-        marker = Some(search + offset);
-        search += offset + "_decorators = [".len();
+struct DecoratorAssignment {
+    name_start: usize,
+    name_end: usize,
+    array_open: usize,
+}
+
+fn next_decorator_assignment(text: &str, from: usize, until: usize) -> Option<DecoratorAssignment> {
+    let mut search = from;
+    while let Some(offset) = text[search..until].find("_decorators") {
+        let marker = search + offset;
+        let mut name_end = marker + "_decorators".len();
+        search = name_end;
+        // The pinned emitter appends a numeric suffix when an outer binding
+        // already uses its generated name. Keep that suffix in every scan.
+        if text[name_end..until].starts_with('_') {
+            let digits = text[name_end + 1..until]
+                .bytes()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            if digits == 0 {
+                continue;
+            }
+            name_end += 1 + digits;
+        }
+        if text[name_end..until].starts_with(" = [") {
+            return Some(DecoratorAssignment {
+                name_start: identifier_start(text, marker),
+                name_end,
+                array_open: name_end + 3,
+            });
+        }
     }
-    let Some(marker) = marker else {
+    None
+}
+
+fn decorator_assignment_before(
+    text: &str,
+    from: usize,
+    until: usize,
+) -> Option<DecoratorAssignment> {
+    let mut search = from;
+    let mut last = None;
+    while let Some(assignment) = next_decorator_assignment(text, search, until) {
+        search = assignment.array_open + 1;
+        last = Some(assignment);
+    }
+    last
+}
+
+fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
+    let Some(assignment) = decorator_assignment_before(text, 0, await_at) else {
         return false;
     };
-    let Some(offset) = text[marker..await_at].find('[') else {
-        return false;
-    };
-    let open = marker + offset;
+    let open = assignment.array_open;
     if !matching_delimiter(text, open, b'[', b']').is_some_and(|close| await_at < close) {
         return false;
     }
@@ -691,14 +731,11 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             cursor = at + "await __nmath".len();
             continue;
         }
-        let prefix = &text[class_open..at];
-        let Some(marker) = prefix.rfind("_decorators = [") else {
+        let Some(assignment) = decorator_assignment_before(text, class_open, at) else {
             cursor = at + "await __nmath".len();
             continue;
         };
-        let end = class_open + marker + "_decorators".len();
-        let start = identifier_start(text, end);
-        let decorator_var = &text[start..end];
+        let decorator_var = &text[assignment.name_start..assignment.name_end];
         let field_call = format!("{decorator_var}, {{ kind: \"field\"");
         let accessor_call = format!("{decorator_var}, {{ kind: \"accessor\"");
         if !text[class_open..wrapper_close].contains(&field_call)
@@ -762,21 +799,12 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             let mut assignments = Vec::new();
             let mut position = metadata_end;
             while position < static_close {
-                let Some(offset) = text[position..static_close].find("_decorators = [") else {
+                let Some(decorator) = next_decorator_assignment(text, position, static_close)
+                else {
                     break;
                 };
-                let marker = position + offset;
-                let mut assignment_name_start = marker;
-                while let Some((index, ch)) =
-                    text[..assignment_name_start].char_indices().next_back()
-                {
-                    if is_identifier_char(ch) {
-                        assignment_name_start = index;
-                    } else {
-                        break;
-                    }
-                }
-                let assignment_start = line_start(text, marker);
+                let assignment_name_start = decorator.name_start;
+                let assignment_start = line_start(text, assignment_name_start);
                 let end = statement_end(text, assignment_start, static_close)
                     .ok_or("Generated decorator assignment is unbalanced")?;
                 let assignment = &text[assignment_start..end];
