@@ -343,13 +343,16 @@ fn decode_npy_with<R>(
         "<c8" | ">c8" => DType::Complex64,
         "<c16" | ">c16" => DType::Complex128,
         other if other.starts_with("<U") || other.starts_with(">U") => {
-            DType::from_id(&format!("str[{}]", &other[2..]))?
+            DType::from_id(&format!("str[{}]", &other[2..]))
+                .map_err(|_| format_error("unsupported dtype descriptor"))?
         }
         other if other.starts_with("<M8[") || other.starts_with(">M8[") => {
-            DType::from_id(&format!("datetime64{}", &other[3..]))?
+            DType::from_id(&format!("datetime64{}", &other[3..]))
+                .map_err(|_| format_error("unsupported dtype descriptor"))?
         }
         other if other.starts_with("<m8[") || other.starts_with(">m8[") => {
-            DType::from_id(&format!("timedelta64{}", &other[3..]))?
+            DType::from_id(&format!("timedelta64{}", &other[3..]))
+                .map_err(|_| format_error("unsupported dtype descriptor"))?
         }
         _ => return Err(format_error("unsupported dtype descriptor")),
     };
@@ -677,6 +680,9 @@ mod tests {
             "{'descr': '<f8', 'fortran_order': False, 'shape': (-1,)}",
             "{'descr': '<f8', 'fortran_order': False, 'shape': (18446744073709551615, 2)}",
             "{'descr': '<x8', 'fortran_order': False, 'shape': (1,)}",
+            "{'descr': '<Ubogus', 'fortran_order': False, 'shape': (1,)}",
+            "{'descr': '<M8[foo]', 'fortran_order': False, 'shape': (1,)}",
+            "{'descr': '<m8[foo]', 'fortran_order': False, 'shape': (1,)}",
             "{'descr': '<f8, 'fortran_order': False, 'shape': (1,)}",
         ];
         for header in malformed {
