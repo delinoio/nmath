@@ -106,7 +106,16 @@ export function ones<D extends ComputableDType, const S extends Shape>(
   dtype: D,
 ): NMathArray<D, S> {
   const one = (
-    dtype === "int64" || dtype === "uint64" ? 1n : dtype === "bool" ? true : 1
+    dtype === "str"
+      ? "1"
+      : dtype === "datetime64" ||
+          dtype === "timedelta64" ||
+          dtype === "int64" ||
+          dtype === "uint64"
+        ? 1n
+        : dtype === "bool"
+          ? true
+          : 1
   ) as ScalarOf<D>;
   return context.full(shape, one, dtype);
 }
