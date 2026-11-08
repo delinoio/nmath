@@ -697,7 +697,7 @@ mod io_npz_context;
 
 #[cfg(test)]
 mod admission_tests {
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{fs, sync::mpsc, thread, time::Duration};
 
     use super::*;
     use crate::{BinaryOp, Buffer, Scalar, expr::freeze_test_hook};
@@ -715,6 +715,79 @@ mod admission_tests {
     fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
         let (tx, rx) = mpsc::channel();
         (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn oversized_npy_header_fails_before_publication() {
+        let ctx = context(4);
+        let dir = tempfile::tempdir().unwrap();
+        for (index, rank) in [4_000, 22_000].into_iter().enumerate() {
+            let array = ctx.array(vec![1; rank], Buffer::U8(vec![1])).unwrap();
+            let used_before = ctx.metrics().cpu_memory.used;
+            let fresh = dir.path().join(format!("fresh-{rank}.npy"));
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                fresh.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert!(!fresh.exists());
+
+            let existing = dir.path().join(format!("existing-{rank}.npy"));
+            fs::write(&existing, b"original").unwrap();
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert_eq!(fs::read(&existing).unwrap(), b"original");
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), index + 1);
+            assert_eq!(ctx.metrics().cpu_memory.used, used_before);
+        }
+
+        let supported = ctx.array(vec![1; 3_300], Buffer::U8(vec![1])).unwrap();
+        let path = dir.path().join("supported.npy");
+        let (done, rx) = completion();
+        ctx.save_npy(
+            &supported,
+            path.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        let bytes = fs::read(&path).unwrap();
+        assert_eq!(u16::from_le_bytes([bytes[8], bytes[9]]), 9_974);
+        assert_eq!(
+            io::decode_npy(&bytes).unwrap(),
+            (vec![1; 3_300], Buffer::U8(vec![1]))
+        );
+        ctx.close();
     }
 
     fn completed(rx: mpsc::Receiver<Result<JobOutput>>) {
