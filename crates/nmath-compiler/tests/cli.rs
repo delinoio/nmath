@@ -203,6 +203,58 @@ fn build_writes_javascript_declarations_and_source_maps() {
     assert!(leftovers.is_empty(), "temporary files left behind");
 }
 
+#[test]
+fn build_publishes_near_limit_output_names() {
+    let fixture = Fixture::new("build-long-name");
+    let stem = "a".repeat(246);
+    fixture.write(&format!("src/{stem}.nts"), "export const value = 1;\n");
+    let suffixes = [".js", ".js.map", ".d.ts", ".d.ts.map"];
+
+    for replaced in [false, true] {
+        if replaced {
+            for suffix in suffixes {
+                fixture.write(&format!("dist/{stem}{suffix}"), "previous output");
+            }
+        }
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{result:#}");
+        let output_files = result["outputFiles"].as_array().unwrap();
+        assert_eq!(output_files.len(), 4, "{result:#}");
+        for suffix in suffixes {
+            let name = format!("{stem}{suffix}");
+            assert!(
+                output_files
+                    .iter()
+                    .any(|path| path.as_str().unwrap().ends_with(&name)),
+                "{result:#}"
+            );
+            let content = fixture.read(&format!("dist/{name}"));
+            assert_ne!(content, "previous output");
+            assert!(!content.is_empty());
+        }
+        assert_eq!(std::fs::read_dir(fixture.path("dist")).unwrap().count(), 4);
+    }
+
+    let previous: Vec<_> = suffixes
+        .iter()
+        .map(|suffix| {
+            let content = format!("rollback previous {suffix}");
+            fixture.write(&format!("dist/{stem}{suffix}"), &content);
+            content
+        })
+        .collect();
+    fixture.write("src/z.nts", "export const blocked = 1;\n");
+    std::fs::create_dir(fixture.path("dist/z.js")).unwrap();
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 1, "{result:#}");
+    assert_eq!(codes(&result), ["NMATH_COMPILER_EMIT"]);
+    assert_eq!(result["outputFiles"], Value::Array(Vec::new()));
+    for (suffix, content) in suffixes.iter().zip(previous) {
+        assert_eq!(fixture.read(&format!("dist/{stem}{suffix}")), content);
+    }
+    assert_eq!(std::fs::read_dir(fixture.path("dist")).unwrap().count(), 5);
+}
+
 fn inherited_nmath_fixture(name: &str, no_implicit_any: bool) -> Fixture {
     let fixture = Fixture::new(name);
     fixture.write(

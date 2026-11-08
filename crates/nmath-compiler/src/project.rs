@@ -1160,6 +1160,56 @@ mod tests {
     }
 
     #[test]
+    fn near_limit_output_names_publish_replace_and_rollback() {
+        let dir = publication_dir("long-names");
+        let stem = "a".repeat(246);
+        let suffixes = [".js", ".js.map", ".d.ts", ".d.ts.map"];
+        let mut writes = BTreeMap::new();
+        for suffix in suffixes {
+            let target = dir.join(format!("{stem}{suffix}"));
+            // The longest component is 255 bytes on the fixture filesystem.
+            std::fs::write(&target, "probe").unwrap();
+            std::fs::remove_file(&target).unwrap();
+            assert!(
+                temp_path(&target).file_name().unwrap().len() < target.file_name().unwrap().len()
+            );
+            assert!(
+                backup_path(&target).file_name().unwrap().len() < target.file_name().unwrap().len()
+            );
+            writes.insert(normalize(&target), format!("first {suffix}"));
+        }
+
+        assert_eq!(commit_outputs(&writes).unwrap().len(), 4);
+        for (path, content) in &writes {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), *content);
+            std::fs::write(path, format!("previous {content}")).unwrap();
+        }
+
+        let replacement = writes
+            .iter()
+            .map(|(path, content)| (path.clone(), format!("replacement {content}")))
+            .collect();
+        assert_eq!(commit_outputs(&replacement).unwrap().len(), 4);
+        for (path, content) in &replacement {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), *content);
+        }
+
+        let blocked = dir.join("z.js");
+        std::fs::create_dir(&blocked).unwrap();
+        let mut failed = writes.clone();
+        failed.insert(normalize(&blocked), "blocked".to_string());
+        assert_eq!(
+            commit_outputs(&failed).unwrap_err().code,
+            CompilerCode::Emit
+        );
+        for (path, content) in &replacement {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), *content);
+        }
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 5);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn occupied_artifact_candidates_are_not_replaced() {
         let dir = publication_dir("collisions");
         let target = dir.join("main.js");
