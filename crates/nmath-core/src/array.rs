@@ -101,9 +101,7 @@ impl NdArray {
 
     /// Copies the visible elements into a snapshot charged to `budget`.
     pub fn snapshot(&self, budget: &MemoryBudget) -> Result<DenseArray> {
-        let bytes = (self.size() * self.dtype().item_size()) as u64;
-        let reservation = budget.reserve(bytes)?;
-        DenseArray::new(self.shape.clone(), self.to_buffer(), reservation)
+        self.snapshot_cancellable(budget, &CancellationToken::new())
     }
 
     /// Materialize in logical C order with bounded cancellation and no

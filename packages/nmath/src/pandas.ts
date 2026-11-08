@@ -498,7 +498,13 @@ export class DataFrame {
     options: ComputeOptions & { ascending?: boolean; nullsLast?: boolean } = {},
   ): Promise<DataFrame> {
     return this.#rows(
-      (p) => p.sort(by, options.ascending === false, options.nullsLast ?? true),
+      (p) =>
+        p.sort(
+          by,
+          options.ascending === false,
+          options.nullsLast ?? true,
+          true,
+        ),
       options,
     );
   }
@@ -554,7 +560,7 @@ export class DataFrame {
       options.dropna ?? true,
       true,
     );
-    if (options.sort !== false) plan = plan.sort(key);
+    if (options.sort !== false) plan = plan.sort(key, false, true, true);
     const out = await plan.compute(options);
     return new DataFrame(out.columns, { validity: out.validity });
   }

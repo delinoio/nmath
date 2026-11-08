@@ -286,6 +286,75 @@ fn memory_budget_rejects_and_releases() {
 }
 
 #[test]
+fn execution_snapshots_charge_only_payload_and_copy_strided_values() {
+    let tiny = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 1,
+        cpu_memory_budget: 3,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let input = tiny.array(vec![1], Buffer::U8(vec![7])).unwrap();
+    let (done, rx) = channel();
+    tiny.compute(
+        &Expr::input(&input),
+        Device::Cpu,
+        CancellationToken::new(),
+        done,
+    )
+    .unwrap();
+    assert_eq!(dense_values(wait(&rx).unwrap()), Buffer::U8(vec![7]));
+    assert_eq!(tiny.metrics().cpu_memory.peak, 3);
+    assert_eq!(tiny.metrics().cpu_memory.used, 1);
+
+    let source = ctx(1, 1);
+    let input = source
+        .array(vec![6], Buffer::U8(vec![0, 1, 2, 3, 4, 5]))
+        .unwrap();
+    let view = input
+        .view(&[Selector::Slice {
+            start: None,
+            stop: None,
+            step: Some(-2),
+        }])
+        .unwrap();
+    let target = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 1,
+        cpu_memory_budget: 2,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let (done, rx) = channel();
+    target
+        .copy_from(&view, CancellationToken::new(), done)
+        .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+    assert_eq!(target.metrics().cpu_memory.used, 0);
+    assert_eq!(target.metrics().cpu_memory.rejected, 1);
+
+    let target = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 1,
+        cpu_memory_budget: 3,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let (done, rx) = channel();
+    target
+        .copy_from(&view, CancellationToken::new(), done)
+        .unwrap();
+    let JobOutput::Array(copy) = wait(&rx).unwrap() else {
+        panic!("copy did not return an array")
+    };
+    assert_eq!(copy.to_buffer(), Buffer::U8(vec![5, 3, 1]));
+    assert_eq!(target.metrics().cpu_memory.used, 3);
+    assert_eq!(target.metrics().cpu_memory.peak, 3);
+    drop(copy);
+    assert_eq!(target.metrics().cpu_memory.used, 0);
+}
+
+#[test]
 fn cross_context_values_need_explicit_copy() {
     let a_ctx = ctx(1, 1);
     let b_ctx = ctx(1, 1);
