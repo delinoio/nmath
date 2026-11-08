@@ -19,7 +19,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant, SystemTime},
 };
 
@@ -467,46 +470,55 @@ fn dedupe_parse_diagnostics(diagnostics: &mut Vec<CompilerDiagnostic>) {
 /// place. On any failure the temporary files are removed and no existing output
 /// is replaced.
 fn commit_outputs(writes: &BTreeMap<String, String>) -> Result<Vec<String>, CompilerDiagnostic> {
-    let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let cleanup = |staged: &[(PathBuf, PathBuf)]| {
-        for (temp, _) in staged {
-            let _ = std::fs::remove_file(temp);
-        }
-    };
+    let mut staged = Vec::new();
     for (path, content) in writes {
         let target = PathBuf::from(path);
-        let temp = temp_path(&target);
         let written = target
             .parent()
             .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::File::create(&temp))
-            .and_then(|mut file| {
-                file.write_all(content.as_bytes())
-                    .and_then(|()| file.sync_all())
+            .and_then(|()| reserve_staging(&target))
+            .and_then(|(temp, mut file)| {
+                let result = file
+                    .write_all(content.as_bytes())
+                    .and_then(|()| file.sync_all());
+                drop(file);
+                if result.is_err() {
+                    let _ = std::fs::remove_file(&temp);
+                }
+                result.map(|()| temp)
             });
-        if let Err(err) = written {
-            let _ = std::fs::remove_file(&temp);
-            cleanup(&staged);
-            tracing::error!(file = %path, error = %err, "staging output failed");
-            return Err(CompilerDiagnostic::new(
-                CompilerCode::Emit,
-                path,
-                0,
-                0,
-                format!("Output could not be written: {err}."),
-            ));
+        match written {
+            Ok(temp) => staged.push(StagedOutput {
+                temp: Some(temp),
+                target,
+            }),
+            Err(err) => {
+                cleanup_staged(&staged);
+                tracing::error!(file = %path, error = %err, "staging output failed");
+                return Err(CompilerDiagnostic::new(
+                    CompilerCode::Emit,
+                    path,
+                    0,
+                    0,
+                    format!("Output could not be written: {err}."),
+                ));
+            }
         }
-        staged.push((temp, target));
     }
     // Each committed output remembers the backup of the file it replaced, so a
     // later failure can restore every earlier target.
-    let mut committed: Vec<(&PathBuf, Option<PathBuf>)> = Vec::new();
-    for (index, (temp, target)) in staged.iter().enumerate() {
-        let result = replace_with_backup(temp, target);
+    let mut committed = Vec::new();
+    for index in 0..staged.len() {
+        let target = staged[index].target.clone();
+        let temp = staged[index].temp.as_ref().expect("staged output is owned");
+        let result = replace_with_backup(temp, &target);
         match result {
-            Ok(backup) => committed.push((target, backup)),
+            Ok(backup) => {
+                staged[index].temp = None;
+                committed.push((target, backup));
+            }
             Err(err) => {
-                cleanup(&staged[index..]);
+                cleanup_staged(&staged[index..]);
                 rollback(&committed);
                 tracing::error!(file = %target.display(), error = %err, "renaming output failed");
                 return Err(CompilerDiagnostic::new(
@@ -530,13 +542,72 @@ fn commit_outputs(writes: &BTreeMap<String, String>) -> Result<Vec<String>, Comp
         .collect())
 }
 
-/// Moves an existing target file aside, then renames `temp` into place. On
-/// failure the target is left as it was.
+struct StagedOutput {
+    /// `None` after the rename consumes this transaction's staging entry.
+    temp: Option<PathBuf>,
+    target: PathBuf,
+}
+
+fn cleanup_staged(staged: &[StagedOutput]) {
+    for output in staged {
+        if let Some(temp) = &output.temp {
+            let _ = std::fs::remove_file(temp);
+        }
+    }
+}
+
+fn reserve_staging(target: &Path) -> std::io::Result<(PathBuf, std::fs::File)> {
+    reserve_staging_with(|| temp_path(target))
+}
+
+fn reserve_staging_with(
+    mut candidate: impl FnMut() -> PathBuf,
+) -> std::io::Result<(PathBuf, std::fs::File)> {
+    loop {
+        let path = candidate();
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+fn reserve_backup(target: &Path) -> std::io::Result<PathBuf> {
+    reserve_backup_with(target, || backup_path(target))
+}
+
+fn reserve_backup_with(
+    target: &Path,
+    mut candidate: impl FnMut() -> PathBuf,
+) -> std::io::Result<PathBuf> {
+    loop {
+        let path = candidate();
+        // A hard link reserves a recovery name without replacing an occupied
+        // entry. The target and backup are siblings, so they share a
+        // filesystem.
+        match std::fs::hard_link(target, &path) {
+            Ok(()) => return Ok(path),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+/// Reserves a link to an existing regular target, then replaces it with `temp`.
+/// On failure the target is left as it was.
 fn replace_with_backup(temp: &Path, target: &Path) -> std::io::Result<Option<PathBuf>> {
     let backup = match std::fs::symlink_metadata(target) {
         Ok(meta) if meta.is_file() => {
-            let backup = backup_path(target);
-            std::fs::rename(target, &backup)?;
+            let backup = reserve_backup(target)?;
+            if let Err(err) = std::fs::remove_file(target) {
+                let _ = std::fs::remove_file(&backup);
+                return Err(err);
+            }
             Some(backup)
         }
         // A directory or other non-file target makes the rename below fail and
@@ -547,7 +618,9 @@ fn replace_with_backup(temp: &Path, target: &Path) -> std::io::Result<Option<Pat
     };
     if let Err(err) = std::fs::rename(temp, target) {
         if let Some(backup) = &backup {
-            let _ = std::fs::rename(backup, target);
+            if let Err(restore_err) = std::fs::rename(backup, target) {
+                tracing::error!(file = %target.display(), error = %restore_err, "restoring output failed");
+            }
         }
         return Err(err);
     }
@@ -555,7 +628,7 @@ fn replace_with_backup(temp: &Path, target: &Path) -> std::io::Result<Option<Pat
 }
 
 /// Restores earlier outputs in reverse order after a failed commit.
-fn rollback(committed: &[(&PathBuf, Option<PathBuf>)]) {
+fn rollback(committed: &[(PathBuf, Option<PathBuf>)]) {
     for (target, backup) in committed.iter().rev() {
         let restored = match backup {
             Some(backup) => std::fs::rename(backup, target),
@@ -567,20 +640,26 @@ fn rollback(committed: &[(&PathBuf, Option<PathBuf>)]) {
     }
 }
 
-fn backup_path(target: &Path) -> PathBuf {
+static NEXT_ARTIFACT_ID: AtomicU64 = AtomicU64::new(0);
+
+fn artifact_path(target: &Path, extension: &str) -> PathBuf {
     let name = target
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    target.with_file_name(format!(".{name}.nmath-{}.bak", std::process::id()))
+    let id = NEXT_ARTIFACT_ID.fetch_add(1, Ordering::Relaxed);
+    target.with_file_name(format!(
+        ".{name}.nmath-{}-{id}.{extension}",
+        std::process::id()
+    ))
+}
+
+fn backup_path(target: &Path) -> PathBuf {
+    artifact_path(target, "bak")
 }
 
 fn temp_path(target: &Path) -> PathBuf {
-    let name = target
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    target.with_file_name(format!(".{name}.nmath-{}.tmp", std::process::id()))
+    artifact_path(target, "tmp")
 }
 
 /// A tsrs-style path: absolute, forward slashes.
@@ -925,6 +1004,19 @@ impl FS for OverlayFs {
 mod tests {
     use super::*;
 
+    fn publication_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "nmath-publication-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn dedupes_compiler_errors_at_parse_diagnostic_locations() {
         let mut diagnostics = vec![
@@ -992,6 +1084,169 @@ mod tests {
             std::fs::read_dir(&dir).unwrap().count(),
             3,
             "no backups remain"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn occupied_artifact_candidates_are_not_replaced() {
+        let dir = publication_dir("collisions");
+        let target = dir.join("main.js");
+        std::fs::write(&target, "previous output").unwrap();
+        let occupied_temp = dir.join("occupied.tmp");
+        let free_temp = dir.join("free.tmp");
+        std::fs::write(&occupied_temp, "staging sentinel").unwrap();
+        let mut candidates = [occupied_temp.clone(), free_temp.clone()].into_iter();
+        let (reserved_temp, file) = reserve_staging_with(|| candidates.next().unwrap()).unwrap();
+        assert_eq!(reserved_temp, free_temp);
+        drop(file);
+        assert_eq!(
+            std::fs::read_to_string(&occupied_temp).unwrap(),
+            "staging sentinel"
+        );
+
+        let occupied_backup = dir.join("occupied.bak");
+        let free_backup = dir.join("free.bak");
+        std::fs::write(&occupied_backup, "backup sentinel").unwrap();
+        let mut candidates = [occupied_backup.clone(), free_backup.clone()].into_iter();
+        let reserved_backup = reserve_backup_with(&target, || candidates.next().unwrap()).unwrap();
+        assert_eq!(reserved_backup, free_backup);
+        assert_eq!(
+            std::fs::read_to_string(&occupied_backup).unwrap(),
+            "backup sentinel"
+        );
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "previous output");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn publication_preserves_occupied_legacy_staging_and_backup_paths() {
+        let dir = publication_dir("legacy-artifacts");
+        let existing = dir.join("a.js");
+        let absent = dir.join("b.js");
+        std::fs::write(&existing, "previous output").unwrap();
+        let legacy_temp = dir.join(format!(".a.js.nmath-{}.tmp", std::process::id()));
+        let legacy_backup = dir.join(format!(".a.js.nmath-{}.bak", std::process::id()));
+        let legacy_absent_temp = dir.join(format!(".b.js.nmath-{}.tmp", std::process::id()));
+        std::fs::write(&legacy_temp, "staging sentinel").unwrap();
+        std::fs::write(&legacy_backup, "backup sentinel").unwrap();
+        std::fs::write(&legacy_absent_temp, "other staging sentinel").unwrap();
+        let writes = BTreeMap::from([
+            (normalize(&existing), "new output".to_string()),
+            (normalize(&absent), "new file".to_string()),
+        ]);
+        assert_eq!(commit_outputs(&writes).unwrap().len(), 2);
+        assert_eq!(std::fs::read_to_string(&existing).unwrap(), "new output");
+        assert_eq!(std::fs::read_to_string(&absent).unwrap(), "new file");
+        assert_eq!(
+            std::fs::read_to_string(&legacy_temp).unwrap(),
+            "staging sentinel"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&legacy_backup).unwrap(),
+            "backup sentinel"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&legacy_absent_temp).unwrap(),
+            "other staging sentinel"
+        );
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 5);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn failed_publication_keeps_unowned_artifacts_and_restores_output() {
+        let dir = publication_dir("failed-legacy-artifacts");
+        let first = dir.join("a.js");
+        let blocked = dir.join("b.js");
+        std::fs::write(&first, "previous output").unwrap();
+        std::fs::create_dir(&blocked).unwrap();
+        let legacy_temp = dir.join(format!(".a.js.nmath-{}.tmp", std::process::id()));
+        let legacy_backup = dir.join(format!(".a.js.nmath-{}.bak", std::process::id()));
+        let blocked_temp = dir.join(format!(".b.js.nmath-{}.tmp", std::process::id()));
+        std::fs::write(&legacy_temp, "staging sentinel").unwrap();
+        std::fs::write(&legacy_backup, "backup sentinel").unwrap();
+        std::fs::write(&blocked_temp, "blocked staging sentinel").unwrap();
+        let writes = BTreeMap::from([
+            (normalize(&first), "new output".to_string()),
+            (normalize(&blocked), "cannot replace directory".to_string()),
+        ]);
+        let diagnostic = commit_outputs(&writes).unwrap_err();
+        assert_eq!(diagnostic.code, CompilerCode::Emit);
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "previous output");
+        assert_eq!(
+            std::fs::read_to_string(&legacy_temp).unwrap(),
+            "staging sentinel"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&legacy_backup).unwrap(),
+            "backup sentinel"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&blocked_temp).unwrap(),
+            "blocked staging sentinel"
+        );
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 5);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn interleaved_reservations_have_separate_cleanup_ownership() {
+        let dir = publication_dir("interleaved");
+        let target = dir.join("main.js");
+        std::fs::write(&target, "previous output").unwrap();
+        let (first_temp, first_file) = reserve_staging(&target).unwrap();
+        let (second_temp, second_file) = reserve_staging(&target).unwrap();
+        assert_ne!(first_temp, second_temp);
+        drop((first_file, second_file));
+        cleanup_staged(&[StagedOutput {
+            temp: Some(first_temp.clone()),
+            target: target.clone(),
+        }]);
+        assert!(!first_temp.exists());
+        assert!(second_temp.exists());
+
+        let first_backup = reserve_backup(&target).unwrap();
+        let second_backup = reserve_backup(&target).unwrap();
+        assert_ne!(first_backup, second_backup);
+        std::fs::remove_file(&first_backup).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&second_backup).unwrap(),
+            "previous output"
+        );
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "previous output");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn occupied_staging_symlink_and_referent_are_untouched() {
+        let dir = publication_dir("staging-symlink");
+        let target = dir.join("main.js");
+        let referent = dir.join("referent");
+        std::fs::write(&referent, "referent sentinel").unwrap();
+        let occupied = dir.join("occupied.tmp");
+        let free = dir.join("free.tmp");
+        std::os::unix::fs::symlink(&referent, &occupied).unwrap();
+        let mut candidates = [occupied.clone(), free.clone()].into_iter();
+        let (reserved, file) = reserve_staging_with(|| candidates.next().unwrap()).unwrap();
+        assert_eq!(reserved, free);
+        drop(file);
+        assert_eq!(std::fs::read_link(&occupied).unwrap(), referent);
+        assert_eq!(
+            std::fs::read_to_string(&referent).unwrap(),
+            "referent sentinel"
+        );
+
+        let legacy = dir.join(format!(".main.js.nmath-{}.tmp", std::process::id()));
+        std::os::unix::fs::symlink(&referent, &legacy).unwrap();
+        let writes = BTreeMap::from([(normalize(&target), "emitted output".to_string())]);
+        assert_eq!(commit_outputs(&writes).unwrap().len(), 1);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "emitted output");
+        assert_eq!(std::fs::read_link(&legacy).unwrap(), referent);
+        assert_eq!(
+            std::fs::read_to_string(&referent).unwrap(),
+            "referent sentinel"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
