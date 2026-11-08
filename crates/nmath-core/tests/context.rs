@@ -617,6 +617,263 @@ fn assigning_a_view_valued_expression_copies_its_values() {
 }
 
 #[test]
+fn assignment_charges_conversion_and_selection_scratch() {
+    let make_context = |budget| {
+        Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 0,
+            cpu_memory_budget: budget,
+            gpu_memory_budget: 0,
+        })
+        .unwrap()
+    };
+    let write = |context: &Context, target: &nmath_core::NdArray| {
+        let (done, rx) = channel();
+        context
+            .assign(
+                target,
+                vec![],
+                &Expr::scalar(Scalar::Float(1.0)),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        wait(&rx)
+    };
+
+    let limited = make_context(40);
+    let target = limited.array(vec![4], Buffer::F64(vec![0.0; 4])).unwrap();
+    assert_eq!(
+        write(&limited, &target).unwrap_err().code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    assert_eq!(target.to_buffer(), Buffer::F64(vec![0.0; 4]));
+    assert_eq!(limited.metrics().cpu_memory.used, 32);
+    assert_eq!(limited.metrics().cpu_memory.peak, 40);
+
+    let ample = make_context(256);
+    let target = ample.array(vec![4], Buffer::F64(vec![0.0; 4])).unwrap();
+    write(&ample, &target).unwrap();
+    assert_eq!(target.to_buffer(), Buffer::F64(vec![1.0; 4]));
+    assert_eq!(ample.metrics().cpu_memory.used, 32);
+    assert_eq!(ample.metrics().cpu_memory.peak, 152);
+    assert_eq!(ample.metrics().cpu_memory.cumulative_reserved, 200);
+}
+
+#[test]
+fn numeric_assignment_rejects_before_cast_and_preserves_values() {
+    let make_context = |budget| {
+        Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 0,
+            cpu_memory_budget: budget,
+            gpu_memory_budget: 0,
+        })
+        .unwrap()
+    };
+    let write = |context: &Context| {
+        let target = context.array(vec![4], Buffer::I8(vec![0; 4])).unwrap();
+        let source = context
+            .array(vec![4], Buffer::F64(vec![1.9, -2.2, 3.0, 4.8]))
+            .unwrap();
+        let (done, rx) = channel();
+        context
+            .assign(
+                &target,
+                vec![],
+                &Expr::input(&source),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        (target, source, wait(&rx))
+    };
+
+    let limited = make_context(100);
+    let (target, _source, outcome) = write(&limited);
+    assert_eq!(outcome.unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+    assert_eq!(target.to_buffer(), Buffer::I8(vec![0; 4]));
+    assert_eq!(limited.metrics().cpu_memory.used, 36);
+    assert_eq!(limited.metrics().cpu_memory.peak, 100);
+
+    let ample = make_context(256);
+    let (target, _source, outcome) = write(&ample);
+    outcome.unwrap();
+    assert_eq!(target.to_buffer(), Buffer::I8(vec![1, -2, 3, 4]));
+    assert_eq!(ample.metrics().cpu_memory.used, 36);
+    assert!(ample.metrics().cpu_memory.peak > 100);
+}
+
+#[test]
+fn special_assignment_keeps_a_single_conversion_charge() {
+    let context = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 100,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let target = context
+        .array(
+            vec![2],
+            Buffer::Unicode {
+                width: 2,
+                values: vec![0; 4],
+            },
+        )
+        .unwrap();
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![],
+            &Expr::scalar(Scalar::Text("a".into())),
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_eq!(
+        target.to_buffer(),
+        Buffer::Unicode {
+            width: 2,
+            values: vec![97, 0, 97, 0]
+        }
+    );
+    assert_eq!(context.metrics().cpu_memory.used, 16);
+    assert_eq!(context.metrics().cpu_memory.peak, 100);
+
+    let dtype = nmath_core::DType::Datetime64(nmath_core::dtype::TimeUnit::NANOSECOND);
+    let context = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 104,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let target = context
+        .array(
+            vec![2],
+            Buffer::Temporal {
+                dtype,
+                ticks: vec![0; 2],
+            },
+        )
+        .unwrap();
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![],
+            &Expr::scalar(Scalar::Temporal(7, dtype)),
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_eq!(
+        target.to_buffer(),
+        Buffer::Temporal {
+            dtype,
+            ticks: vec![7; 2]
+        }
+    );
+    assert_eq!(context.metrics().cpu_memory.used, 16);
+    assert_eq!(context.metrics().cpu_memory.peak, 104);
+}
+
+#[test]
+fn assignment_index_scratch_failure_preserves_later_writes_and_order() {
+    let context = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 256,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let target = context.array(vec![5], Buffer::F64(vec![0.0; 5])).unwrap();
+    let scalar = Expr::scalar(Scalar::Float(3.0));
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![Selector::Indices(vec![0; 16])],
+            &scalar,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+    assert_eq!(target.to_buffer(), Buffer::F64(vec![0.0; 5]));
+    assert_eq!(context.metrics().cpu_memory.used, 40);
+
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![Selector::Slice {
+                start: None,
+                stop: None,
+                step: Some(-2),
+            }],
+            &scalar,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_eq!(
+        target.to_buffer(),
+        Buffer::F64(vec![3.0, 0.0, 3.0, 0.0, 3.0])
+    );
+
+    let values = context.array(vec![2], Buffer::F64(vec![7.0, 8.0])).unwrap();
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![Selector::Indices(vec![3, 1])],
+            &Expr::input(&values),
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    wait(&rx).unwrap();
+    assert_eq!(
+        target.to_buffer(),
+        Buffer::F64(vec![3.0, 8.0, 3.0, 7.0, 3.0])
+    );
+}
+
+#[test]
+fn assignment_memory_rejection_preserves_generator_state() {
+    let context = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 64,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let target = context.array(vec![4], Buffer::F64(vec![0.0; 4])).unwrap();
+    let generator = context.generator(42);
+    let before = generator.current();
+    let (done, rx) = channel();
+    context
+        .assign(
+            &target,
+            vec![],
+            &Expr::random(context.id(), &generator, vec![4]),
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+    assert_eq!(generator.current(), before);
+    assert_eq!(target.to_buffer(), Buffer::F64(vec![0.0; 4]));
+    assert_eq!(context.metrics().cpu_memory.used, 32);
+}
+
+#[test]
 fn random_assignments_commit_generator_state() {
     let c = ctx(1, 4);
     let g = c.generator(42);
