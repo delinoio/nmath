@@ -163,6 +163,15 @@ test("pandas dropna excludes float NaN keys while Polars retains them", async ()
         ],
       );
       assert.deepEqual(
+        rows(await pandas.groupBy("k", "v", "sum", { dropna: false })),
+        [
+          [1, 10],
+          [2, 9],
+          [Number.NaN, 50],
+          [null, 100],
+        ],
+      );
+      assert.deepEqual(
         rows(await frame.lazy().groupBy("k", "v", "sum").collect()),
         [
           [2, 9],
@@ -180,6 +189,212 @@ test("pandas dropna excludes float NaN keys while Polars retains them", async ()
       assert.deepEqual(rows(empty), []);
       assert.equal(empty.get("k").dtype, dtype);
       assert.equal(empty.get("v").dtype, "int32");
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("pandas float sorts place valid NaNs and masked rows independently of direction", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      const basic = new pd.DataFrame(
+        { k: ctx.array([1, Number.NaN, 2], { dtype }) },
+        { index: ["one", "nan", "two"] },
+      );
+      for (const [ascending, nullsLast, expected] of [
+        [true, true, ["one", "two", "nan"]],
+        [true, false, ["nan", "one", "two"]],
+        [false, true, ["two", "one", "nan"]],
+        [false, false, ["nan", "two", "one"]],
+      ]) {
+        const sorted = await basic.sortValues("k", { ascending, nullsLast });
+        assert.deepEqual(
+          sorted.index,
+          expected,
+          `${dtype}/${ascending}/${nullsLast}`,
+        );
+        assert.equal(sorted.get("k").dtype, dtype);
+        assert.equal(
+          Number.isNaN(
+            sorted.get("k").values.item(sorted.index.indexOf("nan")),
+          ),
+          true,
+        );
+      }
+      assert.deepEqual(
+        (await basic.sortValues("k", { ascending: false })).index,
+        ["two", "one", "nan"],
+      );
+
+      const labels = [
+        "two-a",
+        "nan-a",
+        "one-a",
+        "nan-b",
+        "two-b",
+        "masked",
+        "one-b",
+      ];
+      const keys = [2, Number.NaN, 1, Number.NaN, 2, 99, 1];
+      const mask = [true, true, true, true, true, false, true];
+      const frame = new pd.DataFrame(
+        {
+          k: ctx.array(keys, { dtype }),
+          companion: ctx.array([0, 1, 2, 3, 4, 5, 6], { dtype: "int32" }),
+        },
+        {
+          index: labels,
+          validity: new Map([["k", ctx.array(mask, { dtype: "bool" })]]),
+        },
+      );
+      for (const [ascending, nullsLast, positions] of [
+        [true, true, [2, 6, 0, 4, 1, 3, 5]],
+        [true, false, [1, 3, 5, 2, 6, 0, 4]],
+        [false, true, [0, 4, 2, 6, 1, 3, 5]],
+        [false, false, [1, 3, 5, 0, 4, 2, 6]],
+      ]) {
+        const sorted = await frame.sortValues("k", { ascending, nullsLast });
+        const key = sorted.get("k");
+        assert.deepEqual(
+          sorted.index,
+          positions.map((i) => labels[i]),
+        );
+        assert.deepEqual(sorted.get("companion").values.toArray(), positions);
+        assert.deepEqual(
+          key.values.toArray(),
+          positions.map((i) => keys[i]),
+        );
+        assert.deepEqual(
+          key.validity.toArray(),
+          positions.map((i) => mask[i]),
+        );
+        assert.equal(key.dtype, dtype);
+      }
+
+      for (const values of [[], [Number.NaN, Number.NaN]]) {
+        const allNaN = new pd.DataFrame({ k: ctx.array(values, { dtype }) });
+        for (const ascending of [true, false]) {
+          const sorted = await allNaN.sortValues("k", { ascending });
+          assert.equal(sorted.shape[0], values.length);
+          assert.equal(sorted.get("k").dtype, dtype);
+          assert.deepEqual(sorted.get("k").values.toArray(), values);
+        }
+      }
+      const invalid = new pd.DataFrame(
+        { k: ctx.array([3, 1], { dtype }) },
+        {
+          index: ["first", "second"],
+          validity: new Map([
+            ["k", ctx.array([false, false], { dtype: "bool" })],
+          ]),
+        },
+      );
+      assert.deepEqual((await invalid.sortValues("k")).index, [
+        "first",
+        "second",
+      ]);
+      const finite = new pd.DataFrame(
+        { k: ctx.array([Infinity, -Infinity, -0, 0], { dtype }) },
+        { index: ["pos-inf", "neg-inf", "neg-zero", "pos-zero"] },
+      );
+      for (const [ascending, expected] of [
+        [true, ["neg-inf", "neg-zero", "pos-zero", "pos-inf"]],
+        [false, ["pos-inf", "neg-zero", "pos-zero", "neg-inf"]],
+      ]) {
+        const sorted = await finite.sortValues("k", { ascending });
+        assert.deepEqual(sorted.index, expected);
+        assert.equal(Object.is(sorted.get("k").values.item(1), -0), true);
+      }
+
+      const polars = new pl.DataFrame([
+        new pl.Series("k", ctx.array([1, Number.NaN, 2], { dtype })),
+      ]);
+      assert.deepEqual(rows(await polars.lazy().sort("k").collect()), [
+        [1],
+        [2],
+        [Number.NaN],
+      ]);
+      assert.deepEqual(
+        rows(await polars.lazy().sort("k", { descending: true }).collect()),
+        [[Number.NaN], [2], [1]],
+      );
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("Polars grouped float max ignores NaN without changing other aggregates", async () => {
+  const ctx = context();
+  async function grouped(dtype, input, valid, op = "max", pandas = false) {
+    const keys = ctx.array(
+      input.map(() => 1),
+      { dtype: "int32" },
+    );
+    const values = ctx.array(input, { dtype });
+    const mask = ctx.array(valid, { dtype: "bool" });
+    const frame = new pl.DataFrame([
+      new pl.Series("k", keys),
+      new pl.Series("v", values, mask),
+    ]);
+    try {
+      const out = pandas
+        ? await frame.toPandas().groupBy("k", "v", op)
+        : await frame.lazy().groupBy("k", "v", op).collect();
+      try {
+        if (input.length === 0) return { rows: 0 };
+        const column = pandas ? out.get("v") : out.getColumn("v");
+        return {
+          rows: 1,
+          value: Number(column.values.item(0)),
+          valid: column.validity?.item(0) ?? true,
+        };
+      } finally {
+        for (const name of out.columns) {
+          const column = pandas ? out.get(name) : out.getColumn(name);
+          column.values.dispose();
+          column.validity?.dispose();
+        }
+      }
+    } finally {
+      keys.dispose();
+      values.dispose();
+      mask.dispose();
+    }
+  }
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const [input, valid, expected] of [
+        [[1, NaN], [true, true], 1],
+        [[NaN, 1], [true, true], 1],
+        [[NaN, -Infinity], [true, true], -Infinity],
+        [[Infinity, NaN], [true, true], Infinity],
+        [[NaN, NaN], [true, true], NaN],
+        [[NaN, 2], [true, false], NaN],
+        [[1, NaN, 99], [true, true, false], 1],
+        [[1, 2], [true, true], 2],
+        [[1, 2], [false, false], null],
+      ]) {
+        const actual = await grouped(dtype, input, valid);
+        assert.equal(actual.rows, 1);
+        assert.equal(actual.valid, expected !== null);
+        if (expected !== null) assert.ok(Object.is(actual.value, expected));
+      }
+      assert.deepEqual(await grouped(dtype, [], []), { rows: 0 });
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "max", true)).value,
+        1,
+      );
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "count")).value,
+        2,
+      );
+      for (const op of ["sum", "mean"])
+        assert.ok(
+          Number.isNaN(
+            (await grouped(dtype, [1, NaN], [true, true], op)).value,
+          ),
+        );
     }
   } finally {
     await ctx.close();

@@ -38,12 +38,22 @@ fi
 # Upload file
 RESPONSE=$(curl -s -X POST -F "file=@$FILE" "$BLOB_UPLOAD_URL")
 
-# Try to extract URL from JSON response
-URL=$(echo "$RESPONSE" | grep -o '"url"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"url"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//' || true)
-
-# Fallback: maybe the response is just the URL
-if [[ -z "$URL" ]]; then
-    URL="$RESPONSE"
+# Plain text responses already contain the URL. Parse JSON responses as data so
+# escaped URL characters are decoded before validation.
+URL="$RESPONSE"
+if [[ ! "$RESPONSE" =~ ^https?:// ]]; then
+    URL=$(printf '%s' "$RESPONSE" | node -e '
+const fs = require("node:fs");
+try {
+    const response = JSON.parse(fs.readFileSync(0, "utf8"));
+    if (response === null || Array.isArray(response) || typeof response !== "object" || typeof response.url !== "string") {
+        process.exit(1);
+    }
+    process.stdout.write(response.url);
+} catch {
+    process.exit(1);
+}
+') || URL=""
 fi
 
 # Validate we got a URL back

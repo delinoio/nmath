@@ -52,6 +52,55 @@ fn static_validation_preserves_promotion() {
     assert!(gpu::validate(&Expr::cast(&a, DType::Float32).unwrap()).is_err());
 }
 
+#[test]
+fn shared_graph_validation_visits_distinct_states() {
+    let leaf = input(vec![1], Buffer::F32(vec![1.0]));
+    let mut shared = leaf.clone();
+    for depth in 0..=16 {
+        if depth > 0 {
+            shared = Expr::binary(BinaryOp::Add, &shared, &shared).unwrap();
+        }
+        if matches!(depth, 0 | 4 | 16) {
+            assert_eq!(gpu::validation_visits(&shared).unwrap(), depth + 1);
+            shared.check_gpu_support().unwrap();
+        }
+    }
+
+    let unary = Expr::unary(UnaryOp::Neg, &leaf).unwrap();
+    let binary = Expr::binary(BinaryOp::Add, &unary, &unary).unwrap();
+    assert_eq!(gpu::validation_visits(&binary).unwrap(), 3);
+    let matrix = input(vec![1, 1], Buffer::F32(vec![1.0]));
+    let product = Expr::matmul(&matrix, &matrix).unwrap();
+    assert_eq!(gpu::validation_visits(&product).unwrap(), 2);
+    let ordinary = Expr::binary(
+        BinaryOp::Add,
+        &input(vec![1], Buffer::F32(vec![1.0])),
+        &input(vec![1], Buffer::F32(vec![2.0])),
+    )
+    .unwrap();
+    assert_eq!(gpu::validation_visits(&ordinary).unwrap(), 3);
+}
+
+#[test]
+fn shared_validation_keeps_first_error_and_empty_reduction_rules() {
+    let empty = input(vec![2, 0], Buffer::F32(vec![]));
+    let min = Expr::reduce(ReduceOp::Min, &empty, Some(vec![1])).unwrap();
+    let unsupported =
+        Expr::cast(&input(vec![2], Buffer::F32(vec![0.0; 2])), DType::Float32).unwrap();
+    let graph = Expr::binary(BinaryOp::Add, &min, &unsupported).unwrap();
+    assert_eq!(
+        gpu::validate(&graph).unwrap_err().code,
+        error::ErrorCode::ShapeMismatch
+    );
+    assert_eq!(
+        gpu::validate(&unsupported).unwrap_err().code,
+        error::ErrorCode::GpuUnsupportedOperation
+    );
+    for op in [ReduceOp::Sum, ReduceOp::Mean] {
+        gpu::validate(&Expr::reduce(op, &empty, Some(vec![1])).unwrap()).unwrap();
+    }
+}
+
 // Explicit opt-in: a normal test run must not silently count no-adapter skips
 // as real GPU acceptance. Run with --ignored --nocapture on a supported
 // machine.

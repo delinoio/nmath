@@ -79,7 +79,7 @@ Only allow specific domains:
     onLinkCheck: async (url) => {
       const trusted = ['example.com', 'docs.example.com'];
       const hostname = new URL(url).hostname;
-      return trusted.some((d) => hostname.endsWith(d));
+      return trusted.some((domain) => hostname === domain || hostname.endsWith('.' + domain));
     },
   }}
 >
@@ -183,7 +183,8 @@ Strict config for AI-generated content:
     enabled: true,
     onLinkCheck: async (url) => {
       const trusted = ['your-domain.com'];
-      return trusted.some((d) => new URL(url).hostname.endsWith(d));
+      const hostname = new URL(url).hostname;
+      return trusted.some((domain) => hostname === domain || hostname.endsWith('.' + domain));
     },
   }}
 >
