@@ -396,9 +396,12 @@ type BroadcastReversed<
     : Acc;
 
 /** Broadcast result shape, or `never` when static dimensions conflict. */
-export type Broadcast<A extends Shape, B extends Shape> = number[] extends A
+export type Broadcast<
+  A extends Shape,
+  B extends Shape,
+> = number extends A["length"]
   ? number[]
-  : number[] extends B
+  : number extends B["length"]
     ? number[]
     : BroadcastReversed<Reverse<A>, Reverse<B>>;
 
@@ -469,7 +472,7 @@ export type ReduceShape<
   K extends boolean = false,
 > = [A] extends [undefined]
   ? K extends true
-    ? number[] extends S
+    ? number extends S["length"]
       ? number[]
       : MapAxes<S, number, true>
     : boolean extends K
@@ -477,7 +480,7 @@ export type ReduceShape<
       : []
   : boolean extends K
     ? number[]
-    : number[] extends S
+    : number extends S["length"]
       ? number[]
       : AxisList<A> extends infer I extends number
         ? IsLiteral<I> extends true

@@ -79,7 +79,7 @@ The FFT entry point adds `fft2`, `ifft2`, `fftn`, `ifftn`, `fftshift`, `ifftshif
 
 ### Typing
 
-`NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for tuple shapes. Incompatible static shapes produce a type error; dynamic dimensions fall back to runtime validation without erasing dtype or rank.
+`NMathArray<D extends DType, S extends Shape>` and `Expr<D, S>` carry dtype and shape type parameters. `Shape` is a readonly tuple of `number` literals or `number` for a dynamic dimension. Broadcasting is computed at the type level for fixed tuple shapes. Incompatible fixed shapes produce a type error; dynamic dimensions retain known dtype and rank and defer dimension validation to runtime. An open tuple with an unknown number of dimensions, including a required prefix or suffix, has conservative `number[]` results for broadcasting and axis reductions. An all-axis reduction without `keepdims` remains scalar when the input rank is unknown.
 
 Core and NumPy array creation, and exact float16 bit creation, keep an exact tuple shape only when the options require `shape`. An optional or possibly undefined `shape` returns a conservative `number[]` shape because the runtime can infer its shape from the input data. Dtype inference and explicit shape validation are unchanged.
 
