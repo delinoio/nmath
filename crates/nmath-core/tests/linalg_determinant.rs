@@ -31,7 +31,8 @@ fn compensating_pivots_preserve_finite_determinants() {
             panic!("determinant must retain float64");
         };
         assert!(values[0].is_finite() && values[0] != 0.0);
-        // The pinned NumPy test_linalg double-precision criterion is decimal 12.
+        // The pinned NumPy test_linalg double-precision criterion is decimal
+        // 12.
         assert!((values[0] - 1.0).abs() < 1e-12, "{}", values[0]);
     }
     assert_eq!(budget.usage().used, 0);
