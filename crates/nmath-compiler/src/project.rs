@@ -585,16 +585,67 @@ fn reserve_backup_with(
     target: &Path,
     mut candidate: impl FnMut() -> PathBuf,
 ) -> std::io::Result<PathBuf> {
+    reserve_backup_with_linker(target, &mut candidate, |from, to| {
+        std::fs::hard_link(from, to)
+    })
+}
+
+fn reserve_backup_with_linker(
+    target: &Path,
+    mut candidate: impl FnMut() -> PathBuf,
+    hard_link: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> std::io::Result<PathBuf> {
     loop {
         let path = candidate();
         // A hard link reserves a recovery name without replacing an occupied
         // entry. The target and backup are siblings, so they share a
         // filesystem.
-        match std::fs::hard_link(target, &path) {
+        match hard_link(target, &path) {
             Ok(()) => return Ok(path),
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) if err.kind() == std::io::ErrorKind::Unsupported => {
+                return reserve_backup_copy(target, path, candidate);
+            }
             Err(err) => return Err(err),
         }
+    }
+}
+
+/// Creates an exclusively owned recovery copy when the filesystem cannot
+/// create hard links. The destination is created before any bytes are copied,
+/// so an occupied artifact is never replaced. The caller removes the original
+/// target only after this copy succeeds and records the recovery path for
+/// rollback.
+fn reserve_backup_copy(
+    target: &Path,
+    first_candidate: PathBuf,
+    mut candidate: impl FnMut() -> PathBuf,
+) -> std::io::Result<PathBuf> {
+    let mut path = first_candidate;
+    loop {
+        let mut source = std::fs::File::open(target)?;
+        let permissions = source.metadata()?.permissions();
+        let mut backup = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                path = candidate();
+                continue;
+            }
+            Err(err) => return Err(err),
+        };
+        let copied = std::io::copy(&mut source, &mut backup)
+            .and_then(|_| backup.sync_all())
+            .and_then(|_| std::fs::set_permissions(&path, permissions));
+        if let Err(err) = copied {
+            drop(backup);
+            let _ = std::fs::remove_file(&path);
+            return Err(err);
+        }
+        return Ok(path);
     }
 }
 
@@ -1116,6 +1167,39 @@ mod tests {
             "backup sentinel"
         );
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "previous output");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unsupported_hard_links_use_exclusive_backup_copy() {
+        let dir = publication_dir("copy-backup");
+        let target = dir.join("main.js");
+        let occupied = dir.join("occupied.bak");
+        let available = dir.join("available.bak");
+        std::fs::write(&target, "previous output").unwrap();
+        std::fs::write(&occupied, "unrelated backup").unwrap();
+        let mut candidates = [occupied.clone(), available.clone()].into_iter();
+        let reserved = reserve_backup_with_linker(
+            &target,
+            || candidates.next().unwrap(),
+            |_, _| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "hard links unavailable",
+                ))
+            },
+        )
+        .unwrap();
+        assert_eq!(reserved, available);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "previous output");
+        assert_eq!(
+            std::fs::read_to_string(&occupied).unwrap(),
+            "unrelated backup"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&available).unwrap(),
+            "previous output"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

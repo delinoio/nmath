@@ -79,7 +79,7 @@ Every diagnostic reports the original `.nts` file and 1-based line and column, a
 
 ## Storage
 
-Build output is written to the `outDir` from `tsconfig.json`. Each output file is written to an exclusively created temporary file and renamed only after the whole build succeeds. Existing regular outputs receive exclusively reserved recovery links so a later publication failure can restore them. Publication never replaces an occupied staging or recovery artifact.
+Build output is written to the `outDir` from `tsconfig.json`. Each output file is written to an exclusively created temporary file and renamed only after the whole build succeeds. Existing regular outputs receive exclusively reserved recovery entries so a later publication failure can restore them. Publication uses a hard link when the filesystem supports it and an exclusively created recovery copy otherwise. Publication never replaces an occupied staging or recovery artifact.
 
 ## Security
 
