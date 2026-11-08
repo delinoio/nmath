@@ -627,3 +627,27 @@ fn load_npy_reserves_encoded_and_decoded_buffers() {
         "only the array stays charged"
     );
 }
+
+#[test]
+fn scheduled_load_npy_accepts_alternate_header_quotes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("quoted.npy");
+    let header = b"{\"descr\" : \"<f8\", \"fortran_order\" : False, \"shape\" : (1,), }";
+    let mut padded = header.to_vec();
+    padded.extend(vec![b' '; (64 - (10 + padded.len() + 1) % 64) % 64]);
+    padded.push(b'\n');
+    let mut bytes = b"\x93NUMPY\x01\x00".to_vec();
+    bytes.extend_from_slice(&(padded.len() as u16).to_le_bytes());
+    bytes.extend_from_slice(&padded);
+    bytes.extend_from_slice(&1.25f64.to_le_bytes());
+    std::fs::write(&path, bytes).unwrap();
+
+    let c = ctx(1, 0);
+    let (done, rx) = channel();
+    c.load_npy(path, CancellationToken::new(), done).unwrap();
+    let JobOutput::Array(loaded) = wait(&rx).unwrap() else {
+        panic!("expected an array");
+    };
+    assert_eq!(loaded.shape(), &[1]);
+    assert_eq!(loaded.to_buffer(), Buffer::F64(vec![1.25]));
+}

@@ -140,13 +140,150 @@ pub fn encode_npy(shape: &[usize], buffer: &Buffer) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-fn header_value<'a>(header: &'a str, key: &str) -> Result<&'a str> {
-    let needle = format!("'{key}':");
-    let start = header
-        .find(&needle)
-        .ok_or_else(|| format_error(&format!("missing '{key}'")))?
-        + needle.len();
-    Ok(header[start..].trim_start())
+struct HeaderParser<'a> {
+    text: &'a str,
+    offset: usize,
+}
+
+impl<'a> HeaderParser<'a> {
+    fn skip_space(&mut self) {
+        while self
+            .text
+            .as_bytes()
+            .get(self.offset)
+            .is_some_and(u8::is_ascii_whitespace)
+        {
+            self.offset += 1;
+        }
+    }
+
+    fn take(&mut self, byte: u8) -> bool {
+        self.skip_space();
+        if self.text.as_bytes().get(self.offset) == Some(&byte) {
+            self.offset += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expect(&mut self, byte: u8) -> Result<()> {
+        if self.take(byte) {
+            Ok(())
+        } else {
+            Err(format_error("malformed header dictionary"))
+        }
+    }
+
+    fn string(&mut self) -> Result<&'a str> {
+        self.skip_space();
+        let quote = match self.text.as_bytes().get(self.offset) {
+            Some(b'\'' | b'"') => self.text.as_bytes()[self.offset],
+            _ => return Err(format_error("expected a quoted header string")),
+        };
+        self.offset += 1;
+        let start = self.offset;
+        while let Some(&byte) = self.text.as_bytes().get(self.offset) {
+            if byte == quote {
+                let value = &self.text[start..self.offset];
+                self.offset += 1;
+                return Ok(value);
+            }
+            if byte == b'\\' || byte == b'\n' || byte == b'\r' {
+                return Err(format_error("malformed header string"));
+            }
+            self.offset += 1;
+        }
+        Err(format_error("unterminated header string"))
+    }
+
+    fn boolean(&mut self) -> Result<bool> {
+        self.skip_space();
+        let rest = &self.text[self.offset..];
+        let value = if rest.starts_with("True") {
+            self.offset += 4;
+            true
+        } else if rest.starts_with("False") {
+            self.offset += 5;
+            false
+        } else {
+            return Err(format_error("malformed fortran_order"));
+        };
+        Ok(value)
+    }
+
+    fn shape(&mut self) -> Result<Vec<usize>> {
+        self.expect(b'(')?;
+        let mut shape = Vec::new();
+        if self.take(b')') {
+            return Ok(shape);
+        }
+        loop {
+            self.skip_space();
+            let start = self.offset;
+            while self
+                .text
+                .as_bytes()
+                .get(self.offset)
+                .is_some_and(u8::is_ascii_digit)
+            {
+                self.offset += 1;
+            }
+            if start == self.offset {
+                return Err(format_error("malformed shape"));
+            }
+            shape.push(
+                self.text[start..self.offset]
+                    .parse::<usize>()
+                    .map_err(|_| format_error("malformed shape"))?,
+            );
+            if self.take(b',') {
+                if self.take(b')') {
+                    return Ok(shape);
+                }
+            } else if self.take(b')') && shape.len() > 1 {
+                return Ok(shape);
+            } else {
+                return Err(format_error("malformed shape"));
+            }
+        }
+    }
+}
+
+fn parse_header(header: &str) -> Result<(&str, bool, Vec<usize>)> {
+    let mut parser = HeaderParser {
+        text: header,
+        offset: 0,
+    };
+    parser.expect(b'{')?;
+    let (mut descr, mut fortran, mut shape) = (None, None, None);
+    loop {
+        if parser.take(b'}') {
+            break;
+        }
+        let key = parser.string()?;
+        parser.expect(b':')?;
+        match key {
+            "descr" if descr.is_none() => descr = Some(parser.string()?),
+            "fortran_order" if fortran.is_none() => fortran = Some(parser.boolean()?),
+            "shape" if shape.is_none() => shape = Some(parser.shape()?),
+            _ => return Err(format_error("unknown or duplicate header field")),
+        }
+        if parser.take(b',') {
+            continue;
+        }
+        parser.expect(b'}')?;
+        break;
+    }
+    parser.skip_space();
+    if parser.offset != header.len() {
+        return Err(format_error("malformed header dictionary"));
+    }
+    Ok((
+        descr.ok_or_else(|| format_error("missing 'descr'"))?,
+        fortran.ok_or_else(|| format_error("missing 'fortran_order'"))?,
+        shape.ok_or_else(|| format_error("missing 'shape'"))?,
+    ))
 }
 
 /// Decodes NPY version 1.x/2.x/3.x data. Complex dtypes also accept
@@ -189,11 +326,7 @@ fn decode_npy_with<R>(
     }
     let header = std::str::from_utf8(&bytes[header_start..header_start + header_len])
         .map_err(|_| format_error("header is not valid text"))?;
-    let descr_text = header_value(header, "descr")?;
-    let descr_text = descr_text
-        .strip_prefix('\'')
-        .and_then(|s| s.split('\'').next())
-        .ok_or_else(|| format_error("malformed descr"))?;
+    let (descr_text, fortran, shape) = parse_header(header)?;
     let dtype = match descr_text {
         "|b1" => DType::Bool,
         "|i1" => DType::Int8,
@@ -220,37 +353,21 @@ fn decode_npy_with<R>(
         }
         _ => return Err(format_error("unsupported dtype descriptor")),
     };
-    let fortran = header_value(header, "fortran_order")?.starts_with("True");
-    if (!fortran && !header_value(header, "fortran_order")?.starts_with("False"))
-        || (fortran
-            && !matches!(
-                dtype,
-                DType::Float16
-                    | DType::Complex64
-                    | DType::Complex128
-                    | DType::Str(_)
-                    | DType::Datetime64(_)
-                    | DType::Timedelta64(_)
-            ))
+    if fortran
+        && !matches!(
+            dtype,
+            DType::Float16
+                | DType::Complex64
+                | DType::Complex128
+                | DType::Str(_)
+                | DType::Datetime64(_)
+                | DType::Timedelta64(_)
+        )
     {
         return Err(format_error(
             "Fortran-order data is not supported in this build",
         ));
     }
-    let shape_text = header_value(header, "shape")?;
-    let shape_text = shape_text
-        .strip_prefix('(')
-        .and_then(|s| s.split(')').next())
-        .ok_or_else(|| format_error("malformed shape"))?;
-    let shape = shape_text
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            s.parse::<usize>()
-                .map_err(|_| format_error("malformed shape"))
-        })
-        .collect::<Result<Vec<_>>>()?;
     let count = shape
         .iter()
         .try_fold(1usize, |acc, &d| acc.checked_mul(d))
@@ -506,6 +623,85 @@ fn read_checked_with<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture(header: &str, version: u8, payload: &[u8]) -> Vec<u8> {
+        let prefix_len = if version == 1 { 10 } else { 12 };
+        let mut padded = header.as_bytes().to_vec();
+        padded.extend(vec![b' '; (64 - (prefix_len + padded.len() + 1) % 64) % 64]);
+        padded.push(b'\n');
+        let mut bytes = NPY_MAGIC.to_vec();
+        bytes.extend_from_slice(&[version, 0]);
+        if version == 1 {
+            bytes.extend_from_slice(&(padded.len() as u16).to_le_bytes());
+        } else {
+            bytes.extend_from_slice(&(padded.len() as u32).to_le_bytes());
+        }
+        bytes.extend_from_slice(&padded);
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    #[test]
+    fn accepts_equivalent_header_dictionaries_across_versions() {
+        let headers = [
+            "{\"descr\": \"<f8\", \"fortran_order\": False, \"shape\": (1,), }",
+            "{'descr' : '<f8', 'fortran_order' : False, 'shape' : (1,), }",
+            "{'descr': \"<f8\", 'fortran_order': False, 'shape': (1,), }",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), }",
+            "{ 'shape' : ( 1 , ) , \"fortran_order\" : False , 'descr' : \"<f8\" }",
+        ];
+        for version in [1, 2, 3] {
+            for header in headers {
+                let bytes = fixture(header, version, &1.25f64.to_le_bytes());
+                assert_eq!(
+                    decode_npy(&bytes).unwrap(),
+                    (vec![1], Buffer::F64(vec![1.25]))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_header_dictionaries_before_reserving_output() {
+        let malformed = [
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1,)",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), } junk",
+            "{'descr': '<f8', 'fortran_order': False 'shape': (1,)}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), 'shape': (1,)}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), 'extra': 1}",
+            "{'fortran_order': False, 'shape': (1,)}",
+            "{'descr': 8, 'fortran_order': False, 'shape': (1,)}",
+            "{'descr': '<f8', 'fortran_order': 'False', 'shape': (1,)}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': [1]}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (1)}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (-1,)}",
+            "{'descr': '<f8', 'fortran_order': False, 'shape': (18446744073709551615, 2)}",
+            "{'descr': '<x8', 'fortran_order': False, 'shape': (1,)}",
+            "{'descr': '<f8, 'fortran_order': False, 'shape': (1,)}",
+        ];
+        for header in malformed {
+            let budget = MemoryBudget::new(crate::memory::Device::Cpu, 8);
+            let bytes = fixture(header, 1, &1.25f64.to_le_bytes());
+            assert_eq!(
+                decode_npy_budgeted(&bytes, &budget).unwrap_err().code,
+                ErrorCode::IoFormat,
+                "{header}"
+            );
+            assert_eq!(budget.usage().used, 0);
+        }
+        for payload in [&[][..], &[0; 16][..]] {
+            assert_eq!(
+                decode_npy(&fixture(
+                    "{'descr': '<f8', 'fortran_order': False, 'shape': (1,)}",
+                    1,
+                    payload
+                ))
+                .unwrap_err()
+                .code,
+                ErrorCode::IoFormat
+            );
+        }
+    }
 
     #[test]
     fn npy_round_trip() {
