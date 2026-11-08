@@ -456,18 +456,21 @@ fn emit_nts_javascript(
         .cloned()
         .collect::<Vec<_>>();
     for path in js_paths {
+        let mut decorator_cursor = 0;
         loop {
             let old = writes.remove(&path).expect("JavaScript output path exists");
-            let Some(rewrite) = crate::async_decorators::rewrite(&old).map_err(|message| {
-                vec![CompilerDiagnostic::without_location(
-                    CompilerCode::Emit,
-                    message,
-                )]
-            })?
+            let Some(rewrite) =
+                crate::async_decorators::rewrite(&old, decorator_cursor).map_err(|message| {
+                    vec![CompilerDiagnostic::without_location(
+                        CompilerCode::Emit,
+                        message,
+                    )]
+                })?
             else {
                 writes.insert(path.clone(), old);
                 break;
             };
+            decorator_cursor = rewrite.resume_at;
             let new = rewrite.new;
             let map_path = format!("{path}.map");
             if let Some(map) = writes.get_mut(&map_path) {

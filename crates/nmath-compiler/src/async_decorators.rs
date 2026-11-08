@@ -18,6 +18,9 @@ pub(crate) struct CopySpan {
 pub(crate) struct Rewrite {
     pub new: String,
     pub copies: Vec<CopySpan>,
+    /// Restart at this wrapper so nested repairs remain visible without
+    /// scanning earlier classes.
+    pub resume_at: usize,
 }
 
 enum Part {
@@ -497,26 +500,25 @@ fn matching_brace(text: &str, open: usize) -> Option<usize> {
 }
 
 fn enclosing_wrapper(text: &str, class_at: usize) -> Option<(usize, usize, usize, bool)> {
-    let mut found = None;
-    for (pattern, asynchronous) in [("(() => {", false), ("(async () => {", true)] {
-        let mut search = 0;
-        while let Some(offset) = text[search..class_at].find(pattern) {
-            let wrapper_at = search + offset;
-            let wrapper_open = wrapper_at + pattern.len() - 1;
-            let Some(wrapper_close) = matching_brace(text, wrapper_open) else {
-                search = wrapper_at + pattern.len();
-                continue;
-            };
-            if wrapper_open < class_at
-                && class_at < wrapper_close
-                && found.is_none_or(|(at, _, _, _)| wrapper_at > at)
-            {
-                found = Some((wrapper_at, wrapper_open, wrapper_close, asynchronous));
-            }
-            search = wrapper_at + pattern.len();
+    let mut search = class_at;
+    loop {
+        let (wrapper_at, pattern, asynchronous) = [("(() => {", false), ("(async () => {", true)]
+            .into_iter()
+            .filter_map(|(pattern, asynchronous)| {
+                text[..search]
+                    .rfind(pattern)
+                    .map(|at| (at, pattern, asynchronous))
+            })
+            .max_by_key(|(at, _, _)| *at)?;
+        search = wrapper_at;
+        let wrapper_open = wrapper_at + pattern.len() - 1;
+        let Some(wrapper_close) = matching_brace(text, wrapper_open) else {
+            continue;
+        };
+        if wrapper_open < class_at && class_at < wrapper_close {
+            return Some((wrapper_at, wrapper_open, wrapper_close, asynchronous));
         }
     }
-    found
 }
 
 fn enclosing_downlevel_decorator_block(
@@ -629,7 +631,7 @@ fn await_is_in_decorator_assignment(text: &str, await_at: usize) -> bool {
     true
 }
 
-fn apply(text: &str, mut edits: Vec<Edit>) -> Result<Rewrite, String> {
+fn apply(text: &str, mut edits: Vec<Edit>, resume_at: usize) -> Result<Rewrite, String> {
     edits.sort_by_key(|edit| (edit.start, edit.end));
     let mut output = String::new();
     let mut copies = Vec::new();
@@ -663,6 +665,7 @@ fn apply(text: &str, mut edits: Vec<Edit>) -> Result<Rewrite, String> {
     Ok(Rewrite {
         new: output,
         copies,
+        resume_at,
     })
 }
 
@@ -684,11 +687,11 @@ fn find_await_set(text: &str, from: usize) -> Option<usize> {
     None
 }
 
-pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
+pub(crate) fn rewrite(text: &str, from: usize) -> Result<Option<Rewrite>, String> {
     if !text.contains("__esDecorate(") {
         return Ok(None);
     }
-    let mut cursor = 0;
+    let mut cursor = from;
     let (
         await_at,
         class_at,
@@ -827,7 +830,9 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             let Some(last) = assignments.iter().rposition(|assignment| assignment.4) else {
                 return Ok(None);
             };
-            let sentinel = (0..)
+            // Start from this expression instead of retesting every sentinel
+            // allocated to earlier classes. Still reject names present in input.
+            let sentinel = (await_at..)
                 .map(|index| format!("__nmath_decorator_sentinel_{index}"))
                 .find(|candidate| !text.contains(candidate))
                 .unwrap();
@@ -944,7 +949,7 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
         end: wrapper_close + 4,
         parts: vec![Part::New(").value".into())],
     });
-    apply(text, edits).map(Some)
+    apply(text, edits, wrapper_at).map(Some)
 }
 
 #[cfg(test)]
