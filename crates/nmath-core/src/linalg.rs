@@ -631,7 +631,9 @@ pub fn execute(
                 rhs[i * n + i] = C::new(1., 0.);
             }
         }
-        let mut determinant = C::new(1., 0.);
+        let mut determinant_phase = C::new(1., 0.);
+        let mut determinant_log_abs = 0.0;
+        let mut singular_determinant = false;
         for k in 0..n {
             token.check()?;
             let mut pivot = k;
@@ -642,7 +644,7 @@ pub fn execute(
             }
             if lu[pivot * n + k] == C::new(0., 0.) {
                 if op == LinalgOp::Det {
-                    determinant = C::new(0., 0.);
+                    singular_determinant = true;
                     break;
                 }
                 return Err(Error::new(
@@ -657,10 +659,16 @@ pub fn execute(
                 for j in 0..cols {
                     rhs.swap(k * cols + j, pivot * cols + j);
                 }
-                determinant = -determinant;
+                if op == LinalgOp::Det {
+                    determinant_phase = -determinant_phase;
+                }
             }
             let diagonal = lu[k * n + k];
-            determinant *= diagonal;
+            if op == LinalgOp::Det {
+                let magnitude = diagonal.norm();
+                determinant_phase *= diagonal / magnitude;
+                determinant_log_abs += magnitude.ln();
+            }
             for i in k + 1..n {
                 token.check()?;
                 let factor = lu[i * n + k].fdiv(diagonal);
@@ -676,6 +684,11 @@ pub fn execute(
             }
         }
         if op == LinalgOp::Det {
+            let determinant = if singular_determinant {
+                C::new(0., 0.)
+            } else {
+                determinant_phase * determinant_log_abs.exp()
+            };
             write(&mut output, batch_id, determinant);
             continue;
         }
