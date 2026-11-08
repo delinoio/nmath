@@ -302,15 +302,123 @@ fn real_dtype(dtype: DType) -> DType {
     }
 }
 
-fn determinant_from_phase_log(phase: C, log_abs: f64) -> C {
-    fn component(phase: f64, log_abs: f64) -> f64 {
-        if phase == 0.0 {
-            return phase;
+#[derive(Clone, Copy)]
+struct SignedLog {
+    sign: f64,
+    log_abs: f64,
+}
+
+impl SignedLog {
+    fn zero() -> Self {
+        Self {
+            sign: 0.0,
+            log_abs: f64::NEG_INFINITY,
         }
-        (log_abs + phase.abs().ln()).exp().copysign(phase)
     }
 
-    C::new(component(phase.re, log_abs), component(phase.im, log_abs))
+    fn from_value(value: f64) -> Self {
+        if value == 0.0 {
+            Self::zero()
+        } else {
+            Self {
+                sign: value.signum(),
+                log_abs: value.abs().ln(),
+            }
+        }
+    }
+
+    fn neg(self) -> Self {
+        Self {
+            sign: -self.sign,
+            log_abs: self.log_abs,
+        }
+    }
+
+    fn add(self, other: Self) -> Self {
+        if self.sign == 0.0 {
+            return other;
+        }
+        if other.sign == 0.0 {
+            return self;
+        }
+        if self.sign == other.sign {
+            let (large, small) = if self.log_abs >= other.log_abs {
+                (self.log_abs, other.log_abs)
+            } else {
+                (other.log_abs, self.log_abs)
+            };
+            return Self {
+                sign: self.sign,
+                log_abs: large + (small - large).exp().ln_1p(),
+            };
+        }
+        if self.log_abs == other.log_abs {
+            return Self::zero();
+        }
+        let (large, small, sign) = if self.log_abs > other.log_abs {
+            (self.log_abs, other.log_abs, self.sign)
+        } else {
+            (other.log_abs, self.log_abs, other.sign)
+        };
+        Self {
+            sign,
+            log_abs: large + (-(small - large).exp()).ln_1p(),
+        }
+    }
+
+    fn mul(self, other: Self) -> Self {
+        if self.sign == 0.0 || other.sign == 0.0 {
+            Self::zero()
+        } else {
+            Self {
+                sign: self.sign * other.sign,
+                log_abs: self.log_abs + other.log_abs,
+            }
+        }
+    }
+
+    fn value(self) -> f64 {
+        if self.sign == 0.0 {
+            0.0
+        } else {
+            self.sign * self.log_abs.exp()
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LogComplex {
+    re: SignedLog,
+    im: SignedLog,
+}
+
+impl LogComplex {
+    fn one() -> Self {
+        Self {
+            re: SignedLog::from_value(1.0),
+            im: SignedLog::zero(),
+        }
+    }
+
+    fn neg(self) -> Self {
+        Self {
+            re: self.re.neg(),
+            im: self.im.neg(),
+        }
+    }
+
+    fn mul_assign(&mut self, rhs: C) {
+        let re = self.re;
+        let im = self.im;
+        let rhs_re = SignedLog::from_value(rhs.re);
+        let rhs_im = SignedLog::from_value(rhs.im);
+        self.re = re.mul(rhs_re).add(im.mul(rhs_im).neg());
+        self.im = re.mul(rhs_im).add(im.mul(rhs_re));
+    }
+
+    fn value(self) -> C {
+        C::new(self.re.value(), self.im.value())
+    }
 }
 
 /// Result shape and dtype of a factorization of `a` (..., m, n).
@@ -642,8 +750,7 @@ pub fn execute(
                 rhs[i * n + i] = C::new(1., 0.);
             }
         }
-        let mut determinant_phase = C::new(1., 0.);
-        let mut determinant_log_abs = 0.0;
+        let mut determinant_product = LogComplex::one();
         let mut singular_determinant = false;
         for k in 0..n {
             token.check()?;
@@ -671,21 +778,18 @@ pub fn execute(
                     rhs.swap(k * cols + j, pivot * cols + j);
                 }
                 if op == LinalgOp::Det {
-                    determinant_phase = -determinant_phase;
+                    determinant_product = determinant_product.neg();
                 }
             }
             let diagonal = lu[k * n + k];
             if op == LinalgOp::Det {
-                // Normalize by the largest component so a finite complex pivot
-                // does not overflow while its phase and log magnitude are
-                // extracted. Reconstruct each result component separately below
-                // because the scalar determinant magnitude may be
-                // unrepresentable.
-                let scale = diagonal.re.abs().max(diagonal.im.abs());
-                let normalized = C::new(diagonal.re / scale, diagonal.im / scale);
-                let magnitude = normalized.norm();
-                determinant_phase *= normalized / magnitude;
-                determinant_log_abs += scale.ln() + magnitude.ln();
+                // Accumulate real and imaginary components in signed log form.
+                // A shared normalized phase can underflow a tiny component (for
+                // example, 1e-100 / 1e308) before reconstruction can recover
+                // it. Component-wise logs avoid both that loss
+                // and an overflowing intermediate complex
+                // magnitude.
+                determinant_product.mul_assign(diagonal);
             }
             for i in k + 1..n {
                 token.check()?;
@@ -705,7 +809,7 @@ pub fn execute(
             let determinant = if singular_determinant {
                 C::new(0., 0.)
             } else {
-                determinant_from_phase_log(determinant_phase, determinant_log_abs)
+                determinant_product.value()
             };
             write(&mut output, batch_id, determinant);
             continue;
