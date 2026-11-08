@@ -1,0 +1,254 @@
+// SPDX-License-Identifier: Apache-2.0
+use nmath_core::{
+    Buffer, CancellationToken, DenseArray, Device, ErrorCode,
+    linalg::{self, LinalgOp},
+    memory::{MemoryBudget, Reservation},
+};
+
+fn dense(shape: Vec<usize>, buffer: Buffer) -> DenseArray {
+    DenseArray::new(shape, buffer, Reservation::none()).unwrap()
+}
+
+fn determinant(a: &DenseArray, budget: &MemoryBudget, token: &CancellationToken) -> DenseArray {
+    linalg::execute(LinalgOp::Det, a, None, budget, token).unwrap()
+}
+
+#[test]
+fn compensating_pivots_preserve_finite_determinants() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    for diagonal in [
+        [1e100, 1e100, 1e100, 1e100, 1e-100, 1e-100, 1e-100, 1e-100],
+        [1e-100, 1e-100, 1e-100, 1e-100, 1e100, 1e100, 1e100, 1e100],
+    ] {
+        let mut values = vec![0.0; 64];
+        for (i, value) in diagonal.into_iter().enumerate() {
+            values[i * 8 + i] = value;
+        }
+        let a = dense(vec![8, 8], Buffer::F64(values));
+        let result = determinant(&a, &budget, &token);
+        let Buffer::F64(values) = &result.buffer else {
+            panic!("determinant must retain float64");
+        };
+        assert!(values[0].is_finite() && values[0] != 0.0);
+        // The pinned NumPy test_linalg double-precision criterion is decimal
+        // 12.
+        assert!((values[0] - 1.0).abs() < 1e-12, "{}", values[0]);
+    }
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn signs_phases_singular_and_empty_cases() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let negative = dense(vec![2, 2], Buffer::F64(vec![-2.0, 0.0, 0.0, 3.0]));
+    assert_eq!(
+        determinant(&negative, &budget, &token).buffer,
+        Buffer::F64(vec![-6.0])
+    );
+    let ordinary = dense(
+        vec![3, 3],
+        Buffer::F64(vec![2.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 4.0]),
+    );
+    let ordinary_result = determinant(&ordinary, &budget, &token);
+    let Buffer::F64(values) = &ordinary_result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!((values[0] - 24.0).abs() < 1e-12);
+    drop(ordinary_result);
+    let swapped = dense(vec![2, 2], Buffer::F64(vec![0.0, 1.0, 1.0, 0.0]));
+    assert_eq!(
+        determinant(&swapped, &budget, &token).buffer,
+        Buffer::F64(vec![-1.0])
+    );
+
+    let complex = dense(
+        vec![2, 2],
+        Buffer::C128(vec![[1e100, 1e100], [0.0, 0.0], [0.0, 0.0], [1e-100, 0.0]]),
+    );
+    let result = determinant(&complex, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] - 1.0).abs() < 1e-12);
+    assert!((values[0][1] - 1.0).abs() < 1e-12);
+    drop(result);
+    let single_complex = dense(
+        vec![2, 2],
+        Buffer::C64(vec![[1.0, 2.0], [0.0, 0.0], [0.0, 0.0], [3.0, 0.0]]),
+    );
+    let single_result = determinant(&single_complex, &budget, &token);
+    let Buffer::C64(values) = &single_result.buffer else {
+        panic!("determinant must retain complex64");
+    };
+    assert!((values[0][0] - 3.0).abs() < 1e-6);
+    assert!((values[0][1] - 6.0).abs() < 1e-6);
+    drop(single_result);
+
+    let singular = dense(vec![2, 2], Buffer::F64(vec![1.0, 2.0, 2.0, 4.0]));
+    assert_eq!(
+        determinant(&singular, &budget, &token).buffer,
+        Buffer::F64(vec![0.0])
+    );
+    let empty = dense(vec![0, 0], Buffer::C64(vec![]));
+    assert_eq!(
+        determinant(&empty, &budget, &token).buffer,
+        Buffer::C64(vec![[1.0, 0.0]])
+    );
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn finite_complex_components_survive_overflowing_magnitude() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+
+    let single = dense(vec![1, 1], Buffer::C128(vec![[1.3e308, 1.3e308]]));
+    let result = determinant(&single, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!(values[0][0].is_finite() && values[0][1].is_finite());
+    assert!((values[0][0] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    assert!((values[0][1] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    drop(result);
+
+    let tiny_component = dense(vec![1, 1], Buffer::C128(vec![[1e308, 1e-100]]));
+    let result = determinant(&tiny_component, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] - 1e308).abs() / 1e308 < 1e-12);
+    assert!((values[0][1] - 1e-100).abs() / 1e-100 < 1e-12);
+    drop(result);
+
+    let rotated_tiny_component = dense(
+        vec![2, 2],
+        Buffer::C128(vec![[1e308, 1e-100], [0.0, 0.0], [0.0, 0.0], [0.0, 1.0]]),
+    );
+    let result = determinant(&rotated_tiny_component, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] + 1e-100).abs() / 1e-100 < 1e-12);
+    assert!((values[0][1] - 1e308).abs() / 1e308 < 1e-12);
+    drop(result);
+
+    let diagonal = dense(
+        vec![2, 2],
+        Buffer::C128(vec![[1e200, 1e200], [0.0, 0.0], [0.0, 0.0], [1.3e108, 0.0]]),
+    );
+    let result = determinant(&diagonal, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!(values[0][0].is_finite() && values[0][1].is_finite());
+    assert!((values[0][0] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    assert!((values[0][1] - 1.3e308).abs() / 1.3e308 < 1e-12);
+    drop(result);
+
+    let cancellation = dense(
+        vec![2, 2],
+        Buffer::C128(vec![
+            [1048576.0, 1048576.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [1048576.0, 1048575.9999999999],
+        ]),
+    );
+    let result = determinant(&cancellation, &budget, &token);
+    let Buffer::C128(values) = &result.buffer else {
+        panic!("determinant must retain complex128");
+    };
+    assert!((values[0][0] - 0.0001220703125).abs() < 1e-12);
+    drop(result);
+
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn near_limit_finite_determinants_do_not_overflow_reconstruction() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let near_limit = dense(
+        vec![2, 2],
+        Buffer::F64(vec![1e6, 0.0, 0.0, 1.7976931348623154e302]),
+    );
+    let result = determinant(&near_limit, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!(values[0].is_finite());
+    assert!((values[0] - 1.7976931348623155e308).abs() / 1.7976931348623155e308 < 1e-12);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn subnormal_pivots_retain_their_scale() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let subnormal = dense(vec![1, 1], Buffer::F64(vec![1e-310]));
+    let result = determinant(&subnormal, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert!((values[0] - 1e-310).abs() / 1e-310 < 1e-12);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn subnormal_reconstruction_rounds_once_at_the_boundary() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let boundary = dense(
+        vec![2, 2],
+        Buffer::F64(vec![2_f64.powi(-537), 0.0, 0.0, 1.5 * 2_f64.powi(-538)]),
+    );
+    let result = determinant(&boundary, &budget, &token);
+    let Buffer::F64(values) = &result.buffer else {
+        panic!("determinant must retain float64");
+    };
+    assert_eq!(values[0], 5e-324);
+    drop(result);
+    assert_eq!(budget.usage().used, 0);
+}
+
+#[test]
+fn determinant_retains_batch_dtype_cancellation_and_budget() {
+    let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+    let token = CancellationToken::new();
+    let batch = dense(
+        vec![2, 2, 2],
+        Buffer::F32(vec![2.0, 0.0, 0.0, 3.0, 0.0, 1.0, 1.0, 0.0]),
+    );
+    let result = determinant(&batch, &budget, &token);
+    assert_eq!(result.shape, vec![2]);
+    assert_eq!(result.buffer, Buffer::F32(vec![6.0, -1.0]));
+    drop(result);
+
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    assert_eq!(
+        linalg::execute(LinalgOp::Det, &batch, None, &budget, &cancelled)
+            .unwrap_err()
+            .code,
+        ErrorCode::Cancelled
+    );
+    let insufficient = MemoryBudget::new(Device::Cpu, 8);
+    assert_eq!(
+        linalg::execute(LinalgOp::Det, &batch, None, &insufficient, &token)
+            .unwrap_err()
+            .code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    assert_eq!(insufficient.usage().used, 0);
+    let sufficient = MemoryBudget::new(Device::Cpu, 72);
+    let charged = determinant(&batch, &sufficient, &token);
+    assert_eq!(sufficient.usage().used, 8);
+    drop(charged);
+    assert_eq!(sufficient.usage().used, 0);
+    assert_eq!(budget.usage().used, 0);
+}

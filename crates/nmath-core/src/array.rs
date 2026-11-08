@@ -6,13 +6,13 @@ use std::sync::{
 };
 
 use crate::{
-    buffer::{Buffer, DenseArray, Scalar},
+    buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
     memory::{MemoryBudget, Reservation},
     shape::{
         Selector, advanced_axis, broadcast_shapes, broadcast_strides, contiguous_strides,
-        for_each_offset, index_offsets, index_shape, normalize_index, resolve_slice,
+        for_each_offset, index_offsets_budgeted, index_shape, normalize_index, resolve_slice,
     },
     sync::{CancellationToken, FifoGuard, FifoLock, Ticket},
 };
@@ -334,8 +334,27 @@ impl NdArray {
         value: &DenseArray,
         token: &CancellationToken,
     ) -> Result<()> {
+        // Direct Rust writes have no context budget argument. Keep this API
+        // usable with checked allocation sizes; Context::assign supplies its
+        // actual CPU budget through assign_with_budget.
+        self.assign_with_budget(
+            _turn,
+            selectors,
+            value,
+            token,
+            &MemoryBudget::new(crate::memory::Device::Cpu, u64::MAX),
+        )
+    }
+
+    pub(crate) fn assign_with_budget(
+        &self,
+        _turn: &FifoGuard,
+        selectors: &[Selector],
+        value: &DenseArray,
+        token: &CancellationToken,
+        budget: &MemoryBudget,
+    ) -> Result<()> {
         let target_shape = index_shape(&self.shape, selectors)?;
-        let offsets = index_offsets(&self.shape, &self.strides, self.offset, selectors)?;
         let out = broadcast_shapes(&value.shape, &target_shape)?;
         if out != target_shape {
             return Err(Error::new(
@@ -375,15 +394,38 @@ impl NdArray {
                  assignment.",
             ));
         }
-        let source = value.buffer.cast(dtype)?;
+        let cast_bytes = checked_byte_len(value.size(), dtype)?;
+        let _cast_charge = budget.reserve(cast_bytes as u64)?;
+        let source = value.buffer.cast_cancellable(dtype, token)?;
+        let offsets =
+            index_offsets_budgeted(&self.shape, &self.strides, self.offset, selectors, budget)?;
+        let rank_bytes = value
+            .shape
+            .len()
+            .checked_add(
+                target_shape
+                    .len()
+                    .checked_mul(2)
+                    .ok_or_else(crate::shape::index_scratch_overflow)?,
+            )
+            .and_then(|n| n.checked_mul(std::mem::size_of::<usize>()))
+            .ok_or_else(crate::shape::index_scratch_overflow)?;
+        let source_bytes = offsets
+            .values
+            .len()
+            .checked_mul(std::mem::size_of::<usize>())
+            .and_then(|n| n.checked_add(rank_bytes))
+            .filter(|&n| n <= isize::MAX as usize)
+            .ok_or_else(crate::shape::index_scratch_overflow)?;
+        let _source_charge = budget.reserve(source_bytes as u64)?;
         let strides = broadcast_strides(&value.shape, &target_shape);
-        let mut source_offsets = Vec::with_capacity(offsets.len());
+        let mut source_offsets = Vec::with_capacity(offsets.values.len());
         for_each_offset(&target_shape, &strides, 0, |o| source_offsets.push(o));
         token.check()?;
         let _snapshot_gate = crate::table::SNAPSHOT_GATE.lock().unwrap();
         token.check()?;
         let mut data = self.storage.data.write().unwrap();
-        for (&dst, &src) in offsets.iter().zip(&source_offsets) {
+        for (&dst, &src) in offsets.values.iter().zip(&source_offsets) {
             data.set_from(dst, &source, src);
         }
         Ok(())
