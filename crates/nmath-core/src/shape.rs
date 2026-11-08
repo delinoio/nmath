@@ -219,6 +219,20 @@ fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
     (last - first + 1 != count).then_some(array_axis)
 }
 
+/// Returns the output axis occupied by the broadcast advanced index block.
+pub(crate) fn advanced_axis(selectors: &[Selector]) -> Option<usize> {
+    let first_array = selectors.iter().position(|selector| !selector.is_basic())?;
+    if separated_advanced_axis(selectors).is_some() {
+        Some(0)
+    } else {
+        Some(
+            (0..first_array)
+                .filter(|&axis| matches!(selectors.get(axis), None | Some(Selector::Slice { .. })))
+                .count(),
+        )
+    }
+}
+
 /// Output shape of indexing `shape` with `selectors`. Integer-array and mask
 /// selectors broadcast together into one advanced dimension.
 /// Length of the advanced block: the broadcast length of every integer-array
@@ -387,16 +401,10 @@ pub(crate) fn indexed_offset(
         index / trailing % shape[axis]
     }
 
+    let advanced_axis = advanced_axis(selectors);
     let separated = separated_advanced_axis(selectors).is_some();
     let first_array = selectors.iter().position(|selector| !selector.is_basic());
-    let advanced_axis = if separated {
-        0
-    } else {
-        (0..first_array.unwrap_or(0))
-            .filter(|&axis| matches!(selectors.get(axis), None | Some(Selector::Slice { .. })))
-            .count()
-    };
-    let advanced_index = first_array.map(|_| coordinate(result_index, result_shape, advanced_axis));
+    let advanced_index = advanced_axis.map(|axis| coordinate(result_index, result_shape, axis));
     let mut result_axis = usize::from(separated);
     let mut mask_axis = 0;
     let mut offset = base;

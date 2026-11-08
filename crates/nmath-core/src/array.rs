@@ -11,8 +11,8 @@ use crate::{
     error::{Error, ErrorCode, Result},
     memory::{MemoryBudget, Reservation},
     shape::{
-        Selector, broadcast_shapes, broadcast_strides, contiguous_strides, for_each_offset,
-        index_offsets, index_shape, normalize_index, resolve_slice,
+        Selector, advanced_axis, broadcast_shapes, broadcast_strides, contiguous_strides,
+        for_each_offset, index_offsets, index_shape, normalize_index, resolve_slice,
     },
     sync::{CancellationToken, FifoGuard, FifoLock, Ticket},
 };
@@ -276,8 +276,10 @@ impl NdArray {
         }
         let mut buffer = Buffer::filled(dtype, size, Scalar::Int(0))?;
         let source = self.storage.data.read().unwrap();
-        for output_index in 0..size {
-            if output_index % 1024 == 0 {
+        let output_advanced_axis = advanced_axis(selectors);
+        let mut visited = 0usize;
+        let mut write_output = |output_index: usize| -> Result<()> {
+            if visited % 1024 == 0 {
                 token.check()?;
             }
             let offset = crate::shape::indexed_offset(
@@ -291,6 +293,25 @@ impl NdArray {
                 token,
             )?;
             buffer.set_from(output_index, &source, offset);
+            visited += 1;
+            Ok(())
+        };
+        if let Some(axis) = output_advanced_axis.filter(|&axis| axis > 0) {
+            let advanced_len = shape[axis];
+            let trailing = shape[axis + 1..].iter().product::<usize>();
+            let leading = size / (advanced_len * trailing);
+            for advanced_index in 0..advanced_len {
+                for leading_index in 0..leading {
+                    let prefix = leading_index * advanced_len * trailing;
+                    for trailing_index in 0..trailing {
+                        write_output(prefix + advanced_index * trailing + trailing_index)?;
+                    }
+                }
+            }
+        } else {
+            for output_index in 0..size {
+                write_output(output_index)?;
+            }
         }
         token.check()?;
         DenseArray::new(shape, buffer, reservation)
@@ -454,6 +475,23 @@ mod tests {
         assert_eq!(taken.buffer, Buffer::F64(vec![4.0, 1.0]));
         assert_eq!(budget.usage().used, 16);
         assert!(a.take(&[Selector::Indices(vec![0])], &budget).is_err());
+    }
+
+    #[test]
+    fn copying_mask_after_retained_axis_preserves_c_order() {
+        let a = array(vec![2, 5], (0..10).map(|v| v as f64).collect());
+        let budget = MemoryBudget::new(Device::Cpu, 64);
+        let taken = a
+            .take(
+                &[
+                    slice(None, None, None),
+                    Selector::Mask(vec![false, true, false, false, true]),
+                ],
+                &budget,
+            )
+            .unwrap();
+        assert_eq!(taken.shape, vec![2, 2]);
+        assert_eq!(taken.buffer, Buffer::F64(vec![1.0, 4.0, 6.0, 9.0]));
     }
 
     #[test]
