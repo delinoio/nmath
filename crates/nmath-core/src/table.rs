@@ -921,6 +921,16 @@ fn group(
                 float += s.as_f64();
             }
             if extreme.as_ref().is_none_or(|old: &Scalar| {
+                if flavor == Flavor::Polars && matches!(op, Aggregate::Max) {
+                    if let (Scalar::Float(next), Scalar::Float(current)) = (&s, old) {
+                        if next.is_nan() {
+                            return false;
+                        }
+                        if current.is_nan() {
+                            return true;
+                        }
+                    }
+                }
                 let c = cmp(s.clone(), old.clone());
                 if matches!(op, Aggregate::Min) {
                     c == Ordering::Less

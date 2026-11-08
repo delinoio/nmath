@@ -324,6 +324,82 @@ test("pandas float sorts place valid NaNs and masked rows independently of direc
     await ctx.close();
   }
 });
+test("Polars grouped float max ignores NaN without changing other aggregates", async () => {
+  const ctx = context();
+  async function grouped(dtype, input, valid, op = "max", pandas = false) {
+    const keys = ctx.array(
+      input.map(() => 1),
+      { dtype: "int32" },
+    );
+    const values = ctx.array(input, { dtype });
+    const mask = ctx.array(valid, { dtype: "bool" });
+    const frame = new pl.DataFrame([
+      new pl.Series("k", keys),
+      new pl.Series("v", values, mask),
+    ]);
+    try {
+      const out = pandas
+        ? await frame.toPandas().groupBy("k", "v", op)
+        : await frame.lazy().groupBy("k", "v", op).collect();
+      try {
+        if (input.length === 0) return { rows: 0 };
+        const column = pandas ? out.get("v") : out.getColumn("v");
+        return {
+          rows: 1,
+          value: Number(column.values.item(0)),
+          valid: column.validity?.item(0) ?? true,
+        };
+      } finally {
+        for (const name of out.columns) {
+          const column = pandas ? out.get(name) : out.getColumn(name);
+          column.values.dispose();
+          column.validity?.dispose();
+        }
+      }
+    } finally {
+      keys.dispose();
+      values.dispose();
+      mask.dispose();
+    }
+  }
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const [input, valid, expected] of [
+        [[1, NaN], [true, true], 1],
+        [[NaN, 1], [true, true], 1],
+        [[NaN, -Infinity], [true, true], -Infinity],
+        [[Infinity, NaN], [true, true], Infinity],
+        [[NaN, NaN], [true, true], NaN],
+        [[NaN, 2], [true, false], NaN],
+        [[1, NaN, 99], [true, true, false], 1],
+        [[1, 2], [true, true], 2],
+        [[1, 2], [false, false], null],
+      ]) {
+        const actual = await grouped(dtype, input, valid);
+        assert.equal(actual.rows, 1);
+        assert.equal(actual.valid, expected !== null);
+        if (expected !== null) assert.ok(Object.is(actual.value, expected));
+      }
+      assert.deepEqual(await grouped(dtype, [], []), { rows: 0 });
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "max", true)).value,
+        1,
+      );
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "count")).value,
+        2,
+      );
+      for (const op of ["sum", "mean"])
+        assert.ok(
+          Number.isNaN(
+            (await grouped(dtype, [1, NaN], [true, true], op)).value,
+          ),
+        );
+    }
+  } finally {
+    await ctx.close();
+  }
+});
 test("join coalesces only the right key after resolving retained names", async () => {
   const ctx = context();
   try {
