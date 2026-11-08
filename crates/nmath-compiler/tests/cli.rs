@@ -364,8 +364,9 @@ fn field_decorator_fixture(name: &str, legacy: bool, source: &str) -> Fixture {
     );
     fixture.write(
         "node_modules/@delinoio/nmath/nts-runtime.js",
-        "export let setCalls = 0;\nexport async function set(a, i, value) { setCalls++; await \
-         Promise.resolve(); a.values[i] = value; return value; }\n",
+        "export function decoratorKey() { return Symbol(); }\nexport let setCalls = 0;\nexport \
+         async function set(a, i, value) { setCalls++; await Promise.resolve(); a.values[i] = \
+         value; return value; }\n",
     );
     fixture.write("src/main.nts", source);
     fixture
@@ -971,6 +972,35 @@ fn modern_field_decorator_does_not_use_shadowed_symbol() {
 }
 
 #[test]
+fn modern_field_decorator_does_not_use_shadowed_global_this() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { const globalThis = 123; class C { @dec(a[0] = 1) value = 2; } return \
+                  [new C().value, a.values[0], setCalls, globalThis]; }\n";
+    let fixture = field_decorator_fixture("decorator-shadowed-global", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the shadowed Symbol fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[2,1,1,123]"
+    );
+}
+
+#[test]
 fn modern_auto_accessor_decorator_await_is_relocated() {
     let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
                   '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
@@ -1259,11 +1289,7 @@ fn many_decorated_classes_rewrite_without_retaining_prior_snapshots() {
     let (code, result) = run_json("build", &fixture);
     assert_eq!(code, 0, "{result:#}");
     let output = fixture.read("dist/main.js");
-    assert_eq!(
-        output.matches("globalThis.Symbol()").count(),
-        count,
-        "{output}"
-    );
+    assert_eq!(output.matches(".decoratorKey()").count(), count, "{output}");
     let map: Value = serde_json::from_str(&fixture.read("dist/main.js.map")).unwrap();
     assert_eq!(map["sourcesContent"][0], source);
 }

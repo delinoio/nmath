@@ -1007,8 +1007,14 @@ fn rewrite(
                 parts.push(Part::New(", ".into()));
                 parts.push(Part::Copy(value_start, value_end));
             }
+            // The lowering pass already chose an uncaptured runtime import.
+            // Create the key there rather than resolving user-local globals.
+            let runtime = text[await_at + "await ".len()..]
+                .split_once(".set(")
+                .ok_or("Awaited runtime namespace is missing")?
+                .0;
             parts.push(Part::New(format!(
-                ", {sentinel} = globalThis.Symbol())]() {{}}\n        "
+                ", {sentinel} = {runtime}.decoratorKey())]() {{}}\n        "
             )));
             edits.push(Edit {
                 start: class_close,
