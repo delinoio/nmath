@@ -796,7 +796,7 @@ impl JobEnv {
             if let ExprKind::Input(a) = &e.0.kind {
                 let key = a as *const NdArray;
                 if !self.snapshots.contains_key(&key) {
-                    match a.snapshot(&self.budget) {
+                    match a.snapshot_cancellable(&self.budget, &self.token) {
                         Ok(s) => {
                             self.snapshots.insert(key, s);
                             #[cfg(test)]
