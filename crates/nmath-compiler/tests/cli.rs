@@ -603,6 +603,32 @@ fn unrelated_async_method_does_not_make_a_decorator_factory_async() {
 }
 
 #[test]
+fn multiline_decorator_assignments_are_relocated_as_complete_expressions() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: { value: number }): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec({\n  value: a[0] = 1\n}) field = 2; } const instance = \
+                  new C(); return [instance.field, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-multiline", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the multiline decorator fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
 fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
     for (name, source) in [
         (

@@ -42,6 +42,146 @@ fn line_end(text: &str, at: usize) -> usize {
         .map_or(text.len(), |index| at + index + 1)
 }
 
+fn statement_end(text: &str, start: usize, limit: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start;
+    let mut parentheses = 0usize;
+    let mut brackets = 0usize;
+    let mut braces = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut regex = false;
+    let mut regex_class = false;
+    let mut line_comment = false;
+    let mut block_comment = false;
+    let mut can_start_regex = true;
+    while index < limit {
+        let byte = bytes[index];
+        let next = bytes.get(index + 1).copied();
+        if regex {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if regex_class {
+                if byte == b']' {
+                    regex_class = false;
+                }
+            } else if byte == b'[' {
+                regex_class = true;
+            } else if byte == b'/' {
+                regex = false;
+                can_start_regex = false;
+            }
+        } else if line_comment {
+            if byte == b'\n' {
+                line_comment = false;
+            }
+        } else if block_comment {
+            if byte == b'*' && next == Some(b'/') {
+                block_comment = false;
+                index += 1;
+            }
+        } else if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                quote = None;
+            }
+        } else if byte == b'/' && next == Some(b'/') {
+            line_comment = true;
+            index += 1;
+        } else if byte == b'/' && next == Some(b'*') {
+            block_comment = true;
+            index += 1;
+        } else if byte == b'/' && can_start_regex {
+            regex = true;
+            regex_class = false;
+        } else if matches!(byte, b'\'' | b'"' | b'`') {
+            quote = Some(byte);
+            can_start_regex = false;
+        } else if byte.is_ascii_alphabetic() || byte == b'_' || byte == b'$' {
+            let token_start = index;
+            index += 1;
+            while index < limit
+                && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'_' | b'$'))
+            {
+                index += 1;
+            }
+            can_start_regex = matches!(
+                &text[token_start..index],
+                "await"
+                    | "case"
+                    | "delete"
+                    | "do"
+                    | "else"
+                    | "in"
+                    | "instanceof"
+                    | "of"
+                    | "return"
+                    | "throw"
+                    | "typeof"
+                    | "void"
+                    | "yield"
+            );
+            continue;
+        } else if byte.is_ascii_digit() {
+            index += 1;
+            while index < limit && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'.') {
+                index += 1;
+            }
+            can_start_regex = false;
+            continue;
+        } else if byte == b'(' {
+            parentheses += 1;
+            can_start_regex = true;
+        } else if byte == b')' {
+            parentheses = parentheses.checked_sub(1)?;
+            can_start_regex = false;
+        } else if byte == b'[' {
+            brackets += 1;
+            can_start_regex = true;
+        } else if byte == b']' {
+            brackets = brackets.checked_sub(1)?;
+            can_start_regex = false;
+        } else if byte == b'{' {
+            braces += 1;
+            can_start_regex = true;
+        } else if byte == b'}' {
+            braces = braces.checked_sub(1)?;
+            can_start_regex = false;
+        } else if matches!(byte, b'.' | b')' | b']') {
+            can_start_regex = false;
+        } else if matches!(
+            byte,
+            b';' | b','
+                | b':'
+                | b'?'
+                | b'='
+                | b'!'
+                | b'&'
+                | b'|'
+                | b'+'
+                | b'-'
+                | b'*'
+                | b'%'
+                | b'^'
+                | b'~'
+                | b'<'
+                | b'>'
+        ) {
+            if byte == b';' && parentheses == 0 && brackets == 0 && braces == 0 {
+                return Some(line_end(text, index));
+            }
+            can_start_regex = true;
+        }
+        index += 1;
+    }
+    None
+}
+
 fn matching_brace(text: &str, open: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut quote = None;
@@ -316,17 +456,31 @@ pub(crate) fn rewrite(text: &str) -> Result<Option<Rewrite>, String> {
             let mut assignments = Vec::new();
             let mut position = metadata_end;
             while position < static_close {
-                let end = line_end(text, position).min(static_close);
-                let line = text[position..end].trim();
-                if line.contains("_decorators = [") && !line.contains("__esDecorate(") {
-                    let trimmed_start = position + text[position..end].find(line).unwrap();
-                    let trimmed_end = trimmed_start + line.len() - usize::from(line.ends_with(';'));
+                let Some(offset) = text[position..static_close].find("_decorators = [") else {
+                    break;
+                };
+                let marker = position + offset;
+                let mut assignment_name_start = marker;
+                while assignment_name_start > 0 {
+                    let byte = text.as_bytes()[assignment_name_start - 1];
+                    if byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$') {
+                        assignment_name_start -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                let assignment_start = line_start(text, marker);
+                let end = statement_end(text, assignment_start, static_close)
+                    .ok_or("Generated decorator assignment is unbalanced")?;
+                let assignment = &text[assignment_start..end];
+                if !assignment.contains("__esDecorate(") {
+                    let value_end = assignment_start + assignment.rfind(';').unwrap();
                     assignments.push((
-                        position,
+                        assignment_start,
                         end,
-                        trimmed_start,
-                        trimmed_end,
-                        find_await_set(line, 0).is_some(),
+                        assignment_name_start,
+                        value_end,
+                        find_await_set(assignment, 0).is_some(),
                     ));
                 }
                 position = end;
