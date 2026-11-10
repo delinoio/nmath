@@ -275,6 +275,8 @@ Apache-2.0. See `LICENSE` and `NOTICE`. Native dependencies keep their own licen
 
 The numeric table APIs are a bounded native subset of pandas 3.1.0 and Polars 2.1.0. They do not implement the complete pandas or Polars API. Columns can use bool, signed/unsigned 8-, 16-, 32- or 64-bit integers, float32 and float64. Nulls use explicit boolean validity columns; true means valid. Fixed-width strings and temporal columns support materialization, selection, filtering and access; their sorting/join/group operations remain targets. Categorical, complex and extended-precision table columns remain targets. NaN/inf and floating-point summation behavior still require broader original-derived numerical acceptance; explicit-null integer fixtures do not establish complete missing-value parity.
 
+Pandas `Series.sum()`, `mean()`, `min()` and `max()`, and `DataFrame.sum()`, skip NaNs in float32 and float64 columns. Empty or all-NaN columns return zero for sum and NaN for mean/min/max. Infinities remain values. Explicit validity-mask reductions are still unsupported. Core/NumPy and Polars reductions keep their existing NaN behavior.
+
 ```ts
 import { createContext } from '@delinoio/nmath';
 import { DataFrame, Series } from '@delinoio/nmath/polars';

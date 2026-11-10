@@ -382,6 +382,9 @@ trait Num: Copy + PartialOrd + Send + Sync + Default {
     fn pairwise_sum(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
         Ok(None)
     }
+    fn pairwise_sum_skip_nan(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
+        Ok(None)
+    }
     fn mean(self, count: usize) -> Self;
     /// Multiplicative identity, used by the product reduction.
     fn one() -> Self;
@@ -512,6 +515,110 @@ impl Num for f32 {
             Ok(sum(&values[..mid], token)? + sum(&values[mid..], token)?)
         }
         Ok(Some(sum(values, token)?))
+    }
+
+    fn pairwise_sum_skip_nan(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+        fn count(values: &[f32], token: &CancellationToken) -> Result<usize> {
+            let mut count = 0;
+            for chunk in values.chunks(CHUNK) {
+                token.check()?;
+                count += chunk.iter().filter(|&&value| !value.is_nan()).count();
+            }
+            Ok(count)
+        }
+
+        fn split_at_non_nan(
+            values: &[f32],
+            left_count: usize,
+            token: &CancellationToken,
+        ) -> Result<usize> {
+            let mut seen = 0;
+            for (i, &value) in values.iter().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if !value.is_nan() {
+                    seen += 1;
+                    if seen == left_count {
+                        return Ok(i + 1);
+                    }
+                }
+            }
+            unreachable!("the requested finite prefix must exist");
+        }
+
+        fn sum(values: &[f32], finite_count: usize, token: &CancellationToken) -> Result<f32> {
+            token.check()?;
+            if finite_count == 0 {
+                return Ok(0.0);
+            }
+            if finite_count < 8 {
+                let mut total = -0.0_f32;
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if !value.is_nan() {
+                        total += value;
+                        seen += 1;
+                    }
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
+            }
+            if finite_count <= 128 {
+                // Apply the same eight-lane order as pairwise_sum to the
+                // logical sequence with NaNs removed, without allocating a
+                // filtered copy that would consume the reduction budget.
+                let mut lanes = [0.0_f32; 8];
+                let end = finite_count - finite_count % 8;
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen < 8 {
+                        lanes[seen] = value;
+                    } else if seen < end {
+                        lanes[seen % 8] += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                // Match pairwise_sum: combine the eight lanes first, then
+                // add each remaining logical value in order. Accumulating
+                // the tail before combining the lanes changes float32
+                // cancellation behavior for large values followed by small
+                // values, even though the NaNs are only skipped logically.
+                let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen >= end {
+                        total += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
+            }
+            let left_count = (finite_count / 2) / 8 * 8;
+            let split = split_at_non_nan(values, left_count, token)?;
+            Ok(sum(&values[..split], left_count, token)?
+                + sum(&values[split..], finite_count - left_count, token)?)
+        }
+
+        Ok(Some(sum(values, count(values, token)?, token)?))
     }
 
     fn mean(self, count: usize) -> Self {
@@ -2174,7 +2281,40 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    reduce_with_policy(
+        op,
+        input,
+        axes,
+        ReductionPolicy::PropagateNan,
+        budget,
+        token,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReductionPolicy {
+    PropagateNan,
+    SkipNan,
+}
+
+pub fn reduce_with_policy(
+    op: ReduceOp,
+    input: &DenseArray,
+    axes: Option<&[i64]>,
+    policy: ReductionPolicy,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
     validate_special_reduce(op, input.dtype(), axes)?;
+    if policy == ReductionPolicy::SkipNan
+        && (!matches!(input.dtype(), DType::Float32 | DType::Float64)
+            || !matches!(
+                op,
+                ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
+            ))
+    {
+        return Err(crate::dtype::unsupported());
+    }
     let rank = input.shape.len();
     let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
@@ -2184,7 +2324,10 @@ pub fn reduce(
         .iter()
         .zip(&reduced)
         .any(|(&len, &r)| r && len == 0);
-    if (matches!(op, ReduceOp::Min | ReduceOp::Max) || op.is_arg()) && empty_reduction {
+    if ((matches!(op, ReduceOp::Min | ReduceOp::Max) && policy == ReductionPolicy::PropagateNan)
+        || op.is_arg())
+        && empty_reduction
+    {
         return Err(Error::new(
             ErrorCode::ShapeMismatch,
             if op.is_arg() {
@@ -2349,11 +2492,42 @@ pub fn reduce(
     // Borrow matching input storage. Widening for sum/mean is reserved before
     // conversion; no input-sized offset or i128 scratch vectors are needed.
     let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
+    fn contains_nan<T: Num>(values: &[T], token: &CancellationToken) -> Result<bool> {
+        for chunk in values.chunks(CHUNK) {
+            token.check()?;
+            if chunk.iter().any(|&value| value.nan()) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    // Keep the existing accumulation and budget path for clean floating data.
+    let policy = if policy == ReductionPolicy::SkipNan {
+        let has_nan = match values.as_ref() {
+            Buffer::F32(values) => contains_nan(values, token)?,
+            Buffer::F64(values) => contains_nan(values, token)?,
+            _ => unreachable!("the pandas policy admits only float32 and float64"),
+        };
+        if has_nan || (empty_reduction && matches!(op, ReduceOp::Min | ReduceOp::Max)) {
+            ReductionPolicy::SkipNan
+        } else {
+            ReductionPolicy::PropagateNan
+        }
+    } else {
+        policy
+    };
     let _seen_reservation = budget.reserve(if matches!(op, ReduceOp::Min | ReduceOp::Max) {
         out_len as u64
     } else {
         0
     })?;
+    let _count_reservation = budget.reserve(
+        if policy == ReductionPolicy::SkipNan && op == ReduceOp::Mean {
+            checked_reduction_bytes(out_len, std::mem::size_of::<usize>())?
+        } else {
+            0
+        },
+    )?;
     fn run<T: Num>(
         op: ReduceOp,
         values: &[T],
@@ -2361,6 +2535,7 @@ pub fn reduce(
         out_len: usize,
         count: usize,
         contiguous: bool,
+        policy: ReductionPolicy,
         token: &CancellationToken,
     ) -> Result<Vec<T>> {
         let mut out = if op == ReduceOp::Prod {
@@ -2368,6 +2543,74 @@ pub fn reduce(
         } else {
             vec![T::default(); out_len]
         };
+        if policy == ReductionPolicy::SkipNan {
+            if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
+                if T::pairwise_sum_skip_nan(&[], token)?.is_some() {
+                    for (i, chunk) in values.chunks_exact(count).enumerate() {
+                        let total = T::add(
+                            T::default(),
+                            T::pairwise_sum_skip_nan(chunk, token)?.unwrap(),
+                        );
+                        if op == ReduceOp::Mean {
+                            let valid_count = chunk.iter().filter(|&&value| !value.nan()).count();
+                            out[i] = total.mean(valid_count);
+                        } else {
+                            out[i] = total;
+                        }
+                    }
+                    return Ok(out);
+                }
+            }
+            let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
+                vec![false; out_len]
+            } else {
+                Vec::new()
+            };
+            let mut counts = if op == ReduceOp::Mean {
+                vec![0usize; out_len]
+            } else {
+                Vec::new()
+            };
+            for (i, (slot, _)) in slots.enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                let x = values[i];
+                if x.nan() {
+                    continue;
+                }
+                match op {
+                    ReduceOp::Sum | ReduceOp::Mean => out[slot] = T::add(out[slot], x),
+                    ReduceOp::Min | ReduceOp::Max => {
+                        if !seen[slot]
+                            || if op == ReduceOp::Min {
+                                x < out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
+                            } else {
+                                x > out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
+                            }
+                        {
+                            out[slot] = x;
+                        }
+                        seen[slot] = true;
+                    }
+                    _ => unreachable!("pandas reduction policy admits four operators"),
+                }
+                if op == ReduceOp::Mean {
+                    counts[slot] += 1;
+                }
+            }
+            for (i, value) in out.iter_mut().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if op == ReduceOp::Mean {
+                    *value = value.mean(counts[i]);
+                } else if matches!(op, ReduceOp::Min | ReduceOp::Max) && !seen[i] {
+                    *value = T::default().mean(0);
+                }
+            }
+            return Ok(out);
+        }
         if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
             if T::pairwise_sum(&[], token)?.is_some() {
                 for (i, chunk) in values.chunks_exact(count).enumerate() {
@@ -2426,15 +2669,15 @@ pub fn reduce(
     let first_reduced = reduced.iter().position(|&r| r).unwrap_or(reduced.len());
     let contiguous = reduced[first_reduced..].iter().all(|&r| r);
     let buffer = match values.as_ref() {
-        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         Buffer::F16(x) if matches!(op, ReduceOp::Sum | ReduceOp::Mean) => {
             let mut out = vec![Float16::ZERO; out_len];
             if contiguous && count > 0 {
@@ -2473,11 +2716,11 @@ pub fn reduce(
             }
             Buffer::F16(out)
         }
-        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         _ => return Err(crate::dtype::unsupported()),
     };
     DenseArray::new(out_shape, buffer, reservation)
@@ -2884,6 +3127,92 @@ mod tests {
             assert_eq!(budget.usage().peak, 82);
             drop(result);
         }
+    }
+
+    #[test]
+    fn float32_pandas_skip_nan_keeps_pairwise_precision_and_budget() {
+        let mut values = vec![0.1_f32; 1_000_000];
+        values.push(f32::NAN);
+        let input = dense(vec![values.len()], Buffer::F32(values));
+        let token = CancellationToken::new();
+
+        // Metadata (33 bytes) plus one float32 result (4 bytes).
+        let sum_budget = MemoryBudget::new(Device::Cpu, 37);
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &sum_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![100_000.007_812_5]));
+        assert_eq!(sum_budget.usage().peak, 37);
+        drop(sum);
+        assert_eq!(sum_budget.usage().used, 0);
+
+        // Mean additionally reserves one usize count per output slot.
+        let mean_budget = MemoryBudget::new(Device::Cpu, 45);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &mean_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(mean.buffer, Buffer::F32(vec![0.100_000_008_940_696_72]));
+        assert_eq!(mean_budget.usage().peak, 45);
+        drop(mean);
+        assert_eq!(mean_budget.usage().used, 0);
+    }
+
+    #[test]
+    fn float32_pandas_skip_nan_adds_tail_after_pairwise_lanes() {
+        let input = dense(
+            vec![12],
+            Buffer::F32(vec![
+                100_000_000.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -100_000_000.0,
+                1.0,
+                1.0,
+                f32::NAN,
+            ]),
+        );
+        let (budget, token) = env();
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![2.0]));
+        drop(sum);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        let Buffer::F32(values) = mean.buffer else {
+            panic!("Expected float32 mean")
+        };
+        assert!((values[0] - (2.0 / 11.0)).abs() < 1e-7);
     }
 
     #[test]

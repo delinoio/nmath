@@ -11,7 +11,7 @@ use crate::{
     buffer::{Buffer, DenseArray, Scalar, checked_byte_len},
     dtype::DType,
     error::{Error, ErrorCode, Result},
-    kernels::{self, BinaryOp, ReduceOp, ScanOp, ShiftOp, UnaryOp, VarianceOp},
+    kernels::{self, BinaryOp, ReduceOp, ReductionPolicy, ScanOp, ShiftOp, UnaryOp, VarianceOp},
     memory::{Device, MemoryBudget},
     random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
@@ -34,7 +34,7 @@ pub enum ExprKind {
     Where(Expr, Expr, Expr),
     /// Elementwise NumPy math ufunc.
     Math(crate::ufunc::MathOp, Expr),
-    Reduce(ReduceOp, Expr, Option<Vec<i64>>),
+    Reduce(ReduceOp, Expr, Option<Vec<i64>>, ReductionPolicy),
     Scan(ScanOp, Expr, Option<i64>),
     Variance(VarianceOp, Expr, Option<i64>, f64),
     Shift(ShiftOp, Expr, Vec<usize>),
@@ -244,12 +244,33 @@ impl Expr {
     }
 
     pub fn reduce(op: ReduceOp, input: &Expr, axes: Option<Vec<i64>>) -> Result<Expr> {
+        Self::reduce_with_policy(op, input, axes, ReductionPolicy::PropagateNan)
+    }
+
+    pub fn pandas_reduce(op: ReduceOp, input: &Expr) -> Result<Expr> {
+        if !matches!(input.dtype(), DType::Float32 | DType::Float64)
+            || !matches!(
+                op,
+                ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
+            )
+        {
+            return Err(crate::dtype::unsupported());
+        }
+        Self::reduce_with_policy(op, input, None, ReductionPolicy::SkipNan)
+    }
+
+    fn reduce_with_policy(
+        op: ReduceOp,
+        input: &Expr,
+        axes: Option<Vec<i64>>,
+        policy: ReductionPolicy,
+    ) -> Result<Expr> {
         kernels::validate_special_reduce(op, input.dtype(), axes.as_deref())?;
         let reduced = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
         let shape = kernels::reduce_shape(input.shape(), &reduced);
         let dtype = op.result_dtype(input.dtype().ensure_computable()?);
         Ok(Expr::node(
-            ExprKind::Reduce(op, input.clone(), axes),
+            ExprKind::Reduce(op, input.clone(), axes, policy),
             dtype,
             shape,
             input.context_id(),
@@ -619,7 +640,7 @@ impl Expr {
             ExprKind::Binary { op, .. } => op.id(),
             ExprKind::Where(..) => "where",
             ExprKind::Math(op, _) => op.id(),
-            ExprKind::Reduce(op, _, _) => op.id(),
+            ExprKind::Reduce(op, _, _, _) => op.id(),
             ExprKind::Scan(op, _, _) => op.id(),
             ExprKind::Variance(op, ..) => op.id(),
             ExprKind::Shift(op, ..) => op.id(),
@@ -644,7 +665,7 @@ impl Expr {
             ExprKind::Fft(_, e) | ExprKind::PolynomialDerivative(_, e) => vec![e],
             ExprKind::Unary(_, e)
             | ExprKind::Math(_, e)
-            | ExprKind::Reduce(_, e, _)
+            | ExprKind::Reduce(_, e, _, _)
             | ExprKind::Scan(_, e, _)
             | ExprKind::Variance(_, e, _, _)
             | ExprKind::Shift(_, e, _)
@@ -1032,9 +1053,9 @@ impl JobEnv {
                 let v = self.eval_node(e)?;
                 crate::ufunc::execute(*op, &v, &budget, &token)
             }
-            ExprKind::Reduce(op, e, axes) => {
+            ExprKind::Reduce(op, e, axes, policy) => {
                 let v = self.eval_node(e)?;
-                kernels::reduce(*op, &v, axes.as_deref(), &budget, &token)
+                kernels::reduce_with_policy(*op, &v, axes.as_deref(), *policy, &budget, &token)
             }
             ExprKind::Scan(op, e, axis) => {
                 let v = self.eval_node(e)?;

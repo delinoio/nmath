@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use nmath_core::{
     Buffer, CancellationToken, DenseArray, Device, ErrorCode, Expr, NdArray, ReduceOp, Scalar,
-    kernels::{self, validate_special_reduce},
+    kernels::{self, ReductionPolicy, validate_special_reduce},
     memory::{MemoryBudget, Reservation},
 };
 use serde_json::Value as Json;
@@ -230,6 +230,119 @@ fn empty_axes_budgets_and_cancellation() {
         kernels::reduce(ReduceOp::Prod, &values, None, &budget, &cancelled)
             .unwrap_err()
             .code,
+        ErrorCode::Cancelled
+    );
+}
+
+#[test]
+fn pandas_float_reductions_skip_nans_without_changing_core_policy() {
+    let budget = MemoryBudget::new(Device::Cpu, 1 << 20);
+    let token = CancellationToken::new();
+    for values in [
+        Buffer::F32(vec![1.0, f32::NAN, 3.0]),
+        Buffer::F64(vec![1.0, f64::NAN, 3.0]),
+    ] {
+        let input = DenseArray::new(vec![3], values, Reservation::none()).unwrap();
+        for (op, expected) in [
+            (ReduceOp::Sum, 4.0),
+            (ReduceOp::Mean, 2.0),
+            (ReduceOp::Min, 1.0),
+            (ReduceOp::Max, 3.0),
+        ] {
+            let result = kernels::reduce_with_policy(
+                op,
+                &input,
+                None,
+                ReductionPolicy::SkipNan,
+                &budget,
+                &token,
+            )
+            .unwrap();
+            assert_eq!(result.buffer.get(0), Scalar::Float(expected));
+            let original = kernels::reduce(op, &input, None, &budget, &token).unwrap();
+            assert!(matches!(original.buffer.get(0), Scalar::Float(x) if x.is_nan()));
+        }
+    }
+    for values in [vec![], vec![f64::NAN, f64::NAN]] {
+        let input =
+            DenseArray::new(vec![values.len()], Buffer::F64(values), Reservation::none()).unwrap();
+        for op in [ReduceOp::Sum, ReduceOp::Mean, ReduceOp::Min, ReduceOp::Max] {
+            let result = kernels::reduce_with_policy(
+                op,
+                &input,
+                None,
+                ReductionPolicy::SkipNan,
+                &budget,
+                &token,
+            )
+            .unwrap();
+            if op == ReduceOp::Sum {
+                assert_eq!(result.buffer.get(0), Scalar::Float(0.0));
+            } else {
+                assert!(matches!(result.buffer.get(0), Scalar::Float(x) if x.is_nan()));
+            }
+        }
+    }
+    let input = DenseArray::new(
+        vec![2, 3],
+        Buffer::F64(vec![1.0, f64::NAN, 3.0, f64::NAN, 4.0, 6.0]),
+        Reservation::none(),
+    )
+    .unwrap();
+    let result = kernels::reduce_with_policy(
+        ReduceOp::Mean,
+        &input,
+        Some(&[0]),
+        ReductionPolicy::SkipNan,
+        &budget,
+        &token,
+    )
+    .unwrap();
+    assert_eq!(result.buffer, Buffer::F64(vec![1.0, 4.0, 4.5]));
+    let tiny = MemoryBudget::new(Device::Cpu, 1);
+    assert_eq!(
+        kernels::reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &tiny,
+            &token,
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::MemoryBudgetExceeded
+    );
+    assert_eq!(tiny.usage().used, 0);
+    let clean = DenseArray::new(vec![2], Buffer::F64(vec![1.0, 3.0]), Reservation::none()).unwrap();
+    let exact_budget = MemoryBudget::new(Device::Cpu, 41);
+    assert_eq!(
+        kernels::reduce_with_policy(
+            ReduceOp::Mean,
+            &clean,
+            None,
+            ReductionPolicy::SkipNan,
+            &exact_budget,
+            &token,
+        )
+        .unwrap()
+        .buffer
+        .get(0),
+        Scalar::Float(2.0)
+    );
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    assert_eq!(
+        kernels::reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &cancelled,
+        )
+        .unwrap_err()
+        .code,
         ErrorCode::Cancelled
     );
 }
