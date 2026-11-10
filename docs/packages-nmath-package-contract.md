@@ -48,6 +48,8 @@ const ctx = createContext({
 All four options are required. `ctx.close(): Promise<void>` follows the runtime close contract. `ctx.metrics()` returns measurement snapshots. Contexts and arrays implement `dispose()` and `Symbol.dispose` for `using`.
 Native jobs release their execution slot before they settle their result Promise. Promise handlers can close the context or submit another job under the normal admission rules.
 
+NPY saves charge their encoded output and serialization workspace to the context CPU budget while the file job runs. A save that cannot reserve this memory rejects with `NMATH_MEMORY_BUDGET_EXCEEDED` before serialization and leaves the destination unchanged, including when overwrite was requested. The charge is released after the job finishes; `ctx.metrics()` includes it in CPU memory measurements.
+
 Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
 
 Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ctx.generator(seed).random(shape)` must be finite integers from `0` through `4294967295`, inclusive. Their NumPy wrappers use the same rule. Invalid dimensions fail with `NMATH_SHAPE_MISMATCH` before budget arithmetic, input allocation or native shape conversion. Rank-zero shape `[]` and zero dimensions remain valid. A valid shape whose data length differs from its element count also fails with `NMATH_SHAPE_MISMATCH`.
@@ -221,6 +223,8 @@ Methods use an explicit shape, with `[]` for a scalar:
 - `uniform(low, high, shape)`, returning float64.
 - `standard_normal(shape, dtype = "float64")`, with float32 or float64.
 - `normal(loc, scale, shape)` and `exponential(scale, shape)`, returning float64.
+
+For these three methods with a configurable dtype, a definitely present dtype keeps its exact result type. An optional dtype argument or `integers` option includes the documented default in its result dtype when the value can be `undefined`. Omitted dtypes retain the exact default type. The declared computed storage follows every possible result dtype.
 
 Distribution parameters are scalars. Each `compute()` is a new scheduled native job. Jobs sharing a generator run in request order and commit state only on success. Invalid bounds, allocation errors and cancellation before completion preserve generator state, including cached uint32 values. No JS random kernel or Python runtime is used.
 
