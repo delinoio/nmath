@@ -179,11 +179,25 @@ export const remainder = mod;
 export const power = pow;
 export { add, mod };
 
-export function negative<T extends Lazy<ComputableDType, Shape>>(x: T) {
-  return x.neg();
+type UnarySupportedDType = Exclude<
+  ComputableDType,
+  "bool" | "str" | "datetime64"
+>;
+
+export function negative<D extends UnarySupportedDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, S>;
+// This internal bridge satisfies the conditional method receiver; the public
+// overload rejects unsupported dtypes. Remove it if TypeScript resolves the
+// constrained receiver directly.
+export function negative(x: Lazy<any, any>): Expr<any, any> {
+  return (x as Lazy<UnarySupportedDType, Shape>).neg();
 }
-export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
-  return x.pos();
+export function positive<D extends UnarySupportedDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, S>;
+export function positive(x: Lazy<any, any>): Expr<any, any> {
+  return (x as Lazy<UnarySupportedDType, Shape>).pos();
 }
 // Public overloads retain dtype/axis inference and reject unsupported reductions.
 // The broad internal signatures bridge conditional method receivers; no runtime

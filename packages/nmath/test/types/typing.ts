@@ -116,6 +116,94 @@ declare const dynamicAxis: number;
 const dynamicSum = np.sum(numpyRows, dynamicAxis);
 assertTrue<Equal<typeof dynamicSum, Expr<"float32", number[]>>>();
 
+// NumPy unary wrappers retain the dtype and shape of arrays and expressions.
+declare const floatUnaryArray: NMathArray<"float32", readonly [2, 3]>;
+declare const floatUnaryExpr: Expr<"float32", readonly [2, 3]>;
+declare const complexUnaryArray: NMathArray<"complex64", []>;
+declare const complexUnaryExpr: Expr<"complex64", []>;
+declare const durationUnaryArray: NMathArray<"timedelta64", number[]>;
+declare const durationUnaryExpr: Expr<"timedelta64", number[]>;
+assertTrue<
+  Equal<
+    ReturnType<typeof floatUnaryArray.neg>,
+    Expr<"float32", readonly [2, 3]>
+  >
+>();
+assertTrue<
+  Equal<
+    ReturnType<typeof floatUnaryArray.pos>,
+    Expr<"float32", readonly [2, 3]>
+  >
+>();
+const unaryFloatNegativeArray = np.negative(floatUnaryArray);
+const unaryFloatPositiveArray = np.positive(floatUnaryArray);
+const unaryFloatNegativeExpr = np.negative(floatUnaryExpr);
+const unaryFloatPositiveExpr = np.positive(floatUnaryExpr);
+assertTrue<
+  Equal<typeof unaryFloatNegativeArray, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatPositiveArray, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatNegativeExpr, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatPositiveExpr, Expr<"float32", readonly [2, 3]>>
+>();
+const unaryComplexNegativeArray = np.negative(complexUnaryArray);
+const unaryComplexPositiveArray = np.positive(complexUnaryArray);
+const unaryComplexNegativeExpr = np.negative(complexUnaryExpr);
+const unaryComplexPositiveExpr = np.positive(complexUnaryExpr);
+assertTrue<Equal<typeof unaryComplexNegativeArray, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexPositiveArray, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexNegativeExpr, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexPositiveExpr, Expr<"complex64", []>>>();
+const unaryDurationNegativeArray = np.negative(durationUnaryArray);
+const unaryDurationPositiveArray = np.positive(durationUnaryArray);
+const unaryDurationNegativeExpr = np.negative(durationUnaryExpr);
+const unaryDurationPositiveExpr = np.positive(durationUnaryExpr);
+assertTrue<
+  Equal<typeof unaryDurationNegativeArray, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationPositiveArray, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationNegativeExpr, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationPositiveExpr, Expr<"timedelta64", number[]>>
+>();
+
+declare const boolUnary: NMathArray<"bool", [2]>;
+declare const stringUnary: NMathArray<"str", [2]>;
+declare const datetimeUnary: NMathArray<"datetime64", [2]>;
+// @ts-expect-error NumPy negative rejects bool arrays.
+np.negative(boolUnary);
+// @ts-expect-error NumPy positive rejects bool arrays.
+np.positive(boolUnary);
+// @ts-expect-error NumPy negative rejects string arrays.
+np.negative(stringUnary);
+// @ts-expect-error NumPy positive rejects string arrays.
+np.positive(stringUnary);
+// @ts-expect-error NumPy negative rejects datetime arrays.
+np.negative(datetimeUnary);
+// @ts-expect-error NumPy positive rejects datetime arrays.
+np.positive(datetimeUnary);
+// @ts-expect-error Direct negative rejects bool arrays.
+boolUnary.neg();
+// @ts-expect-error Direct positive rejects bool arrays.
+boolUnary.pos();
+// @ts-expect-error Direct negative rejects string arrays.
+stringUnary.neg();
+// @ts-expect-error Direct positive rejects string arrays.
+stringUnary.pos();
+// @ts-expect-error Direct negative rejects datetime arrays.
+datetimeUnary.neg();
+// @ts-expect-error Direct positive rejects datetime arrays.
+datetimeUnary.pos();
+
 const mm = m.matmul(ctx.zeros([3, 5], "float32"));
 assertTrue<Equal<(typeof mm)["shape"], [2, 5]>>();
 // @ts-expect-error core dimensions 3 and 4 do not match
