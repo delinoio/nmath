@@ -100,6 +100,8 @@ A dimension typed as `number` is dynamic. The runtime validates it, and the dtyp
 
 Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
 
+An elementwise binary operation can also throw `NMATH_SHAPE_MISMATCH` when its broadcast output has an unrepresentable layout, even if both empty inputs are valid. The error occurs when constructing the expression, before a compute job starts. Representable empty broadcasts remain valid.
+
 ## Entry points
 
 | Import                     | Purpose                                                                                                              |

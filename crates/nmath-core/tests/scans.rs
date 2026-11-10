@@ -136,7 +136,7 @@ fn expression_inference_validation_and_gpu_rejection() {
         Reservation::none(),
     )
     .unwrap();
-    let input = Expr::input(&NdArray::from_dense(0, dense));
+    let input = Expr::input(&NdArray::from_dense(0, dense).unwrap());
 
     let flat = Expr::scan(ScanOp::CumSum, &input, None).unwrap();
     assert_eq!(flat.dtype(), nmath_core::DType::Int64);
