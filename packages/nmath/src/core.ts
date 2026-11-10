@@ -726,8 +726,17 @@ export abstract class Lazy<
     return keepDims(reduced, this.shape, axes, options);
   }
 
+  sum<K extends boolean = false>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<SumDType<D>, ReduceShape<S, undefined, K>>;
   sum<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str" | "datetime64"]
@@ -735,14 +744,30 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<SumDType<D>, ReduceShape<S, A, K>> {
+  ): Expr<SumDType<D>, ReduceShape<S, A, K>>;
+  sum(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("sum", axis, options);
   }
 
+  mean<K extends boolean = false>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<
+    D extends "timedelta64" ? D : TrueDivide<D>,
+    ReduceShape<S, undefined, K>
+  >;
   mean<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str" | "datetime64"]
@@ -750,14 +775,27 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>> {
+  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>>;
+  mean(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("mean", axis, options);
   }
 
+  min<K extends boolean = false>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, undefined, K>>;
   min<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str"]
@@ -765,14 +803,27 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D, ReduceShape<S, A, K>> {
+  ): Expr<D, ReduceShape<S, A, K>>;
+  min(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("min", axis, options);
   }
 
+  max<K extends boolean = false>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, undefined, K>>;
   max<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str"]
@@ -780,9 +831,13 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D, ReduceShape<S, A, K>> {
+  ): Expr<D, ReduceShape<S, A, K>>;
+  max(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("max", axis, options);
   }
 

@@ -104,6 +104,8 @@ A shape with a variable number of dimensions, such as `[2, ...number[]]`, has an
 
 When an indexing selector list has an unknown length, `get()` retains the dtype but gives the result an unknown-rank shape. Fixed selector lists, including an empty list, keep precise shape inference.
 
+For `sum`, `mean`, `min` and `max`, an axis that may be `undefined` can produce either an all-axis scalar or an array for a selected axis. TypeScript retains both result shapes for literal axes. Narrow the computed result before calling array methods.
+
 When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
 
 ```ts

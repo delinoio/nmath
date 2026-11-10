@@ -470,7 +470,7 @@ export type ReduceShape<
   S extends Shape,
   A extends number | readonly number[] | undefined,
   K extends boolean = false,
-> = [A] extends [undefined]
+> = A extends undefined
   ? K extends true
     ? number extends S["length"]
       ? number[]
