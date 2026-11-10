@@ -1502,7 +1502,8 @@ mod tests {
         let a = NdArray::from_dense(
             1,
             DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
-        );
+        )
+        .unwrap();
         let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
         let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
         env.freeze(&expr).unwrap();
@@ -1526,7 +1527,8 @@ mod tests {
         let a = NdArray::from_dense(
             1,
             DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
-        );
+        )
+        .unwrap();
         let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
         let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
         env.freeze(&expr).unwrap();
