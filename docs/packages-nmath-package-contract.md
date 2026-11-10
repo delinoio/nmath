@@ -312,6 +312,8 @@ An optional `supportedScope` object records an explicitly inspected partial coun
 
 Temporal arrays accept BigInt64Array ticks or nested Temporal scalars. `ArrayOptions.unit` selects the array unit, defaulting to `ns`; Temporal inputs must match its kind and unit. `item()`, rank-zero `compute()` and nested `toArray()` return Temporal scalars. `toTypedArray()` exports exact ticks without converting units. Arrays and expressions expose `unit` and `stringWidth` as applicable. `astype(dtype, {unit?, stringWidth?})` requests an explicit conversion. Basic and advanced indexing, context copies and NPY/NPZ preserve metadata. `full(shape, value, dtype, metadata?)` supports the same storage families; a Temporal fill value supplies its unit when metadata omits one.
 
+`numpy.ones(context, shape, dtype)` fills `str` arrays with `"1"` at width one and `datetime64` and `timedelta64` arrays with exact tick `1` at the default `ns` unit. Scalar and empty shapes keep their dtype metadata. The wrapper uses `context.full`; direct `full` still requires a valid scalar for the selected storage family.
+
 String and temporal operation support and current limitations follow the runtime contract. Dtype inference distinguishes datetime subtraction from addition, preserves duration mean, and rejects known invalid combinations. pandas/Polars selection, boolean filtering and wrapper conversion preserve these columns; specialized string and time-series APIs remain compatibility targets.
 
 ### Shape transformations
