@@ -91,6 +91,11 @@ export function transpose<D extends ComputableDType, S extends Shape>(
 
 type Nested<T> = T | readonly Nested<T>[];
 
+export function array<D extends ComputableDType, const S extends Shape>(
+  context: NMathContext,
+  data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+  options: ArrayOptions<D, S> & { shape: S },
+): NMathArray<D, S>;
 export function array<
   D extends ComputableDType,
   const S extends Shape = number[],
@@ -98,7 +103,15 @@ export function array<
   context: NMathContext,
   data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
   options: ArrayOptions<D, S>,
-): NMathArray<D, S> {
+): NMathArray<D, number[]>;
+export function array<
+  D extends ComputableDType,
+  const S extends Shape = number[],
+>(
+  context: NMathContext,
+  data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+  options: ArrayOptions<D, S>,
+): NMathArray<D, Shape> {
   return context.array(data, options);
 }
 

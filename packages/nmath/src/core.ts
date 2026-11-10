@@ -1624,10 +1624,18 @@ export class NMathContext {
   }
 
   /** Creates an array from a typed array or nested JS arrays. */
+  array<D extends ComputableDType, const S extends Shape>(
+    data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+    options: ArrayOptions<D, S> & { shape: S },
+  ): NMathArray<D, S>;
   array<D extends ComputableDType, const S extends Shape = number[]>(
     data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
     options: ArrayOptions<D, S>,
-  ): NMathArray<D, S> {
+  ): NMathArray<D, number[]>;
+  array<D extends ComputableDType, const S extends Shape = number[]>(
+    data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+    options: ArrayOptions<D, S>,
+  ): NMathArray<D, Shape> {
     if (options.dtype === "str") {
       let width = 1;
       const visit = (v: unknown): void => {
@@ -1717,10 +1725,18 @@ export class NMathContext {
   }
 
   /** Creates float16 storage from exact IEEE-754 binary16 encodings. */
+  arrayFromFloat16Bits<const S extends Shape>(
+    bits: Uint16Array,
+    options: { shape: S },
+  ): NMathArray<"float16", S>;
+  arrayFromFloat16Bits<const S extends Shape = number[]>(
+    bits: Uint16Array,
+    options?: { shape?: S },
+  ): NMathArray<"float16", number[]>;
   arrayFromFloat16Bits<const S extends Shape = number[]>(
     bits: Uint16Array,
     options: { shape?: S } = {},
-  ): NMathArray<"float16", S> {
+  ): NMathArray<"float16", Shape> {
     if (!(bits instanceof Uint16Array))
       throw new TypeError("Binary16 bits must be a Uint16Array.");
     const shape = validatedShape(options.shape ?? [bits.length]);

@@ -398,6 +398,54 @@ test("valid dimensions retain shape and length checks", async () => {
   await ctx.close();
 });
 
+test("optional creation shapes use input data when absent", async () => {
+  const ctx = context();
+  const arrays = [];
+  try {
+    const data = Float32Array.of(1, 2);
+    const bits = Uint16Array.of(0x3c00, 0x4000);
+    const optional = { dtype: "float32" };
+    const optionalBits = {};
+    const absent = [
+      ctx.array(data, optional),
+      np.array(ctx, data, optional),
+      ctx.arrayFromFloat16Bits(bits, optionalBits),
+    ];
+    arrays.push(...absent);
+    for (const array of absent) assert.deepEqual(array.shape, [2]);
+
+    const present = [
+      ctx.array(data, { dtype: "float32", shape: [1, 2] }),
+      np.array(ctx, data, { dtype: "float32", shape: [1, 2] }),
+      ctx.arrayFromFloat16Bits(bits, { shape: [1, 2] }),
+    ];
+    arrays.push(...present);
+    for (const array of present) assert.deepEqual(array.shape, [1, 2]);
+
+    const optionalScalar = ctx.array(Float32Array.of(1), optional);
+    const explicitScalar = ctx.array(Float32Array.of(1), {
+      dtype: "float32",
+      shape: [],
+    });
+    const explicitBitScalar = ctx.arrayFromFloat16Bits(Uint16Array.of(0x3c00), {
+      shape: [],
+    });
+    arrays.push(optionalScalar, explicitScalar, explicitBitScalar);
+    assert.deepEqual(optionalScalar.shape, [1]);
+    assert.deepEqual(explicitScalar.shape, []);
+    assert.deepEqual(explicitBitScalar.shape, []);
+    const computedVector = await optionalScalar.compute();
+    assert.ok(computedVector instanceof NMathArray);
+    assert.deepEqual(computedVector.shape, [1]);
+    computedVector.dispose();
+    assert.equal(await explicitScalar.compute(), 1);
+    assert.equal(await explicitBitScalar.compute(), 1);
+  } finally {
+    for (const array of arrays) array.dispose();
+    await ctx.close();
+  }
+});
+
 test("ragged nested input is rejected", async () => {
   const ctx = context();
   throwsWith(
