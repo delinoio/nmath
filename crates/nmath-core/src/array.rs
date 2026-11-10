@@ -11,8 +11,8 @@ use crate::{
     error::{Error, ErrorCode, Result},
     memory::{MemoryBudget, Reservation},
     shape::{
-        Selector, broadcast_shapes, broadcast_strides, contiguous_strides, for_each_offset,
-        index_offsets, index_offsets_budgeted, index_shape, normalize_index, resolve_slice,
+        Selector, advanced_axis, broadcast_shapes, broadcast_strides, contiguous_strides,
+        for_each_offset, index_offsets_budgeted, index_shape, normalize_index, resolve_slice,
     },
     sync::{CancellationToken, FifoGuard, FifoLock, Ticket},
 };
@@ -224,11 +224,98 @@ impl NdArray {
 
     /// Copying (advanced) indexing into a new dense array charged to `budget`.
     pub fn take(&self, selectors: &[Selector], budget: &MemoryBudget) -> Result<DenseArray> {
+        self.take_cancellable(selectors, budget, &CancellationToken::new())
+    }
+
+    pub(crate) fn take_cancellable(
+        &self,
+        selectors: &[Selector],
+        budget: &MemoryBudget,
+        token: &CancellationToken,
+    ) -> Result<DenseArray> {
+        token.check()?;
         let shape = index_shape(&self.shape, selectors)?;
-        let offsets = index_offsets(&self.shape, &self.strides, self.offset, selectors)?;
-        let bytes = (offsets.len() * self.dtype().item_size()) as u64;
-        let reservation = budget.reserve(bytes)?;
-        let buffer = self.storage.data.read().unwrap().gather(&offsets);
+        let size = shape
+            .iter()
+            .try_fold(1usize, |n, &dim| n.checked_mul(dim))
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::MemoryBudgetExceeded,
+                    "Index result size exceeds the supported vector capacity.",
+                )
+            })?;
+        let dtype = self.dtype();
+        let bytes = crate::buffer::checked_byte_len(size, dtype)?;
+        let reservation = budget.reserve(bytes as u64)?;
+        let mask_count = if size == 0 {
+            0
+        } else {
+            selectors
+                .iter()
+                .filter(|selector| matches!(selector, Selector::Mask(_)))
+                .count()
+        };
+        let scratch_bytes = mask_count
+            .checked_mul(std::mem::size_of::<crate::shape::MaskCursor>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .filter(|&bytes| bytes <= isize::MAX as u64)
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::MemoryBudgetExceeded,
+                    "Index metadata size exceeds the supported vector capacity.",
+                )
+            })?;
+        let _scratch = budget.reserve(scratch_bytes)?;
+        let mut mask_cursors = Vec::with_capacity(mask_count);
+        if size != 0 {
+            for selector in selectors {
+                if let Selector::Mask(mask) = selector {
+                    mask_cursors.push(crate::shape::MaskCursor::new(mask, token)?);
+                }
+            }
+        }
+        let mut buffer = Buffer::filled(dtype, size, Scalar::Int(0))?;
+        let source = self.storage.data.read().unwrap();
+        let output_advanced_axis = advanced_axis(selectors);
+        let mut visited = 0usize;
+        let mut write_output = |output_index: usize| -> Result<()> {
+            if visited % 1024 == 0 {
+                token.check()?;
+            }
+            let offset = crate::shape::indexed_offset(
+                &self.shape,
+                &self.strides,
+                self.offset,
+                selectors,
+                &shape,
+                output_index,
+                &mut mask_cursors,
+                token,
+            )?;
+            buffer.set_from(output_index, &source, offset);
+            visited += 1;
+            Ok(())
+        };
+        if size != 0 {
+            if let Some(axis) = output_advanced_axis.filter(|&axis| axis > 0) {
+                let advanced_len = shape[axis];
+                let trailing = shape[axis + 1..].iter().product::<usize>();
+                let leading = size / (advanced_len * trailing);
+                for advanced_index in 0..advanced_len {
+                    for leading_index in 0..leading {
+                        let prefix = leading_index * advanced_len * trailing;
+                        for trailing_index in 0..trailing {
+                            write_output(prefix + advanced_index * trailing + trailing_index)?;
+                        }
+                    }
+                }
+            } else {
+                for output_index in 0..size {
+                    write_output(output_index)?;
+                }
+            }
+        }
+        token.check()?;
         DenseArray::new(shape, buffer, reservation)
     }
 
@@ -432,5 +519,99 @@ mod tests {
         assert_eq!(taken.buffer, Buffer::F64(vec![4.0, 1.0]));
         assert_eq!(budget.usage().used, 16);
         assert!(a.take(&[Selector::Indices(vec![0])], &budget).is_err());
+    }
+
+    #[test]
+    fn copying_mask_after_retained_axis_preserves_c_order() {
+        let a = array(vec![2, 5], (0..10).map(|v| v as f64).collect());
+        let budget = MemoryBudget::new(Device::Cpu, 64);
+        let taken = a
+            .take(
+                &[
+                    slice(None, None, None),
+                    Selector::Mask(vec![false, true, false, false, true]),
+                ],
+                &budget,
+            )
+            .unwrap();
+        assert_eq!(taken.shape, vec![2, 2]);
+        assert_eq!(taken.buffer, Buffer::F64(vec![1.0, 4.0, 6.0, 9.0]));
+    }
+
+    #[test]
+    fn copying_index_preserves_separated_order_and_reversed_values() {
+        let a = array(vec![2, 3, 4], (0..24).map(|v| v as f64).collect());
+        let reversed = a
+            .view(&[Selector::Slice {
+                start: None,
+                stop: None,
+                step: Some(-1),
+            }])
+            .unwrap();
+        let budget = MemoryBudget::new(Device::Cpu, 48);
+        let selected = reversed
+            .take(
+                &[
+                    Selector::Index(0),
+                    Selector::Slice {
+                        start: None,
+                        stop: None,
+                        step: Some(2),
+                    },
+                    Selector::Indices(vec![3, 0]),
+                ],
+                &budget,
+            )
+            .unwrap();
+        assert_eq!(selected.shape, vec![2, 2]);
+        assert_eq!(selected.buffer, Buffer::F64(vec![15.0, 23.0, 12.0, 20.0]));
+        assert_eq!(budget.usage().used, 32);
+    }
+
+    #[test]
+    fn copying_index_releases_reservation_on_failure_or_cancellation() {
+        let a = array(vec![4], vec![1.0, 2.0, 3.0, 4.0]);
+        let budget = MemoryBudget::new(Device::Cpu, 8);
+        let token = CancellationToken::new();
+        assert_eq!(
+            a.take_cancellable(&[Selector::Indices(vec![0, 1])], &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(budget.usage().used, 0);
+        token.cancel();
+        assert_eq!(
+            a.take_cancellable(&[Selector::Indices(vec![0])], &budget, &token)
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn copying_mask_charges_cursor_metadata() {
+        let a = array(vec![4], vec![1.0, 2.0, 3.0, 4.0]);
+        let scratch = std::mem::size_of::<crate::shape::MaskCursor>() as u64;
+        let budget = MemoryBudget::new(Device::Cpu, 16 + scratch);
+        let selected = a
+            .take(&[Selector::Mask(vec![true, false, true, false])], &budget)
+            .unwrap();
+        assert_eq!(selected.buffer, Buffer::F64(vec![1.0, 3.0]));
+        assert_eq!(budget.usage().peak, 16 + scratch);
+        assert_eq!(budget.usage().used, 16);
+    }
+
+    #[test]
+    fn empty_mask_needs_no_cursor_storage() {
+        let a = array(vec![3], vec![1.0, 2.0, 3.0]);
+        let budget = MemoryBudget::new(Device::Cpu, 0);
+        let selected = a
+            .take(&[Selector::Mask(vec![false, false, false])], &budget)
+            .unwrap();
+        assert_eq!(selected.shape, vec![0]);
+        assert_eq!(selected.buffer, Buffer::F64(vec![]));
+        assert_eq!(budget.usage().used, 0);
     }
 }

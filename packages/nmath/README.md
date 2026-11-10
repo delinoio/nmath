@@ -212,6 +212,8 @@ GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmet
 
 `array.save(path, { overwrite })` writes NPY files and `ctx.load(path)` reads them. NMath never replaces an existing file unless you pass `overwrite: true`. Output goes to a temporary file that is renamed into place, so cancellation or failure leaves the original file unchanged. Keep input files unchanged while a job reads them; NMath reports changes it detects with `NMATH_IO_MODIFIED`, but it cannot detect every change.
 
+NPY saves count their serialization memory against the context CPU budget. If the budget is too small, the save fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before writing and leaves any existing destination unchanged. `ctx.metrics()` reports this memory while it is in use and releases the charge when the job finishes.
+
 Complex NPY output uses little-endian components in C order. Complex NPY input accepts either byte order and C or Fortran order. Loading preserves dtype, logical shape and both components.
 
 ## Errors
