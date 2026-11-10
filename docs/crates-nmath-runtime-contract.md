@@ -107,7 +107,7 @@ CPU execution traverses broadcast batches without expanding repeated operands or
 
 ### Memory accounting
 
-- `MemoryBudget` tracks `used`, `peak` and `limit` separately for `cpu` and `gpu`. `reserve(bytes)` fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before any allocation when `used + bytes > limit`.
+- `MemoryBudget` tracks `used`, `peak` and `limit` separately for `cpu` and `gpu`. `reserve(bytes)` fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before any allocation when `used + bytes` exceeds `limit` or cannot fit in `u64`. An exact active total of `u64::MAX` is valid when the limit permits it. The `u64` cumulative reserved metric saturates at `u64::MAX`; saturation does not reject an otherwise valid reservation.
 - Inputs, snapshots, intermediates and results are all charged. Charges release on drop. GPU execution charges snapshots and host results to the CPU budget, and upload, storage, parameter, status and readback buffers to the GPU budget. Submitted allocations stay charged until device work finishes, including after cancellation. Driver and compiler internal allocations are outside the managed-allocation accounting boundary.
 - CPU index materialization transfers the evaluated input and its reservation into temporary storage. Copying selection reserves the complete result and any rank-sized mask cursor metadata before allocation, then traverses selected source positions directly in C order without element-sized offset buffers. Cancellation or failure releases the temporary and result charges without returning a partial array. Pure basic indexing can still return a shared live view.
 
