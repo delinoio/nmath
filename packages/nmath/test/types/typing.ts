@@ -8,10 +8,12 @@ import {
   slice,
   type Expr,
   type NMathArray,
+  type ReadSelector,
 } from "../../src/index.js";
 import * as np from "../../src/numpy.js";
 import * as nts from "../../src/nts-runtime.js";
 import * as pd from "../../src/pandas.js";
+import type { IndexShape } from "../../src/types.js";
 
 declare function expectType<T>(value: T): void;
 type Equal<A, B> =
@@ -246,6 +248,42 @@ assertTrue<Equal<(typeof mm)["shape"], [2, 5]>>();
 m.matmul(ctx.zeros([4, 5], "float32"));
 
 // Indexing keeps known information.
+declare const known: NMathArray<"float32", readonly [2, 3]>;
+declare const selectors: ReadSelector[];
+declare const readonlySelectors: readonly ReadSelector[];
+declare const variadicSelectors: readonly [number, ...number[]];
+declare const optionalSelector: readonly [0?];
+
+const noSelectors = known.get();
+const twoSelectors = known.get(0, 0);
+assertTrue<Equal<(typeof noSelectors)["shape"], [2, 3]>>();
+assertTrue<Equal<(typeof twoSelectors)["shape"], []>>();
+
+const dynamicSelection = known.get(...selectors);
+const readonlySelection = known.get(...readonlySelectors);
+const variadicSelection = known.get(...variadicSelectors);
+assertTrue<Equal<(typeof dynamicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof readonlySelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof variadicSelection)["shape"], number[]>>();
+assertTrue<
+  Equal<IndexShape<readonly [2, 3], typeof optionalSelector>, number[]>
+>();
+assertTrue<Equal<(typeof dynamicSelection)["dtype"], "float32">>();
+// @ts-expect-error a dynamic selector list may remove source axes
+expectType<Expr<"float32", [2, 3]>>(dynamicSelection);
+// @ts-expect-error a variadic tail may remove the final source axis
+expectType<Expr<"float32", [3]>>(variadicSelection);
+
+const ntsDynamicSelection = nts.get(known, selectors);
+const ntsReadonlySelection = nts.get(known, readonlySelectors);
+const ntsVariadicSelection = nts.get(known, variadicSelectors);
+const ntsFixedSelection = nts.get(known, 0);
+assertTrue<Equal<(typeof ntsDynamicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsReadonlySelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsVariadicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsDynamicSelection)["dtype"], "float32">>();
+assertTrue<Equal<(typeof ntsFixedSelection)["shape"], [3]>>();
+
 const row = m.get(1);
 assertTrue<Equal<(typeof row)["shape"], [3]>>();
 const sl = m.get(slice(0, 1), indices([0, 2]));

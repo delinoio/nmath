@@ -102,6 +102,8 @@ Array creation keeps an exact tuple shape when `shape` is required in the option
 
 A shape with a variable number of dimensions, such as `[2, ...number[]]`, has an unknown rank. Broadcasting and axis reductions return a conservative `number[]` shape type, while reducing over all axes still returns a scalar type.
 
+When an indexing selector list has an unknown length, `get()` retains the dtype but gives the result an unknown-rank shape. Fixed selector lists, including an empty list, keep precise shape inference.
+
 When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
 
 ```ts

@@ -600,17 +600,17 @@ export type IndexShape<
 type BasicIndexShape<
   S extends Shape,
   Sel extends readonly unknown[],
-> = Sel extends readonly [null, ...infer R]
-  ? [1, ...BasicIndexShape<S, R>]
-  : Sel extends readonly [infer H, ...infer R]
-    ? S extends readonly [number, ...infer SR extends number[]]
-      ? H extends number
-        ? BasicIndexShape<SR, R>
-        : [number, ...BasicIndexShape<SR, R>]
-      : never
-    : S extends readonly number[]
-      ? [...S]
-      : never;
+> = Sel extends readonly []
+  ? [...S]
+  : Sel extends readonly [null, ...infer R]
+    ? [1, ...BasicIndexShape<S, R>]
+    : Sel extends readonly [infer H, ...infer R]
+      ? S extends readonly [number, ...infer SR extends number[]]
+        ? H extends number
+          ? BasicIndexShape<SR, R>
+          : [number, ...BasicIndexShape<SR, R>]
+        : never
+      : number[];
 
 /** Operation-specific temporal results, distinct from general promotion. */
 export type BinaryDType<
