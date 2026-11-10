@@ -753,6 +753,7 @@ pub enum Value {
 /// Per-job state: the frozen inputs, budget, cancellation and pending generator
 /// states.
 pub struct JobEnv {
+    context_id: u64,
     pub generator_turns: Vec<crate::sync::FifoGuard>,
     pub device: Device,
     pub budget: MemoryBudget,
@@ -772,7 +773,17 @@ unsafe impl Send for JobEnv {}
 
 impl JobEnv {
     pub fn new(device: Device, budget: MemoryBudget, token: CancellationToken) -> Self {
+        Self::new_for_context(0, device, budget, token)
+    }
+
+    pub(crate) fn new_for_context(
+        context_id: u64,
+        device: Device,
+        budget: MemoryBudget,
+        token: CancellationToken,
+    ) -> Self {
         Self {
+            context_id,
             generator_turns: Vec::new(),
             device,
             budget,
@@ -913,7 +924,10 @@ impl JobEnv {
     /// shape transforms over computed inputs. No live storage is read here.
     fn owned_layout(&mut self, expr: &Expr) -> Result<NdArray> {
         if self.is_shared(expr) {
-            return NdArray::from_dense(expr.context_id().unwrap_or(0), self.eval_node(expr)?);
+            return NdArray::from_dense(
+                expr.context_id().unwrap_or(self.context_id),
+                self.eval_node(expr)?,
+            );
         }
         self.owned_layout_unshared(expr)
     }
@@ -938,12 +952,15 @@ impl JobEnv {
                 let mut dense = input.snapshot_cancellable(&self.budget, &self.token)?;
                 self.token.check()?;
                 dense.shape = expr.shape().to_vec();
-                NdArray::from_dense(expr.context_id().unwrap_or(0), dense)
+                NdArray::from_dense(expr.context_id().unwrap_or(self.context_id), dense)
             }
             ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
                 self.owned_layout(e)?.view(selectors)
             }
-            _ => NdArray::from_dense(expr.context_id().unwrap_or(0), self.eval_node(expr)?),
+            _ => NdArray::from_dense(
+                expr.context_id().unwrap_or(self.context_id),
+                self.eval_node(expr)?,
+            ),
         }
     }
 
