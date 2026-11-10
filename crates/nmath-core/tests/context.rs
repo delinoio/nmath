@@ -1,8 +1,9 @@
 use std::{sync::mpsc, time::Duration};
 
 use nmath_core::{
-    BinaryOp, Buffer, CancellationToken, Context, ContextOptions, Device, ErrorCode,
-    ExecutionStatus, Expr, Result, Scalar, Selector, Value, context::JobOutput, io::WriteMode,
+    BinaryOp, Buffer, CancellationToken, Context, ContextOptions, DType, Device, ErrorCode,
+    ExecutionStatus, Expr, NdArray, Result, Scalar, Selector, Value, context::JobOutput,
+    io::WriteMode, layout::CopyPolicy,
 };
 
 fn ctx(jobs: usize, queue: usize) -> Context {
@@ -33,6 +34,17 @@ fn dense_values(out: JobOutput) -> Buffer {
 fn wait(rx: &Outcome) -> Result<JobOutput> {
     rx.recv_timeout(Duration::from_secs(10))
         .expect("job did not finish")
+}
+
+fn compute_view(context: &Context, expr: &Expr) -> NdArray {
+    let (done, rx) = channel();
+    context
+        .compute(expr, Device::Cpu, CancellationToken::new(), done)
+        .unwrap();
+    let JobOutput::Value(Value::View(view)) = wait(&rx).unwrap() else {
+        panic!("expected a layout view")
+    };
+    view
 }
 
 /// A job that occupies a slot until the test drops `_turn`: an `assign` on a
@@ -383,6 +395,140 @@ fn cross_context_values_need_explicit_copy() {
 }
 
 #[test]
+fn scalar_layout_results_retain_the_executing_context() {
+    let context = ctx(1, 2);
+    let other = ctx(1, 2);
+    for policy in [CopyPolicy::IfNeeded, CopyPolicy::Always, CopyPolicy::Never] {
+        let expr = Expr::reshape(&Expr::scalar(Scalar::Int(1)), &[1], policy).unwrap();
+        let view = compute_view(&context, &expr);
+        assert_eq!(view.context_id(), context.id());
+        assert_eq!(view.shape(), &[1]);
+        assert_eq!(view.dtype(), DType::Int64);
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![1]));
+
+        let (done, rx) = channel();
+        context
+            .compute(
+                &Expr::input(&view),
+                Device::Cpu,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert_eq!(dense_values(wait(&rx).unwrap()), Buffer::I64(vec![1]));
+
+        let target = context.array(vec![1], Buffer::I64(vec![0])).unwrap();
+        let (done, rx) = channel();
+        context
+            .assign(
+                &target,
+                vec![],
+                &Expr::input(&view),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        wait(&rx).unwrap();
+        assert_eq!(target.to_buffer(), Buffer::I64(vec![1]));
+
+        let (done, rx) = channel();
+        context
+            .assign(
+                &view,
+                vec![],
+                &Expr::scalar(Scalar::Int(4)),
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        wait(&rx).unwrap();
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![4]));
+
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .compute(
+                    &Expr::input(&view),
+                    Device::Cpu,
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .assign(
+                    &view,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(8)),
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        let foreign_target = other.array(vec![1], Buffer::I64(vec![0])).unwrap();
+        let (done, _rx) = channel();
+        assert_eq!(
+            other
+                .assign(
+                    &foreign_target,
+                    vec![],
+                    &Expr::input(&view),
+                    CancellationToken::new(),
+                    done,
+                )
+                .unwrap_err()
+                .code,
+            ErrorCode::ContextMismatch
+        );
+        assert_eq!(view.to_buffer(), Buffer::I64(vec![4]));
+        assert_eq!(foreign_target.to_buffer(), Buffer::I64(vec![0]));
+    }
+
+    let transposed = compute_view(
+        &context,
+        &Expr::transpose(&Expr::scalar(Scalar::Int(2)), None).unwrap(),
+    );
+    assert_eq!(transposed.context_id(), context.id());
+    assert!(transposed.shape().is_empty());
+    assert_eq!(transposed.dtype(), DType::Int64);
+    assert_eq!(transposed.to_buffer(), Buffer::I64(vec![2]));
+
+    let sum = Expr::binary(
+        BinaryOp::Add,
+        &Expr::scalar(Scalar::Int(2)),
+        &Expr::scalar(Scalar::Int(3)),
+    )
+    .unwrap();
+    let arithmetic_layout = Expr::reshape(&sum, &[1], CopyPolicy::IfNeeded).unwrap();
+    let arithmetic = compute_view(&context, &arithmetic_layout);
+    assert_eq!(arithmetic.context_id(), context.id());
+    assert_eq!(arithmetic.shape(), &[1]);
+    assert_eq!(arithmetic.dtype(), DType::Int64);
+    assert_eq!(arithmetic.to_buffer(), Buffer::I64(vec![5]));
+    let (done, rx) = channel();
+    context
+        .compute(
+            &Expr::input(&arithmetic),
+            Device::Cpu,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+    assert_eq!(dense_values(wait(&rx).unwrap()), Buffer::I64(vec![5]));
+
+    drop(transposed);
+    drop(arithmetic);
+    assert_eq!(context.metrics().cpu_memory.used, 0);
+    assert_eq!(other.metrics().cpu_memory.used, 0);
+}
+
+#[test]
 fn random_state_commits_only_on_success() {
     let c = ctx(1, 4);
     let g = c.generator(42);
@@ -555,6 +701,80 @@ fn npy_jobs_round_trip_atomically() {
     };
     assert_eq!(loaded.shape(), &[2, 2]);
     assert_eq!(loaded.to_buffer(), Buffer::F32(vec![1.0, 2.0, 3.0, 4.0]));
+}
+
+#[test]
+fn empty_storage_rejects_unrepresentable_strides_without_losing_the_context() {
+    let c = Context::new(ContextOptions {
+        max_concurrent_jobs: 1,
+        max_queue_length: 0,
+        cpu_memory_budget: 0,
+        gpu_memory_budget: 0,
+    })
+    .unwrap();
+    let wide = u32::MAX as usize;
+    for shape in [
+        vec![0, wide, wide],
+        vec![wide, 0, wide],
+        vec![wide, wide, 0],
+    ] {
+        assert_eq!(
+            c.array(shape, Buffer::F64(vec![])).unwrap_err().code,
+            ErrorCode::ShapeMismatch
+        );
+        assert_eq!(c.metrics().cpu_memory.used, 0);
+        assert_eq!(c.metrics().total_submitted, 0);
+    }
+    let empty = c.array(vec![0, 3, 4], Buffer::F64(vec![])).unwrap();
+    assert_eq!(empty.shape(), &[0, 3, 4]);
+    assert_eq!(empty.to_buffer(), Buffer::F64(vec![]));
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+    c.close();
+
+    let c = ctx(1, 0);
+    let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let ordinary = c.array(vec![2, 3], Buffer::F64(values.clone())).unwrap();
+    assert_eq!(ordinary.shape(), &[2, 3]);
+    assert_eq!(ordinary.to_buffer(), Buffer::F64(values));
+    assert_eq!(ordinary.dtype(), nmath_core::DType::Float64);
+    drop(ordinary);
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+    c.close();
+}
+
+#[test]
+fn generated_and_loaded_empty_storage_rejects_unrepresentable_strides() {
+    let c = ctx(1, 0);
+    let wide = u32::MAX as usize;
+    let generator = c.generator(42);
+    let original = generator.current();
+    let expr = Expr::random(c.id(), &generator, vec![0, wide, wide]);
+    let (done, rx) = channel();
+    c.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+        .unwrap();
+    assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeMismatch);
+    assert_eq!(generator.current(), original);
+    assert_eq!(c.metrics().cpu_memory.used, 0);
+
+    let dir = tempfile::tempdir().unwrap();
+    for (index, shape) in [vec![0, wide, wide], vec![wide, wide, 0]]
+        .into_iter()
+        .enumerate()
+    {
+        let path = dir.path().join(format!("empty-{index}.npy"));
+        std::fs::write(
+            &path,
+            nmath_core::io::encode_npy(&shape, &Buffer::F64(vec![])).unwrap(),
+        )
+        .unwrap();
+        let (done, rx) = channel();
+        c.load_npy(path, CancellationToken::new(), done).unwrap();
+        assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::ShapeMismatch);
+        assert_eq!(c.metrics().cpu_memory.used, 0);
+    }
+    let valid = c.array(vec![0, 3, 4], Buffer::F64(vec![])).unwrap();
+    assert_eq!(valid.shape(), &[0, 3, 4]);
+    c.close();
 }
 
 #[test]

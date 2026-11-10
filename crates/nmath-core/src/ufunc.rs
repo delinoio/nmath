@@ -12,6 +12,7 @@ use crate::{
     dtype::{DType, DTypeKind},
     error::{Error, ErrorCode, Result},
     kernels::{BinaryOp, BroadcastPairs, CHUNK, cast_operand, reserve_for},
+    layout::checked_size,
     memory::{MemoryBudget, Reservation},
     shape::{broadcast_shapes, broadcast_strides},
     sync::CancellationToken,
@@ -886,13 +887,15 @@ pub fn binary(
     token.check()?;
     let dtype = binary_dtype(op, compute_dtype)?;
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
-    let reservation = reserve_for(budget, dtype, shape.iter().product())?;
+    let size = checked_size(&shape)?;
+    let reservation = reserve_for(budget, dtype, size)?;
     let (a, _a) = cast_operand(&lhs.buffer, dtype, budget, token)?;
     let (b, _b) = cast_operand(&rhs.buffer, dtype, budget, token)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
+        size,
     );
     let extremum_op = matches!(
         op,

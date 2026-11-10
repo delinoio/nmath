@@ -377,10 +377,14 @@ fn decode_npy_with<R>(
                 .map_err(|_| format_error("malformed shape"))
         })
         .collect::<Result<Vec<_>>>()?;
-    let count = shape
-        .iter()
-        .try_fold(1usize, |acc, &d| acc.checked_mul(d))
-        .ok_or_else(|| format_error("shape overflows"))?;
+    let count = if shape.contains(&0) {
+        0
+    } else {
+        shape
+            .iter()
+            .try_fold(1usize, |acc, &d| acc.checked_mul(d))
+            .ok_or_else(|| format_error("shape overflows"))?
+    };
     let data = &bytes[header_start + header_len..];
     let expected = count
         .checked_mul(dtype.item_size())
@@ -621,8 +625,8 @@ fn write_atomic_with_path(
         write_and_sync(&mut file)?;
         token.check()?;
         match mode {
-            // A hard link fails if the destination exists, so publication never clobbers a
-            // file created concurrently.
+            // A hard link fails if the destination exists, so publication never
+            // clobbers a file created concurrently.
             WriteMode::CreateNew => fs::hard_link(tmp, dest).map_err(|e| {
                 if e.kind() == std::io::ErrorKind::AlreadyExists {
                     Error::new(ErrorCode::IoExists, "The output file already exists.")

@@ -54,6 +54,8 @@ Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones
 
 Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ctx.generator(seed).random(shape)` must be finite integers from `0` through `4294967295`, inclusive. Their NumPy wrappers use the same rule. Invalid dimensions fail with `NMATH_SHAPE_MISMATCH` before budget arithmetic, input allocation or native shape conversion. Rank-zero shape `[]` and zero dimensions remain valid. A valid shape whose data length differs from its element count also fails with `NMATH_SHAPE_MISMATCH`.
 
+Elementwise binary expression construction rejects an inferred output whose signed layout is unrepresentable with `NMATH_SHAPE_MISMATCH`, including when individually valid empty operands broadcast to such an output. This happens before a compute job is submitted. Representable empty broadcasts remain valid.
+
 ### Expressions and compute
 
 - Functions such as `add(a, b)` and methods such as `a.add(b)` return `Expr` without computing.

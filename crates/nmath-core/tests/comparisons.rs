@@ -121,8 +121,8 @@ fn expression_dtype_errors_and_gpu_admission() {
         Reservation::none(),
     )
     .unwrap();
-    let a = Expr::input(&NdArray::from_dense(0, ints));
-    let b = Expr::input(&NdArray::from_dense(0, floats));
+    let a = Expr::input(&NdArray::from_dense(0, ints).unwrap());
+    let b = Expr::input(&NdArray::from_dense(0, floats).unwrap());
     let compared = Expr::binary(BinaryOp::Lt, &a, &b).unwrap();
     assert_eq!(compared.dtype(), DType::Bool);
     assert_eq!(compared.shape(), &[3]);
@@ -131,15 +131,18 @@ fn expression_dtype_errors_and_gpu_admission() {
         ErrorCode::GpuUnsupportedOperation
     );
 
-    let complex = Expr::input(&NdArray::from_dense(
-        0,
-        DenseArray::new(
-            vec![2],
-            Buffer::C64(vec![[1.0, 0.0], [0.0, 1.0]]),
-            Reservation::none(),
+    let complex = Expr::input(
+        &NdArray::from_dense(
+            0,
+            DenseArray::new(
+                vec![2],
+                Buffer::C64(vec![[1.0, 0.0], [0.0, 1.0]]),
+                Reservation::none(),
+            )
+            .unwrap(),
         )
         .unwrap(),
-    ));
+    );
     assert_eq!(
         Expr::binary(BinaryOp::Lt, &complex, &complex)
             .unwrap_err()
@@ -148,18 +151,21 @@ fn expression_dtype_errors_and_gpu_admission() {
     );
     assert!(Expr::binary(BinaryOp::Eq, &complex, &complex).is_ok());
 
-    let strings = Expr::input(&NdArray::from_dense(
-        0,
-        DenseArray::new(
-            vec![1],
-            Buffer::Unicode {
-                width: 1,
-                values: vec![b'a' as u32],
-            },
-            Reservation::none(),
+    let strings = Expr::input(
+        &NdArray::from_dense(
+            0,
+            DenseArray::new(
+                vec![1],
+                Buffer::Unicode {
+                    width: 1,
+                    values: vec![b'a' as u32],
+                },
+                Reservation::none(),
+            )
+            .unwrap(),
         )
         .unwrap(),
-    ));
+    );
     assert_eq!(
         Expr::binary(BinaryOp::Eq, &strings, &strings)
             .unwrap_err()
