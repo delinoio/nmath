@@ -59,7 +59,7 @@ function project(files) {
   return dir;
 }
 
-const MAIN = `import { createContext } from "@delinoio/nmath";
+const MAIN = `import { createContext, NMathArray } from "@delinoio/nmath";
 import { scale } from "./scale.nts";
 
 const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 4, cpuMemoryBudget: 1n << 20n, gpuMemoryBudget: 0n });
@@ -67,6 +67,7 @@ const a = ctx.array([1, 2, 3], { dtype: "float64" });
 const b = scale(a) + a ** 2;
 a[0] = 10;
 const result = await (b - -a).compute();
+if (!(result instanceof NMathArray)) throw new Error("expected an array result");
 console.log(JSON.stringify(result.toArray()));
 console.log(1 + 2);
 await ctx.close();
@@ -340,12 +341,14 @@ a.dispose(); result.dispose(); await ctx.close();
 });
 
 test("nts bracket indexing accepts newaxis and ellipsis", async () => {
-  const source = `import { createContext, ellipsis, newaxis } from "@delinoio/nmath";
+  const source = `import { createContext, ellipsis, newaxis, NMathArray } from "@delinoio/nmath";
 const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 1, cpuMemoryBudget: 4096, gpuMemoryBudget: 0 });
 const a = ctx.zeros([2, 3], "int32");
 a[[ellipsis, 1]] = 5n;
 const view = a[[newaxis, ellipsis, 1]];
-console.log(JSON.stringify([view.shape, (await view.compute()).toArray(), a[newaxis].shape]));
+const result = await view.compute();
+if (!(result instanceof NMathArray)) throw new Error("expected an array result");
+console.log(JSON.stringify([view.shape, result.toArray(), a[newaxis].shape]));
 await ctx.close();
 `;
   const dir = project({ "main.nts": source });

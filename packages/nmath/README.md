@@ -98,6 +98,19 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
+
+```ts
+import { NMathArray } from "@delinoio/nmath";
+
+const result = await ctx.array(1, { dtype: "float64" }).compute();
+if (result instanceof NMathArray) {
+  console.log(result.toArray());
+} else {
+  console.log(result); // number for this dtype
+}
+```
+
 Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
 
 An elementwise binary operation can also throw `NMATH_SHAPE_MISMATCH` when its broadcast output has an unrepresentable layout, even if both empty inputs are valid. The error occurs when constructing the expression, before a compute job starts. Representable empty broadcasts remain valid.
