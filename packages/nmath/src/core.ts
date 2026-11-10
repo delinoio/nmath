@@ -984,9 +984,12 @@ export abstract class Lazy<
   }
 
   /** Lazy axis permutation; omitted axes reverse their order. */
-  transpose<const A extends Shape | undefined = undefined>(
-    axes?: A & TransposeCheck<S, A>,
-  ): Expr<D, TransposeShape<S, A>> {
+  transpose(): Expr<D, TransposeShape<S, undefined>>;
+  transpose<const A extends Shape | undefined>(
+    axes: A & TransposeCheck<S, A>,
+  ): Expr<D, TransposeShape<S, A>>;
+  // Only the overloads expose a result shape; the implementation handles both paths.
+  transpose(axes?: Shape): Expr<D, any> {
     const checked = axes?.map((axis) => {
       if (!Number.isSafeInteger(axis))
         throw new NMathError(
