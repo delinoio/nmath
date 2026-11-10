@@ -68,15 +68,25 @@ export function reshape<
 ): Expr<D, ReshapeShape<S, R>> {
   return input.reshape<R>(shape, options);
 }
+export function transpose<D extends ComputableDType, S extends Shape>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, TransposeShape<S, undefined>>;
 export function transpose<
   D extends ComputableDType,
   S extends Shape,
-  const A extends Shape | undefined = undefined,
+  const A extends Shape | undefined,
 >(
   input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axes?: A & TransposeCheck<S, A>,
-): Expr<D, TransposeShape<S, A>> {
-  return input.transpose<A>(axes);
+  axes: A & TransposeCheck<S, A>,
+): Expr<D, TransposeShape<S, A>>;
+export function transpose<D extends ComputableDType, S extends Shape>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axes?: Shape,
+): Expr<D, any> {
+  // The public overloads check the argument and result; forwarding keeps undefined intact.
+  return input.transpose<Shape | undefined>(
+    axes as (Shape | undefined) & TransposeCheck<S, Shape | undefined>,
+  ) as Expr<D, any>;
 }
 
 type Nested<T> = T | readonly Nested<T>[];
