@@ -17,6 +17,13 @@ import type {
   WeakScalar,
 } from "./types.js";
 
+// Modern decorator emit uses a temporary symbol method to preserve evaluation
+// order. Create its key in this module so user-local Symbol/globalThis bindings
+// cannot capture it. Remove this helper when the emitter supports these awaits.
+export function decoratorKey(): symbol {
+  return Symbol();
+}
+
 // Reuse the public signatures, including dtype promotion and shape checks.
 export { add, sub, mul, div, mod, pow } from "./index.js";
 export { ellipsis, indices, mask, newaxis, slice } from "./core.js";

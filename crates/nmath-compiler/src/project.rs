@@ -437,15 +437,53 @@ fn emit_nts_javascript(
             .collect());
     }
     let mut writes = pass.writes;
-    for (path, text) in &mut writes {
-        if path.ends_with(".js.map") {
+    let map_paths = writes
+        .keys()
+        .filter(|path| path.ends_with(".js.map"))
+        .cloned()
+        .collect::<Vec<_>>();
+    for path in map_paths {
+        if let Some(text) = writes.get_mut(&path) {
             *text =
-                crate::source_maps::compose(path, text, &mapped_sources).map_err(|message| {
+                crate::source_maps::compose(&path, text, &mapped_sources).map_err(|message| {
                     vec![CompilerDiagnostic::without_location(
                         CompilerCode::Emit,
                         message,
                     )]
                 })?;
+        }
+    }
+    let js_paths = writes
+        .keys()
+        .filter(|path| path.ends_with(".js"))
+        .cloned()
+        .collect::<Vec<_>>();
+    for path in js_paths {
+        let mut decorators = crate::async_decorators::Rewriter::new(&writes[&path]);
+        loop {
+            let old = writes.remove(&path).expect("JavaScript output path exists");
+            let Some(rewrite) = decorators.rewrite(&old).map_err(|message| {
+                vec![CompilerDiagnostic::without_location(
+                    CompilerCode::Emit,
+                    message,
+                )]
+            })?
+            else {
+                writes.insert(path.clone(), old);
+                break;
+            };
+            let new = rewrite.new;
+            let map_path = format!("{path}.map");
+            if let Some(map) = writes.get_mut(&map_path) {
+                *map = crate::source_maps::relocate_generated(map, &old, &new, &rewrite.copies)
+                    .map_err(|message| {
+                        vec![CompilerDiagnostic::without_location(
+                            CompilerCode::Emit,
+                            message,
+                        )]
+                    })?;
+            }
+            writes.insert(path.clone(), new);
         }
     }
     Ok(writes)

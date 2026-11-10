@@ -31,6 +31,8 @@ When the `.nts` transform's extension-rewriting option is enabled, source-relati
 | `@delinoio/nmath/compiler`    | `compiler`     | `check` and `build` project APIs.                                                                           |
 | `@delinoio/nmath/nts-runtime` | (internal)     | Helpers that compiled `.nts` output imports. Not documented for direct use.                                 |
 
+The internal `nts-runtime` entry exports `decoratorKey(): symbol` for modern awaited decorator output. It returns a fresh symbol from the runtime module so user-local `Symbol` or `globalThis` bindings cannot capture key creation. Compiler and runtime artifacts must be distributed together. This helper is not a direct-use public API.
+
 The CLI executable is `nmath-compiler`. No separate compiler package is published. The package `bin` entry is a small Node.js launcher that runs the platform's prebuilt `nmath-compiler` executable from `native/` or the platform package; `@delinoio/nmath/compiler` runs the same executable with `--json`.
 The compiler entry point, CLI launcher and compiler build script resolve or build the compiler without loading the numerical addon. A missing compiler reports compiler-specific recovery guidance. Numerical entry points still load the addon when imported.
 
@@ -174,7 +176,7 @@ The published package includes `compatibility.json.gz`, a gzip-compressed JSON o
 - [Repository defaults](repository-defaults.md)
 - [Repository workflow](repository-workflow-contract.md)
 
-Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics. Bracket access used as a constructor target, including through parentheses and type-only wrappers, keeps its JavaScript grouping.
+Compiler helpers retain public arithmetic signatures, indexing result types and assignment value types. In a field decorator argument with an enclosing async context, a checker-proven bracket assignment completes its awaited `set` before the decorator receives the assigned value. Only checker-proven NMath operations call these helpers; ordinary JavaScript syntax keeps its native semantics. Bracket access used as a constructor target, including through parentheses and type-only wrappers, keeps its JavaScript grouping.
 
 ## Numeric tables
 

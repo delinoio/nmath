@@ -4,6 +4,7 @@ use std::process::{Command, Output};
 
 use common::Fixture;
 use serde_json::Value;
+use tsrs_sourcemap::decode_mappings;
 
 const BIN: &str = env!("CARGO_BIN_EXE_nmath-compiler");
 
@@ -375,6 +376,1292 @@ fn inherited_numeric_index_executes_when_no_implicit_any_is_disabled() {
         String::from_utf8_lossy(&runtime.stderr)
     );
     assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "3");
+}
+
+fn field_decorator_fixture(name: &str, legacy: bool, source: &str) -> Fixture {
+    let fixture = Fixture::new(name);
+    let mut config = serde_json::json!({
+        "compilerOptions": {
+            "strict": true,
+            "module": "esnext",
+            "target": "es2022",
+            "moduleResolution": "bundler",
+            "outDir": "dist",
+            "rootDir": "src",
+            "types": []
+        },
+        "include": ["src"]
+    });
+    if legacy {
+        config["compilerOptions"]["experimentalDecorators"] = Value::Bool(true);
+    }
+    fixture.write("tsconfig.json", &config.to_string());
+    fixture.write(
+        "node_modules/@delinoio/nmath/package.json",
+        r#"{"name":"@delinoio/nmath","type":"module","exports":{".":{"types":"./core.d.ts","default":"./core.js"},"./nts-runtime":{"types":"./nts-runtime.d.ts","default":"./nts-runtime.js"}}}"#,
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.d.ts",
+        "export declare const lazyBrand: unique symbol;\nexport declare class NMathArray<D, S> { \
+         readonly [lazyBrand]: true; constructor(values: number[]); values: number[]; }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/core.js",
+        "export class NMathArray { constructor(values) { this.values = values; } }\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.d.ts",
+        "import { NMathArray } from './core.js';\nexport declare let setCalls: number;\nexport \
+         declare function set<T>(a: NMathArray<any, any>, i: number, value: T): Promise<T>;\n",
+    );
+    fixture.write(
+        "node_modules/@delinoio/nmath/nts-runtime.js",
+        "export function decoratorKey() { return Symbol(); }\nexport let setCalls = 0;\nexport \
+         async function set(a, i, value) { setCalls++; await Promise.resolve(); a.values[i] = \
+         value; return value; }\n",
+    );
+    fixture.write("src/main.nts", source);
+    fixture
+}
+
+#[test]
+fn field_decorator_assignments_check_build_and_execute_in_both_modes() {
+    let prefix = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nexport const calls = () => setCalls;\nexport \
+                  const a = new NMathArray<'float64', [1]>([0]);\nexport let received: number[] = \
+                  [];\n";
+    for (name, legacy, class_source) in [
+        (
+            "field-decorator-modern",
+            false,
+            "function dec(value: number): (field: undefined, context: ClassFieldDecoratorContext) \
+             => void { received = [value, a.values[0]]; return () => {}; }\nexport async function \
+             run() { class C { @dec(a[0] = 1) key = 2; } return new C(); }\n",
+        ),
+        (
+            "field-decorator-module",
+            false,
+            "function dec(value: number): (field: undefined, context: ClassFieldDecoratorContext) \
+             => void { received = [value, a.values[0]]; return () => {}; }\nexport class C { \
+             @dec(a[0] = 1) key = 2; }\n",
+        ),
+        (
+            "field-decorator-legacy",
+            true,
+            "function dec(value: number): PropertyDecorator { received = [value, a.values[0]]; \
+             return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) key = 2; \
+             } return new C(); }\n",
+        ),
+        (
+            "field-decorator-legacy-module",
+            true,
+            "function dec(value: number): PropertyDecorator { received = [value, a.values[0]]; \
+             return () => {}; }\nexport class C { @dec(a[0] = 1) key = 2; }\n",
+        ),
+    ] {
+        let fixture = field_decorator_fixture(name, legacy, &format!("{prefix}{class_source}"));
+        let (code, checked) = run_json("check", &fixture);
+        assert_eq!(code, 0, "{name}: {checked:#}");
+        let (code, built) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{name}: {built:#}");
+        let output = fixture.read("dist/main.js");
+        assert_eq!(output.matches("__nmath.set(").count(), 1, "{output}");
+        if !legacy {
+            let map: Value = serde_json::from_str(&fixture.read("dist/main.js.map")).unwrap();
+            assert!(
+                map["sources"][0]
+                    .as_str()
+                    .unwrap()
+                    .ends_with("/src/main.nts")
+            );
+            assert_eq!(map["sourcesContent"][0], format!("{prefix}{class_source}"));
+            let assignment = format!("{prefix}{class_source}").find("a[0] = 1").unwrap();
+            let source = format!("{prefix}{class_source}");
+            let line = source[..assignment]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count() as u32;
+            let column =
+                (assignment - source[..assignment].rfind('\n').map_or(0, |at| at + 1)) as u32;
+            let generated_line = output[..output.find("__nmath.set(").unwrap()]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count() as u32;
+            let mut decoder = decode_mappings(map["mappings"].as_str().unwrap());
+            assert!(
+                decoder.values().any(|mapping| {
+                    mapping.generated_line == generated_line
+                        && mapping.source_line == Some(line)
+                        && mapping
+                            .source_character
+                            .is_some_and(|at| at >= column && at <= column + 8)
+                }),
+                "{name}: awaited assignment lost its original source mapping"
+            );
+            assert!(decoder.error().is_none());
+        }
+        let runtime = Command::new("node")
+            .arg("--input-type=module")
+            .arg("-e")
+            .arg(
+                "import(process.argv[1]).then(async m => { const instance = m.run ? await m.run() \
+                 : new m.C(); console.log(JSON.stringify([m.received, m.a.values[0], \
+                 instance.key, m.calls()])); })",
+            )
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .expect("Node.js runs decorator fixture");
+        assert!(
+            runtime.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            "[[1,1],1,2,1]"
+        );
+    }
+}
+
+#[test]
+fn modern_field_decorator_preserves_class_evaluation_phases() {
+    for (name, members, expected, class_decorator) in [
+        (
+            "modern-phase-computed-first",
+            "[key()]() {} @dec(0) first = 0; @dec(a[0] = 1) field = 2; @dec(2) last = 0;",
+            "[\"heritage\",\"computed\",\"factory-0-0\",\"factory-1-1\",\"factory-2-1\",\"apply\",\
+             \"apply\",\"apply\",\"static\"]",
+            false,
+        ),
+        (
+            "modern-phase-decorator-first",
+            "@dec(0) first = 0; @dec(a[0] = 1) field = 2; [key()]() {} @dec(2) last = 0;",
+            "[\"heritage\",\"factory-0-0\",\"factory-1-1\",\"computed\",\"factory-2-1\",\"apply\",\
+             \"apply\",\"apply\",\"static\"]",
+            false,
+        ),
+        (
+            "modern-phase-class-decorator",
+            "[key()]() {} @dec(0) first = 0; @dec(a[0] = 1) field = 2; @dec(2) last = 0;",
+            "[\"heritage\",\"computed\",\"factory-0-0\",\"factory-1-1\",\"factory-2-1\",\"apply\",\
+             \"apply\",\"apply\",\"class-apply\",\"static\"]",
+            true,
+        ),
+    ] {
+        let class_prefix = if class_decorator { "@classDec " } else { "" };
+        let source = format!(
+            "import {{ NMathArray }} from '@delinoio/nmath';\nimport {{ setCalls }} from \
+             '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+             [1]>([0]);\nconst events: string[] = [];\nfunction base() {{ \
+             events.push('heritage'); return class {{}}; }}\nfunction key(): 'computed' {{ \
+             events.push('computed'); return 'computed'; }}\nfunction dec(value: number): (field: \
+             undefined, context: ClassFieldDecoratorContext) => void {{ \
+             events.push(`factory-${{value}}-${{a.values[0]}}`); return () => {{ \
+             events.push('apply'); }}; }}\nfunction classDec(value: Function, context: \
+             ClassDecoratorContext) {{ events.push('class-apply'); }}\nexport async function \
+             run() {{ {class_prefix}class C extends base() {{ {members} static state = \
+             events.push('static'); }} const instance = new C(); return [events, instance.field, \
+             a.values[0], setCalls, Object.getOwnPropertySymbols(C.prototype).length]; }}\n"
+        );
+        let fixture = field_decorator_fixture(name, false, &source);
+        let (code, checked) = run_json("check", &fixture);
+        assert_eq!(code, 0, "{name}: {checked:#}");
+        let (code, built) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{name}: {built:#}");
+        let runtime = Command::new("node")
+            .arg("--input-type=module")
+            .arg("-e")
+            .arg(
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            )
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .expect("Node.js runs phase-order fixture");
+        assert!(
+            runtime.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        let result: Value = serde_json::from_slice(&runtime.stdout).unwrap();
+        assert_eq!(result[0].to_string(), expected, "{name}");
+        assert_eq!(
+            &result.as_array().unwrap()[1..],
+            &[
+                serde_json::json!(2),
+                serde_json::json!(1),
+                serde_json::json!(1),
+                serde_json::json!(0)
+            ],
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn modern_field_decorator_keeps_the_enclosing_wrapper_with_callback_decorators() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nfunction \
+                  classDec(_factory: () => void): any { return (value: any, _context: \
+                  ClassDecoratorContext) => value; }\nexport async function run() { @classDec(() \
+                  => {}) class C { @dec(a[0] = 1) field = 2; } return [new C().field, \
+                  a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-callback-wrapper", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the callback-wrapper fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the callback-wrapper fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn modern_field_decorator_ignores_preceding_undecorated_inner_class() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+import { setCalls } from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any { return () => {}; }
+export async function run() {
+    let Inner: any;
+    class C { @dec((Inner = class Inner {}, a[0] = 1)) field = 2; }
+    return [new C().field, a.values[0], setCalls, Inner.name];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-inner-class", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the inner-class fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the inner-class fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"[2,1,1,"Inner"]"#
+    );
+}
+
+#[test]
+fn modern_field_decorator_keeps_awaits_in_template_expressions() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+import { setCalls } from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let seen = "";
+function dec(value: string): any { seen = value; return () => {}; }
+export async function run() {
+    class C { @dec(`await __nmath.set( ${a[0] = 1}`) field = 2; }
+    return [new C().field, a.values[0], setCalls, seen];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-template-await", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the template-await fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the template-await fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"[2,1,1,"await __nmath.set( 1"]"#
+    );
+}
+
+#[test]
+fn modern_field_decorator_boxes_the_enclosing_wrapper_return() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nfunction \
+                  classDec(_factory: (value: any) => any): any { return (value: any, _context: \
+                  ClassDecoratorContext) => value; }\nexport async function run() { \
+                  @classDec((value: any) => { return value; }) class C { @dec(a[0] = 1) field = \
+                  2; } return [new C().field, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-callback-return", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the callback-return fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the callback-return fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn generator_lowered_decorator_awaits_fail_without_publishing_output() {
+    for target in ["es2015", "es2016"] {
+        let source = "import { NMathArray } from '@delinoio/nmath';\nconst a = new \
+                      NMathArray<'float64', [1]>([0]);\nfunction dec(_value: number): any { \
+                      return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) \
+                      field = 2; } return new C().field; }\n";
+        let fixture = field_decorator_fixture("decorator-generator-target", false, source);
+        let mut config: Value = serde_json::from_str(&fixture.read("tsconfig.json")).unwrap();
+        config["compilerOptions"]["target"] = target.into();
+        fixture.write("tsconfig.json", &config.to_string());
+        fixture.write("dist/main.js", "preserve existing JavaScript");
+        fixture.write("dist/main.js.map", "preserve existing map");
+        fixture.write("dist/main.d.ts", "preserve existing declarations");
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 1, "{target}: {result:#}");
+        assert!(codes(&result).contains(&"NMATH_COMPILER_EMIT".to_string()));
+        assert!(
+            result["diagnostics"]
+                .to_string()
+                .contains("generator-lowered")
+        );
+        assert!(result["outputFiles"].as_array().unwrap().is_empty());
+        assert_eq!(fixture.read("dist/main.js"), "preserve existing JavaScript");
+        assert_eq!(fixture.read("dist/main.js.map"), "preserve existing map");
+        assert_eq!(
+            fixture.read("dist/main.d.ts"),
+            "preserve existing declarations"
+        );
+        // Ordinary async writes still use generator lowering successfully.
+        fixture.write(
+            "src/main.nts",
+            "import { NMathArray } from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+             [1]>([0]);\nexport async function run() { a[0] = 1; return a.values[0]; }\n",
+        );
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{target} control: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(await m.run()))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "1");
+        fixture.write(
+            "src/main.nts",
+            "import { NMathArray } from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+             [1]>([0]);\nlet saved: () => Promise<void>; function dec(callback: () => \
+             Promise<void>): any { saved = callback; return () => {}; }\nexport async function \
+             run() { class C { @dec(async () => { a[0] = 1; }) field = 2; } const before = \
+             a.values[0]; await saved!(); return [before, a.values[0], new C().field]; }\n",
+        );
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{target} deferred callback: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[0,1,2]");
+    }
+}
+
+#[test]
+fn awaited_fields_preserve_preceding_member_decorator_order() {
+    for awaited_member in ["field = 2", "accessor field = 2"] {
+        let source = format!(
+            r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+const events: unknown[] = [];
+function dec(value: string | number): any {{
+    events.push([value, a.values[0]]);
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{
+        @dec('method') method() {{}}
+        @dec('getter') get read() {{ return 4; }}
+        @dec('setter') set write(_value: number) {{}}
+        @dec(a[0] = 1) {awaited_member};
+        @dec('after') after() {{}}
+    }}
+    return [events, new C().field, setCalls];
+}}
+"#
+        );
+        let fixture = field_decorator_fixture("decorator-member-order", false, &source);
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{awaited_member}: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            r#"[[["method",0],["getter",0],["setter",0],[1,1],["after",1]],2,1]"#
+        );
+    }
+}
+
+#[test]
+fn modern_decorators_ignore_user_owned_array_assignments() {
+    for member in ["field = 2", "accessor field = 2"] {
+        for name in ["_saved_decorators", "_saved_decorators_1"] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let {name}: number[] = [];
+let saved: () => Promise<void>;
+let received = 0;
+function dec(values: number[], callback: () => Promise<void>): any {{
+    received = values[0]; saved = callback; return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec(({name} = [a[0] = 1]), async () => {{ {name} = [a[0] = 3]; }}) {member}; }}
+    const before = [new C().field, a.values[0], received, {name}[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], {name}[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-user-array", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{member} {name}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{member} {name}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,1,1,3,3,2]"
+            );
+        }
+    }
+}
+
+#[test]
+fn modern_field_decorator_ignores_return_text_in_class_decorators() {
+    for label in [
+        r#""return class ""#,
+        "`return class `",
+        r#"`outer ${"return class "}`"#,
+        "/return class /",
+        "1 /* return class  */",
+    ] {
+        let source = format!(
+            r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any {{ return () => {{}}; }}
+function classDec(_label: unknown, callback: (value: any) => any): any {{
+    return (value: any) => callback(value);
+}}
+export async function run() {{
+    @classDec({label}, value => {{ return value; }})
+    class C {{ @dec(a[0] = 1) field = 2; static observedName = this.name; }}
+    return [new C().field, a.values[0], setCalls, C.name, C.observedName];
+}}
+"#
+        );
+        let fixture = field_decorator_fixture("decorator-return-literal", false, &source);
+        let (code, result) = run_json("build", &fixture);
+        assert_eq!(code, 0, "{label}: {result:#}");
+        let runtime = Command::new("node")
+            .args([
+                "--input-type=module",
+                "-e",
+                "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                 m.run())))",
+            ])
+            .arg(fixture.path("dist/main.js"))
+            .output()
+            .unwrap();
+        assert!(
+            runtime.status.success(),
+            "{label}: {}",
+            String::from_utf8_lossy(&runtime.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(runtime.stdout).unwrap().trim(),
+            r#"[2,1,1,"C","C"]"#
+        );
+    }
+}
+
+#[test]
+fn modern_field_decorator_relocates_outer_assignments_with_nested_classes() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(_value: any): any { return () => {}; }\nexport async \
+                  function run() { class Outer { @dec(class Inner { @dec(a[0] = 1) inner = 2; }) \
+                  outer = 3; } return [new Outer().outer, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-nested-class", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the nested-class fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the nested-class fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[3,1,1]");
+}
+
+#[test]
+fn modern_field_decorator_supports_unicode_field_names() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(_value: any): any { return () => {}; }\nexport async \
+                  function run() { class C { @dec(a[0] = 1) 值 = 2; } return [new C().值, \
+                  a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-unicode-field", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert!(output.contains("__nmath.set(a, 0, 1)"), "{output}");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the Unicode-field fixture");
+    assert!(
+        checked.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the Unicode-field fixture");
+    assert!(
+        runtime.status.success(),
+        "{}\n{output}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn modern_field_decorators_preserve_collision_renamed_arrays() {
+    for (bindings, value) in [
+        ("const _field_decorators = 3;", "_field_decorators"),
+        (
+            "const _field_decorators = 1, _field_decorators_1 = 2;",
+            "_field_decorators + _field_decorators_1",
+        ),
+    ] {
+        for member in ["field", "accessor field"] {
+            let source = format!(
+                "import {{ NMathArray }} from '@delinoio/nmath';\nimport {{ setCalls }} from \
+                 '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                 [1]>([0]);\n{bindings}\nfunction dec(_value: number): any {{ return () => {{}}; \
+                 }}\nexport async function run() {{\nclass C {{ @dec(a[0] = {value}) {member} = \
+                 2; }}\nreturn [new C().field, a.values[0], setCalls];\n}}\n"
+            );
+            let fixture = field_decorator_fixture("decorator-array-collision", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{bindings} {member}: {result:#}");
+            let output = fixture.read("dist/main.js");
+            let checked = Command::new("node")
+                .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+                .output()
+                .expect("Node.js checks the collision fixture");
+            assert!(
+                checked.status.success(),
+                "{bindings} {member}: {}\n{output}",
+                String::from_utf8_lossy(&checked.stderr)
+            );
+            let runtime = Command::new("node")
+                .arg("--input-type=module")
+                .arg("-e")
+                .arg(
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                )
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .expect("Node.js runs the collision fixture");
+            assert!(
+                runtime.status.success(),
+                "{}\n{output}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,3,1]");
+        }
+    }
+}
+
+#[test]
+fn modern_field_decorators_rewrite_each_class_and_runtime_alias() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst __nmath = 0;\nconst a = new \
+                  NMathArray<'float64', [1]>([0]);\nfunction dec(value: number): (field: \
+                  undefined, context: ClassFieldDecoratorContext) => void { return () => {}; \
+                  }\nexport async function run() { class A { @dec(a[0] = 1) value = 2; } class B \
+                  { @dec(a[0] = 3) value = 4; } return [new A().value, new B().value, \
+                  a.values[0], setCalls, __nmath]; }\n";
+    let fixture = field_decorator_fixture("modern-two-classes", false, source);
+    let (code, checked) = run_json("check", &fixture);
+    assert_eq!(code, 0, "{checked:#}");
+    let (code, built) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{built:#}");
+    let output = fixture.read("dist/main.js");
+    assert_eq!(output.matches("__nmath_1.set(").count(), 2, "{output}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs two-class fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[2,4,3,2,0]"
+    );
+}
+
+#[test]
+fn unrelated_async_method_does_not_make_a_decorator_factory_async() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nconst a = new \
+                  NMathArray<'float64', [1]>([0]);\nfunction dec(value: number): (field: \
+                  undefined, context: ClassFieldDecoratorContext) => void { return () => {}; \
+                  }\n\nfunction make() { class C { @dec(0) field = 0; async run() { a[0] = 1; } } \
+                  return C; }\nexport const C = make();\n";
+    let fixture = field_decorator_fixture("decorator-unrelated-async-method", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert!(!output.contains("await (async () =>"), "{output}");
+    let checked = Command::new("node")
+        .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+        .output()
+        .expect("Node.js checks the emitted module");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+}
+
+#[test]
+fn multiline_decorator_assignments_are_relocated_as_complete_expressions() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: { value: number }): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec({\n  value: a[0] = 1\n}) field = 2; } const instance = \
+                  new C(); return [instance.field, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-multiline", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the multiline decorator fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn thenable_decorated_class_constructors_are_not_assimilated() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec(a[0] = 1) field = 2; static then(resolve: (value: \
+                  number) => void) { resolve(123); } } const instance = new C(); return [typeof \
+                  C, instance.field, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-thenable", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the thenable constructor fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[\"function\",2,1,1]"
+    );
+}
+
+#[test]
+fn modern_field_decorator_does_not_use_shadowed_symbol() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst Symbol = 123;\nconst a = new \
+                  NMathArray<'float64', [1]>([0]);\nfunction dec(value: number): (field: \
+                  undefined, context: ClassFieldDecoratorContext) => void { return () => {}; \
+                  }\nexport async function run() { class C { @dec(a[0] = 1) value = 2; } return \
+                  [new C().value, a.values[0], setCalls, Symbol]; }\n";
+    let fixture = field_decorator_fixture("decorator-shadowed-symbol", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the shadowed Symbol fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[2,1,1,123]"
+    );
+}
+
+#[test]
+fn modern_field_decorator_does_not_use_shadowed_global_this() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { const globalThis = 123; class C { @dec(a[0] = 1) value = 2; } return \
+                  [new C().value, a.values[0], setCalls, globalThis]; }\n";
+    let fixture = field_decorator_fixture("decorator-shadowed-global", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the shadowed Symbol fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[2,1,1,123]"
+    );
+}
+
+#[test]
+fn modern_field_decorator_preserves_anonymous_class_names() {
+    let source = r#"import { NMathArray } from '@delinoio/nmath';
+const a = new NMathArray<'float64', [1]>([0]);
+function dec(_value: number): any { return () => {}; }
+async function anonymous() {
+    return class { @dec(a[0] = 1) field = 2; static observedName = this.name; };
+}
+async function named() {
+    return class Named { @dec(a[0] = 2) field = 3; static observedName = this.name; };
+}
+async function inferred() {
+    const Inferred = class { @dec(a[0] = 3) field = 4; static observedName = this.name; };
+    return Inferred;
+}
+export async function run() {
+    const A = await anonymous(); const B = await named(); const C = await inferred();
+    return [A.name, A.observedName, new A().field,
+            B.name, B.observedName, new B().field,
+            C.name, C.observedName, new C().field, a.values[0]];
+}
+"#;
+    let fixture = field_decorator_fixture("decorator-anonymous-name", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .args([
+            "--input-type=module",
+            "-e",
+            "import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))",
+        ])
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .unwrap();
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        r#"["","",2,"Named","Named",3,"Inferred","Inferred",4,3]"#
+    );
+}
+
+#[test]
+fn modern_auto_accessor_decorator_await_is_relocated() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (target: any, context: any) => void { \
+                  return () => {}; }\nexport async function run() { class C { @dec(a[0] = 1) \
+                  accessor value = 2; } return [new C().value, a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-auto-accessor", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the auto-accessor fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "[2,1,1]");
+}
+
+#[test]
+fn nested_template_literals_do_not_break_decorator_rewrite() {
+    let source = "import { NMathArray } from '@delinoio/nmath';\nimport { setCalls } from \
+                  '@delinoio/nmath/nts-runtime';\nconst a = new NMathArray<'float64', \
+                  [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+                  ClassFieldDecoratorContext) => void { return () => {}; }\nexport async function \
+                  run() { class C { @dec(a[0] = 1) value = 2; method() { return `outer${`}`}`; } \
+                  } return [new C().method(), a.values[0], setCalls]; }\n";
+    let fixture = field_decorator_fixture("decorator-nested-template", false, source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let runtime = Command::new("node")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg("import(process.argv[1]).then(async m => console.log(JSON.stringify(await m.run())))")
+        .arg(fixture.path("dist/main.js"))
+        .output()
+        .expect("Node.js runs the nested-template fixture");
+    assert!(
+        runtime.status.success(),
+        "{}",
+        String::from_utf8_lossy(&runtime.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(runtime.stdout).unwrap().trim(),
+        "[\"outer}\",1,1]"
+    );
+}
+
+#[test]
+fn modern_field_decorator_distinguishes_literal_function_text_from_callbacks() {
+    for label in [r#""function""#, "`function`", "/function/", r#""=>""#] {
+        for callback in [
+            "async () => { a[0] = 2; return 2; }",
+            "async function () { a[0] = 2; return 2; }",
+            "async () => a[0] = 2",
+        ] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let saved: () => Promise<number>;
+function dec(_label: unknown, value: {{ value: number, callback: () => Promise<number> }}): any {{
+    saved = value.callback;
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec({label}, {{ value: a[0] = 1, callback: {callback} }}) field = 2; }}
+    const before = [new C().field, a.values[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-function-text", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{label} {callback}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{label} {callback}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,2,2]"
+            );
+        }
+    }
+}
+
+#[test]
+fn modern_field_decorator_ignores_literal_decorator_assignments() {
+    for label in [
+        r#""_fake_decorators = [""#,
+        "`_fake_decorators = [`",
+        r#"`outer ${"_fake_decorators = ["}`"#,
+        r#"/_fake_decorators = [x]/"#,
+        "1 /* _fake_decorators = [ */",
+    ] {
+        for callback in [
+            "async () => { a[0] = 2; return 2; }",
+            "async function () { a[0] = 2; return 2; }",
+            "async () => a[0] = 2",
+        ] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let saved: () => Promise<number>;
+function dec(_label: unknown, value: {{ value: number, callback: () => Promise<number> }}): any {{
+    saved = value.callback;
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec({label}, {{ value: a[0] = 1, callback: {callback} }}) field = 2; }}
+    const before = [new C().field, a.values[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-assignment-text", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{label} {callback}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{label} {callback}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,2,2]"
+            );
+        }
+    }
+}
+
+#[test]
+fn modern_field_decorator_ignores_literal_class_markers() {
+    for label in [
+        r#""return class {""#,
+        "`return class {`",
+        r#"`outer ${"return class {"}`"#,
+        r#"/return class [{]/"#,
+        "1 /* return class { */",
+    ] {
+        for callback in [
+            "async () => { a[0] = 2; return 2; }",
+            "async function () { a[0] = 2; return 2; }",
+            "async () => a[0] = 2",
+        ] {
+            let source = format!(
+                r#"import {{ NMathArray }} from '@delinoio/nmath';
+import {{ setCalls }} from '@delinoio/nmath/nts-runtime';
+const a = new NMathArray<'float64', [1]>([0]);
+let saved: () => Promise<number>;
+function dec(_label: unknown, value: {{ value: number, callback: () => Promise<number> }}): any {{
+    saved = value.callback;
+    return () => {{}};
+}}
+export async function run() {{
+    class C {{ @dec({label}, {{ value: a[0] = 1, callback: {callback} }}) field = 2; }}
+    const before = [new C().field, a.values[0], setCalls];
+    await saved!();
+    return [...before, a.values[0], setCalls];
+}}
+"#
+            );
+            let fixture = field_decorator_fixture("decorator-class-text", false, &source);
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{label} {callback}: {result:#}");
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(async m => console.log(JSON.stringify(await \
+                     m.run())))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{label} {callback}: {}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(
+                String::from_utf8(runtime.stdout).unwrap().trim(),
+                "[2,1,1,2,2]"
+            );
+        }
+    }
+}
+
+#[test]
+fn modern_field_decorators_ignore_helper_text_in_literals() {
+    for extension in ["nts", "ts"] {
+        for value in [
+            r#""await __nmath.set(""#,
+            r#"`await __nmath.set(`"#,
+            r#"`outer ${"await __nmath.set("}`"#,
+            r#"/await __nmath.set(a)/"#,
+            r#"1 /* await __nmath.set( */"#,
+        ] {
+            let source = format!(
+                "function dec(_value: any): any {{ return () => {{}}; }}\nexport function run() \
+                 {{ class C {{ @dec({value}) field = 0; }} return new C().field; }}\n"
+            );
+            let fixture = field_decorator_fixture("decorator-literal-helper", false, &source);
+            if extension == "ts" {
+                std::fs::rename(fixture.path("src/main.nts"), fixture.path("src/main.ts")).unwrap();
+            }
+            let (code, result) = run_json("build", &fixture);
+            assert_eq!(code, 0, "{extension} {value}: {result:#}");
+            let checked = Command::new("node")
+                .args(["--check", fixture.path("dist/main.js").to_str().unwrap()])
+                .output()
+                .unwrap();
+            assert!(
+                checked.status.success(),
+                "{extension} {value}: {}",
+                String::from_utf8_lossy(&checked.stderr)
+            );
+            let runtime = Command::new("node")
+                .args([
+                    "--input-type=module",
+                    "-e",
+                    "import(process.argv[1]).then(m => console.log(m.run()))",
+                ])
+                .arg(fixture.path("dist/main.js"))
+                .output()
+                .unwrap();
+            assert!(
+                runtime.status.success(),
+                "{}",
+                String::from_utf8_lossy(&runtime.stderr)
+            );
+            assert_eq!(String::from_utf8(runtime.stdout).unwrap().trim(), "0");
+        }
+    }
+}
+
+#[test]
+fn many_decorated_classes_rewrite_without_retaining_prior_snapshots() {
+    let count = std::env::var("NMATH_MEMORY_CLASS_COUNT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(100);
+    let mut classes = String::new();
+    for index in 0..count {
+        classes.push_str(&format!(
+            "class C{index} {{ @dec(a[0] = {index}) value = {index}; }}\n"
+        ));
+    }
+    let source = format!(
+        "import {{ NMathArray }} from '@delinoio/nmath';\nconst a = new NMathArray<'float64', \
+         [1]>([0]);\nfunction dec(value: number): (field: undefined, context: \
+         ClassFieldDecoratorContext) => void {{ return () => {{}}; }}\nexport async function \
+         run() {{ {classes} return a.values[0]; }}\n"
+    );
+    let fixture = field_decorator_fixture("decorator-many-classes", false, &source);
+    let (code, result) = run_json("build", &fixture);
+    assert_eq!(code, 0, "{result:#}");
+    let output = fixture.read("dist/main.js");
+    assert_eq!(output.matches(".decoratorKey()").count(), count, "{output}");
+    let map: Value = serde_json::from_str(&fixture.read("dist/main.js.map")).unwrap();
+    assert_eq!(map["sourcesContent"][0], source);
+}
+
+#[test]
+fn field_decorator_restricted_contexts_report_the_original_assignment_span() {
+    for (name, source) in [
+        (
+            "decorator-sync",
+            "function f() { class C { @dec(a[0] = 1) key = 2; } }",
+        ),
+        (
+            "field-initializer",
+            "async function f() { class C { @dec(1) key = a[0] = 1; } }",
+        ),
+        (
+            "static-block",
+            "async function f() { class C { static { a[0] = 1; } } }",
+        ),
+        (
+            "parameter-initializer",
+            "async function f(x = (a[0] = 1)) {}",
+        ),
+    ] {
+        let source = format!(
+            "import {{ NMathArray }} from '@delinoio/nmath';\ndeclare const a: \
+             NMathArray<'float64', [1]>;\ndeclare function dec(value: number): (field: undefined, \
+             context: ClassFieldDecoratorContext) => void;\n{source}\n"
+        );
+        let fixture = field_decorator_fixture(name, false, &source);
+        let (code, result) = run_json("check", &fixture);
+        assert_eq!(code, 1, "{name}: {result:#}");
+        let assignment = source.find("a[0] = 1").unwrap();
+        let line = source[..assignment].bytes().filter(|b| *b == b'\n').count() + 1;
+        let column = assignment - source[..assignment].rfind('\n').map_or(0, |i| i + 1) + 1;
+        assert!(
+            result["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|diagnostic| {
+                    diagnostic["code"] == "NMATH_NTS_ASSIGN_REQUIRES_ASYNC"
+                        && diagnostic["line"] == line
+                        && diagnostic["column"] == column
+                }),
+            "{name}: {result:#}"
+        );
+    }
 }
 
 #[test]
