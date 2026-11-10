@@ -11,6 +11,7 @@ import {
   identity,
   linspace,
   logspace,
+  ones,
   ones_like,
   zeros_like,
 } from "../dist/numpy.js";
@@ -296,6 +297,110 @@ test("like constructors keep shape, dtype, metadata and context", async () => {
   } finally {
     await ctx.close();
     await other.close();
+  }
+});
+
+test("ones fills string and temporal arrays with metadata-aware scalar one", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["str", "datetime64", "timedelta64"]) {
+      for (const shape of [[2], [], [0]]) {
+        const array = ones(ctx, shape, dtype);
+        assert.equal(array.context, ctx);
+        assert.equal(array.dtype, dtype);
+        assert.deepEqual(array.shape, shape);
+        if (dtype === "str") {
+          assert.equal(array.stringWidth, 1);
+          assert.deepEqual(
+            array.toArray(),
+            shape.length === 0 ? "1" : Array(shape[0]).fill("1"),
+          );
+        } else {
+          assert.equal(array.unit, "ns");
+          assert.deepEqual(
+            array.toTypedArray(),
+            new BigInt64Array(
+              shape.length === 0 ? [1n] : Array(shape[0]).fill(1n),
+            ),
+          );
+          for (const value of shape.length === 0
+            ? [array.item()]
+            : array.toArray()) {
+            assert.ok(value instanceof Temporal);
+            assert.equal(value.ticks, 1n);
+            assert.equal(value.unit, "ns");
+            assert.equal(value.dtype, dtype);
+          }
+        }
+        array.dispose();
+      }
+    }
+
+    for (const dtype of [
+      "int32",
+      "int64",
+      "uint64",
+      "float16",
+      "float32",
+      "float64",
+      "bool",
+      "complex64",
+      "complex128",
+    ]) {
+      const array = ones(ctx, [2], dtype);
+      assert.equal(array.dtype, dtype);
+      if (dtype === "complex64" || dtype === "complex128") {
+        assert.deepEqual(
+          array.toArray().map((value) => [value.real, value.imag]),
+          [
+            [1, 0],
+            [1, 0],
+          ],
+        );
+      } else {
+        assert.deepEqual(
+          array.toArray(),
+          Array(2).fill(
+            dtype === "bool"
+              ? true
+              : dtype === "int64" || dtype === "uint64"
+                ? 1n
+                : 1,
+          ),
+        );
+      }
+      array.dispose();
+    }
+
+    assert.throws(
+      () => ctx.full([1], 1, "str"),
+      /String storage requires JS strings/,
+    );
+    for (const dtype of ["datetime64", "timedelta64"]) {
+      assert.throws(() => ctx.full([1], 1, dtype), /exact int64 ticks/);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("ones validates shapes before budget checks and rejects insufficient budgets", async () => {
+  const ctx = context({ cpuMemoryBudget: 0 });
+  try {
+    for (const dtype of ["str", "datetime64", "timedelta64"]) {
+      for (const shape of [[-1], [Number.NaN], [2 ** 32]]) {
+        assert.throws(() => ones(ctx, shape, dtype), {
+          code: "NMATH_SHAPE_MISMATCH",
+        });
+        assert.equal(ctx.metrics().cpuMemory.used, 0n);
+      }
+      assert.throws(() => ones(ctx, [1], dtype), {
+        code: "NMATH_MEMORY_BUDGET_EXCEEDED",
+      });
+      assert.equal(ctx.metrics().cpuMemory.used, 0n);
+    }
+  } finally {
+    await ctx.close();
   }
 });
 
