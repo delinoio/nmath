@@ -1968,7 +1968,8 @@ pub fn shift(
                 coordinate
             } else {
                 match op {
-                    // fftshift rolls elements forward; ifftshift is its inverse.
+                    // fftshift rolls elements forward; ifftshift is its
+                    // inverse.
                     ShiftOp::FftShift => (coordinate + length - length / 2) % length,
                     ShiftOp::IfftShift => (coordinate + length / 2) % length,
                 }
@@ -3309,8 +3310,8 @@ mod tests {
         ] {
             assert_eq!(crate::shape::matmul_shape(&a, &b).unwrap_err().code, code);
         }
-        let overflow_left = dense(vec![usize::MAX, 0], Buffer::I32(vec![]));
-        let overflow_right = dense(vec![0, 2], Buffer::I32(vec![]));
+        let overflow_left = dense(vec![isize::MAX as usize / 2, 0], Buffer::I32(vec![]));
+        let overflow_right = dense(vec![0, 3], Buffer::I32(vec![]));
         assert_eq!(
             matmul(
                 &overflow_left,
@@ -3627,7 +3628,8 @@ fn special_binary(
             // NumPy's temporal integer loop casts uint64 operands to int64
             // by preserving their bits. Do not reject the operand before the
             // operation: zero multiplication and small quotients remain valid.
-            // checked_tick below still rejects result overflow and NaT collisions.
+            // checked_tick below still rejects result overflow and NaT
+            // collisions.
             Scalar::UInt(t) => Ok(t as i64),
             _ => Err(unsupported()),
         }

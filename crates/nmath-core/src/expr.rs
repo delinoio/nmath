@@ -913,10 +913,7 @@ impl JobEnv {
     /// shape transforms over computed inputs. No live storage is read here.
     fn owned_layout(&mut self, expr: &Expr) -> Result<NdArray> {
         if self.is_shared(expr) {
-            return Ok(NdArray::from_dense(
-                expr.context_id().unwrap_or(0),
-                self.eval_node(expr)?,
-            ));
+            return NdArray::from_dense(expr.context_id().unwrap_or(0), self.eval_node(expr)?);
         }
         self.owned_layout_unshared(expr)
     }
@@ -941,15 +938,12 @@ impl JobEnv {
                 let mut dense = input.snapshot_cancellable(&self.budget, &self.token)?;
                 self.token.check()?;
                 dense.shape = expr.shape().to_vec();
-                Ok(NdArray::from_dense(expr.context_id().unwrap_or(0), dense))
+                NdArray::from_dense(expr.context_id().unwrap_or(0), dense)
             }
             ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
                 self.owned_layout(e)?.view(selectors)
             }
-            _ => Ok(NdArray::from_dense(
-                expr.context_id().unwrap_or(0),
-                self.eval_node(expr)?,
-            )),
+            _ => NdArray::from_dense(expr.context_id().unwrap_or(0), self.eval_node(expr)?),
         }
     }
 
@@ -1080,7 +1074,7 @@ impl JobEnv {
             }
             ExprKind::Index(e, selectors) => {
                 let v = self.eval_node(e)?;
-                let tmp = NdArray::from_dense(0, v);
+                let tmp = NdArray::from_dense(0, v)?;
                 tmp.take_cancellable(selectors, &budget, &token)
             }
             ExprKind::Transpose(..) | ExprKind::Reshape(..) => {
@@ -1148,6 +1142,7 @@ mod tests {
             ctx,
             DenseArray::new(shape, buffer, Reservation::none()).unwrap(),
         )
+        .unwrap()
     }
 
     fn eval(e: &Expr) -> DenseArray {
@@ -1507,7 +1502,8 @@ mod tests {
         let a = NdArray::from_dense(
             1,
             DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
-        );
+        )
+        .unwrap();
         let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
         let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
         env.freeze(&expr).unwrap();
@@ -1531,7 +1527,8 @@ mod tests {
         let a = NdArray::from_dense(
             1,
             DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
-        );
+        )
+        .unwrap();
         let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
         let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
         env.freeze(&expr).unwrap();

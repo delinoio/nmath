@@ -197,10 +197,10 @@ impl NativeTable {
                     let mut valid = Vec::new();
                     for c in t.columns {
                         values.push(NativeArray {
-                            inner: Some(NdArray::from_dense(id, c.values)),
+                            inner: Some(NdArray::from_dense(id, c.values).map_err(to_napi)?),
                         });
                         valid.push(NativeArray {
-                            inner: Some(NdArray::from_dense(id, c.valid)),
+                            inner: Some(NdArray::from_dense(id, c.valid).map_err(to_napi)?),
                         });
                     }
                     Ok(NativeTableResult {

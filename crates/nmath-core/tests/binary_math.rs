@@ -134,7 +134,7 @@ fn ulps(actual: &Buffer, expected: &Buffer) -> Vec<Option<u128>> {
 }
 
 fn input(a: DenseArray) -> Expr {
-    Expr::input(&NdArray::from_dense(1, a))
+    Expr::input(&NdArray::from_dense(1, a).unwrap())
 }
 
 #[test]

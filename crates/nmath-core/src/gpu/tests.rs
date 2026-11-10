@@ -72,10 +72,13 @@ fn validate_all_shader_variants_without_a_driver() {
         Buffer::I32(vec![1; 4]),
         Buffer::U32(vec![1; 4]),
     ] {
-        let a = Expr::input(&NdArray::from_dense(
-            1,
-            DenseArray::new(vec![2, 2], buffer, Reservation::none()).unwrap(),
-        ));
+        let a = Expr::input(
+            &NdArray::from_dense(
+                1,
+                DenseArray::new(vec![2, 2], buffer, Reservation::none()).unwrap(),
+            )
+            .unwrap(),
+        );
         for op in [
             BinaryOp::Add,
             BinaryOp::Sub,
@@ -111,10 +114,13 @@ fn validate_all_shader_variants_without_a_driver() {
     ] {
         let make = |shape: Vec<usize>| {
             let n = shape.iter().product();
-            Expr::input(&NdArray::from_dense(
-                1,
-                DenseArray::new(shape, Buffer::I32(vec![1; n]), Reservation::none()).unwrap(),
-            ))
+            Expr::input(
+                &NdArray::from_dense(
+                    1,
+                    DenseArray::new(shape, Buffer::I32(vec![1; n]), Reservation::none()).unwrap(),
+                )
+                .unwrap(),
+            )
         };
         graphs.push(Expr::matmul(&make(a_shape), &make(b_shape)).unwrap());
     }
@@ -164,10 +170,13 @@ fn native_precision_guard_verifies_integer_preservation() {
         .unwrap();
     let b = runtime.upload(&Buffer::F32(vec![2.0, 0.5])).unwrap();
     let expr = |values| {
-        Expr::input(&NdArray::from_dense(
-            0,
-            DenseArray::new(vec![2], Buffer::F32(values), Reservation::none()).unwrap(),
-        ))
+        Expr::input(
+            &NdArray::from_dense(
+                0,
+                DenseArray::new(vec![2], Buffer::F32(values), Reservation::none()).unwrap(),
+            )
+            .unwrap(),
+        )
     };
     let e = Expr::binary(
         crate::kernels::BinaryOp::Mul,
@@ -261,10 +270,13 @@ fn native_power_precision_diagnostic() {
     eprintln!(
         "Native pow diagnostic: actual {words:08x?}, NumPy 2.5.4 required [00000001, 00000200]"
     );
-    let input = Expr::input(&NdArray::from_dense(
-        0,
-        DenseArray::new(vec![1], Buffer::F32(vec![2.0]), Reservation::none()).unwrap(),
-    ));
+    let input = Expr::input(
+        &NdArray::from_dense(
+            0,
+            DenseArray::new(vec![1], Buffer::F32(vec![2.0]), Reservation::none()).unwrap(),
+        )
+        .unwrap(),
+    );
     let power = Expr::binary(kernels::BinaryOp::Pow, &input, &input).unwrap();
     validate(&power).unwrap();
     shader::generate(&power).unwrap();
