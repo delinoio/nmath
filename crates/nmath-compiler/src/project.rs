@@ -183,9 +183,9 @@ fn run_inner(command: ProjectCommand, options: &ProjectOptions) -> CompilerResul
 
     let mut args = vec![
         "--runExternalCode".to_string(),
-        // The mapper's `.nts` -> `.js` output extension requires the relative import rewrite
-        // (TS18120). It also turns `./x.nts` specifiers into `./x.js` in emitted
-        // declarations.
+        // The mapper's `.nts` -> `.js` output extension requires the relative
+        // import rewrite (TS18120). It also turns `./x.nts` specifiers into
+        // `./x.js` in emitted declarations.
         "--rewriteRelativeImportExtensions".to_string(),
     ];
     match command {

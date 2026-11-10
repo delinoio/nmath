@@ -163,7 +163,8 @@ impl Rewriter<'_> {
 
     fn visit(&mut self, node: P<Node>, async_context: bool, depth: i64) {
         match node.kind() {
-            // Type-level and constant contexts never contain runtime NMath operations.
+            // Type-level and constant contexts never contain runtime NMath
+            // operations.
             Kind::InterfaceDeclaration | Kind::TypeAliasDeclaration | Kind::EnumDeclaration => {
                 return;
             }
