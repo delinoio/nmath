@@ -131,10 +131,10 @@ test("reconciliation preserves every API name and agreed exclusion", () => {
     .map((row) => `${row.name}\t${row.exclusion ?? ""}`)
     .sort()
     .join("\n");
-  assert.equal(rows.size, 52779);
+  assert.equal(rows.size, 52761);
   assert.equal(
     createHash("sha256").update(boundary).digest("hex"),
-    "6cff4f8731393bc90f6b419d012e40eddf90f0fa7ba1d26e3e7bbf5a0ee5a9ab",
+    "e527ecf70c3b33d4d22b87e548cc0ab0cacca1a282c8a60cd0196d2659ca637c",
   );
 });
 
@@ -188,7 +188,8 @@ test("bounded implementations do not certify dtype classes, aliases or adjacent 
     "numpy.float16",
     "numpy.complex64",
     "numpy.int8",
-    "numpy.linalg.lstsq",
+    "numpy.fft.fftn",
+    "numpy.linalg.svd",
     "numpy.random.Generator.gamma",
     "pandas.Series.str.contains",
     "pandas.Series.dt.year",

@@ -4,24 +4,23 @@
   "acceptanceStatus": "incomplete",
   "statuses": {
     "excluded": 676,
-    "partial-counterpart": 293,
-    "pending": 51810
+    "partial-counterpart": 115,
+    "pending": 51970
   },
   "partialFamilies": {
-    "array-construction": 15,
+    "array-construction": 6,
     "columnar-io": 8,
-    "elementwise": 94,
-    "fft": 18,
-    "indexing-casting": 6,
-    "joining": 7,
-    "linalg": 17,
-    "matrix-product": 5,
+    "elementwise": 10,
+    "fft": 4,
+    "indexing-casting": 3,
+    "linalg": 3,
+    "matrix-product": 1,
     "numpy-io": 4,
     "polynomial": 4,
     "random": 8,
-    "reductions": 28,
-    "shape-transform": 23,
-    "tables": 48,
+    "reductions": 8,
+    "shape-transform": 4,
+    "tables": 44,
     "text-io": 8
   },
   "unperformed": [
