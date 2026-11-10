@@ -98,7 +98,30 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+Array creation keeps an exact tuple shape when `shape` is required in the options. When the options can omit `shape`, `ctx.array`, `numpy.array` and `ctx.arrayFromFloat16Bits` use a conservative `number[]` result shape because the input data can determine the actual shape.
+
+A shape with a variable number of dimensions, such as `[2, ...number[]]`, has an unknown rank. Broadcasting and axis reductions return a conservative `number[]` shape type, while reducing over all axes still returns a scalar type.
+
+When an indexing selector list has an unknown length, `get()` retains the dtype but gives the result an unknown-rank shape. Fixed selector lists, including an empty list, keep precise shape inference.
+
+For `sum`, `mean`, `min` and `max`, an axis that may be `undefined` can produce either an all-axis scalar or an array for a selected axis. TypeScript retains both result shapes for literal axes. Narrow the computed result before calling array methods.
+
+When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
+
+```ts
+import { NMathArray } from "@delinoio/nmath";
+
+const result = await ctx.array(1, { dtype: "float64" }).compute();
+if (result instanceof NMathArray) {
+  console.log(result.toArray());
+} else {
+  console.log(result); // number for this dtype
+}
+```
+
 Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
+
+An elementwise binary operation can also throw `NMATH_SHAPE_MISMATCH` when its broadcast output has an unrepresentable layout, even if both empty inputs are valid. The error occurs when constructing the expression, before a compute job starts. Representable empty broadcasts remain valid.
 
 ## Entry points
 
@@ -198,6 +221,8 @@ GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmet
 ## Files
 
 `array.save(path, { overwrite })` writes NPY files and `ctx.load(path)` reads them. NMath never replaces an existing file unless you pass `overwrite: true`. Output goes to a temporary file that is renamed into place, so cancellation or failure leaves the original file unchanged. Keep input files unchanged while a job reads them; NMath reports changes it detects with `NMATH_IO_MODIFIED`, but it cannot detect every change.
+
+NPY saves count their serialization memory against the context CPU budget. If the budget is too small, the save fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before writing and leaves any existing destination unchanged. `ctx.metrics()` reports this memory while it is in use and releases the charge when the job finishes.
 
 Complex NPY output uses little-endian components in C order. Complex NPY input accepts either byte order and C or Fortran order. Loading preserves dtype, logical shape and both components.
 
@@ -743,7 +768,7 @@ a.dispose();
 
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
-Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. If a transpose axes value can be `undefined`, its result shape includes the default reversal as well as the explicit permutation. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
 
 ### Ranges, identity matrices and `_like` arrays
 

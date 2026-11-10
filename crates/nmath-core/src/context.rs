@@ -213,10 +213,7 @@ impl Context {
     pub fn array(&self, shape: Vec<usize>, buffer: Buffer) -> Result<NdArray> {
         self.ensure_open()?;
         let reservation = self.inner.cpu.reserve(buffer.byte_len())?;
-        Ok(NdArray::from_dense(
-            self.id(),
-            DenseArray::new(shape, buffer, reservation)?,
-        ))
+        NdArray::from_dense(self.id(), DenseArray::new(shape, buffer, reservation)?)
     }
 
     pub fn generator(&self, seed: u128) -> Generator {
@@ -338,7 +335,7 @@ impl Context {
         let id = self.id();
         let work: Work = Box::new(move |env| {
             let snap = source.snapshot_cancellable(&env.budget, &env.token)?;
-            Ok(JobOutput::Array(NdArray::from_dense(id, snap)))
+            Ok(JobOutput::Array(NdArray::from_dense(id, snap)?))
         });
         self.submit(OperationKind::Copy, "copy", Device::Cpu, token, work, done)
     }
@@ -355,7 +352,8 @@ impl Context {
         let array = array.clone();
         let work: Work = Box::new(move |env| {
             let snap = array.snapshot_cancellable(&env.budget, &env.token)?;
-            let bytes = io::encode_npy(&snap.shape, &snap.buffer)?;
+            let (bytes, _serialization) =
+                io::encode_npy_budgeted(&snap.shape, &snap.buffer, &env.budget)?;
             io::write_atomic(&path, &bytes, mode, &env.token)?;
             Ok(JobOutput::Unit)
         });
@@ -381,7 +379,7 @@ impl Context {
             Ok(JobOutput::Array(NdArray::from_dense(
                 id,
                 DenseArray::new(shape, buffer, reservation)?,
-            )))
+            )?))
         });
         self.submit(
             OperationKind::FileRead,
@@ -630,7 +628,8 @@ fn run_job(
             );
             // Snapshots and returned host arrays use CPU memory even for GPU
             // jobs.
-            let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
+            let mut env =
+                JobEnv::new_for_context(inner.id, device, inner.cpu.clone(), token.clone());
             env.gpu_budget = Some(inner.gpu.clone());
             let mut result = token.check().and_then(|()| work(&mut env));
 
@@ -715,6 +714,113 @@ mod admission_tests {
     fn completion() -> (Done, mpsc::Receiver<Result<JobOutput>>) {
         let (tx, rx) = mpsc::channel();
         (Box::new(move |result| tx.send(result).unwrap()), rx)
+    }
+
+    #[test]
+    fn npy_save_reserves_serialization_before_publication() {
+        let dir = tempfile::tempdir().unwrap();
+        let context_with_budget = |budget| {
+            Context::new(ContextOptions {
+                max_concurrent_jobs: 1,
+                max_queue_length: 0,
+                cpu_memory_budget: budget,
+                gpu_memory_budget: 0,
+            })
+            .unwrap()
+        };
+
+        let zero = context_with_budget(0);
+        let empty = zero.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let absent = dir.path().join("absent.npy");
+        let (done, rx) = completion();
+        zero.save_npy(
+            &empty,
+            absent.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert!(!absent.exists());
+        assert_eq!(zero.metrics().cpu_memory.used, 0);
+        assert_eq!(zero.metrics().cpu_memory.peak, 0);
+        zero.close();
+
+        let tight = context_with_budget(16);
+        let one = tight.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let existing = dir.path().join("existing.npy");
+        fs::write(&existing, b"original").unwrap();
+        let (done, rx) = completion();
+        tight
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(fs::read(&existing).unwrap(), b"original");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(tight.metrics().cpu_memory.used, 8);
+        tight.close();
+
+        let enough = context_with_budget(4096);
+        let empty = enough.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &empty,
+                absent.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&absent).unwrap()).unwrap(),
+            (vec![0], Buffer::F64(vec![]))
+        );
+        let one = enough.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&existing).unwrap()).unwrap(),
+            (vec![1], Buffer::F64(vec![7.0]))
+        );
+        assert!(enough.metrics().cpu_memory.peak > 16);
+        assert_eq!(enough.metrics().cpu_memory.used, 8);
+        enough.close();
     }
 
     #[test]
@@ -1723,8 +1829,8 @@ mod random_tests {
         assert_eq!(generator.current(), initial);
 
         let scalar = Expr::random(ctx.id(), &generator, vec![]);
-        let zero = Expr::random(ctx.id(), &generator, vec![usize::MAX, 2, 0]);
-        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[usize::MAX, 2, 0][..], 0)] {
+        let zero = Expr::random(ctx.id(), &generator, vec![0, 3, 4]);
+        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[0, 3, 4][..], 0)] {
             assert_eq!(expr.dtype(), crate::DType::Float64);
             let JobOutput::Value(Value::Dense(value)) = compute(&ctx, expr).unwrap() else {
                 panic!("random compute did not return a dense value");

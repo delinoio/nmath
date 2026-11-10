@@ -8,10 +8,12 @@ import {
   slice,
   type Expr,
   type NMathArray,
+  type ReadSelector,
 } from "../../src/index.js";
 import * as np from "../../src/numpy.js";
 import * as nts from "../../src/nts-runtime.js";
 import * as pd from "../../src/pandas.js";
+import type { IndexShape } from "../../src/types.js";
 
 declare function expectType<T>(value: T): void;
 type Equal<A, B> =
@@ -116,12 +118,172 @@ declare const dynamicAxis: number;
 const dynamicSum = np.sum(numpyRows, dynamicAxis);
 assertTrue<Equal<typeof dynamicSum, Expr<"float32", number[]>>>();
 
+// NumPy unary wrappers retain the dtype and shape of arrays and expressions.
+declare const floatUnaryArray: NMathArray<"float32", readonly [2, 3]>;
+declare const floatUnaryExpr: Expr<"float32", readonly [2, 3]>;
+declare const complexUnaryArray: NMathArray<"complex64", []>;
+declare const complexUnaryExpr: Expr<"complex64", []>;
+declare const durationUnaryArray: NMathArray<"timedelta64", number[]>;
+declare const durationUnaryExpr: Expr<"timedelta64", number[]>;
+assertTrue<
+  Equal<
+    ReturnType<typeof floatUnaryArray.neg>,
+    Expr<"float32", readonly [2, 3]>
+  >
+>();
+assertTrue<
+  Equal<
+    ReturnType<typeof floatUnaryArray.pos>,
+    Expr<"float32", readonly [2, 3]>
+  >
+>();
+const unaryFloatNegativeArray = np.negative(floatUnaryArray);
+const unaryFloatPositiveArray = np.positive(floatUnaryArray);
+const unaryFloatNegativeExpr = np.negative(floatUnaryExpr);
+const unaryFloatPositiveExpr = np.positive(floatUnaryExpr);
+assertTrue<
+  Equal<typeof unaryFloatNegativeArray, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatPositiveArray, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatNegativeExpr, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof unaryFloatPositiveExpr, Expr<"float32", readonly [2, 3]>>
+>();
+const unaryComplexNegativeArray = np.negative(complexUnaryArray);
+const unaryComplexPositiveArray = np.positive(complexUnaryArray);
+const unaryComplexNegativeExpr = np.negative(complexUnaryExpr);
+const unaryComplexPositiveExpr = np.positive(complexUnaryExpr);
+assertTrue<Equal<typeof unaryComplexNegativeArray, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexPositiveArray, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexNegativeExpr, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof unaryComplexPositiveExpr, Expr<"complex64", []>>>();
+const unaryDurationNegativeArray = np.negative(durationUnaryArray);
+const unaryDurationPositiveArray = np.positive(durationUnaryArray);
+const unaryDurationNegativeExpr = np.negative(durationUnaryExpr);
+const unaryDurationPositiveExpr = np.positive(durationUnaryExpr);
+assertTrue<
+  Equal<typeof unaryDurationNegativeArray, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationPositiveArray, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationNegativeExpr, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof unaryDurationPositiveExpr, Expr<"timedelta64", number[]>>
+>();
+
+declare const boolUnary: NMathArray<"bool", [2]>;
+declare const stringUnary: NMathArray<"str", [2]>;
+declare const datetimeUnary: NMathArray<"datetime64", [2]>;
+// @ts-expect-error NumPy negative rejects bool arrays.
+np.negative(boolUnary);
+// @ts-expect-error NumPy positive rejects bool arrays.
+np.positive(boolUnary);
+// @ts-expect-error NumPy negative rejects string arrays.
+np.negative(stringUnary);
+// @ts-expect-error NumPy positive rejects string arrays.
+np.positive(stringUnary);
+// @ts-expect-error NumPy negative rejects datetime arrays.
+np.negative(datetimeUnary);
+// @ts-expect-error NumPy positive rejects datetime arrays.
+np.positive(datetimeUnary);
+// @ts-expect-error Direct negative rejects bool arrays.
+boolUnary.neg();
+// @ts-expect-error Direct positive rejects bool arrays.
+boolUnary.pos();
+// @ts-expect-error Direct negative rejects string arrays.
+stringUnary.neg();
+// @ts-expect-error Direct positive rejects string arrays.
+stringUnary.pos();
+// @ts-expect-error Direct negative rejects datetime arrays.
+datetimeUnary.neg();
+// @ts-expect-error Direct positive rejects datetime arrays.
+datetimeUnary.pos();
+
+// Compiler unary helpers retain supported dtype and shape information.
+const helperFloatNegative = nts.neg(floatUnaryArray);
+const helperFloatPositive = nts.pos(floatUnaryExpr);
+const helperIntegerNegative = nts.neg(v);
+const helperComplexNegative = nts.neg(complexUnaryExpr);
+const helperComplexPositive = nts.pos(complexUnaryArray);
+const helperDurationNegative = nts.neg(durationUnaryArray);
+const helperDurationPositive = nts.pos(durationUnaryExpr);
+assertTrue<
+  Equal<typeof helperFloatNegative, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<
+  Equal<typeof helperFloatPositive, Expr<"float32", readonly [2, 3]>>
+>();
+assertTrue<Equal<typeof helperIntegerNegative, Expr<"int32", readonly [3]>>>();
+assertTrue<Equal<typeof helperComplexNegative, Expr<"complex64", []>>>();
+assertTrue<Equal<typeof helperComplexPositive, Expr<"complex64", []>>>();
+assertTrue<
+  Equal<typeof helperDurationNegative, Expr<"timedelta64", number[]>>
+>();
+assertTrue<
+  Equal<typeof helperDurationPositive, Expr<"timedelta64", number[]>>
+>();
+// @ts-expect-error Compiler negative rejects bool arrays.
+nts.neg(boolUnary);
+// @ts-expect-error Compiler positive rejects bool arrays.
+nts.pos(boolUnary);
+// @ts-expect-error Compiler negative rejects string arrays.
+nts.neg(stringUnary);
+// @ts-expect-error Compiler positive rejects string arrays.
+nts.pos(stringUnary);
+// @ts-expect-error Compiler negative rejects datetime arrays.
+nts.neg(datetimeUnary);
+// @ts-expect-error Compiler positive rejects datetime arrays.
+nts.pos(datetimeUnary);
+
 const mm = m.matmul(ctx.zeros([3, 5], "float32"));
 assertTrue<Equal<(typeof mm)["shape"], [2, 5]>>();
 // @ts-expect-error core dimensions 3 and 4 do not match
 m.matmul(ctx.zeros([4, 5], "float32"));
 
 // Indexing keeps known information.
+declare const known: NMathArray<"float32", readonly [2, 3]>;
+declare const selectors: ReadSelector[];
+declare const readonlySelectors: readonly ReadSelector[];
+declare const variadicSelectors: readonly [number, ...number[]];
+declare const optionalSelector: readonly [0?];
+
+const noSelectors = known.get();
+const twoSelectors = known.get(0, 0);
+assertTrue<Equal<(typeof noSelectors)["shape"], [2, 3]>>();
+assertTrue<Equal<(typeof twoSelectors)["shape"], []>>();
+
+const dynamicSelection = known.get(...selectors);
+const readonlySelection = known.get(...readonlySelectors);
+const variadicSelection = known.get(...variadicSelectors);
+assertTrue<Equal<(typeof dynamicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof readonlySelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof variadicSelection)["shape"], number[]>>();
+assertTrue<
+  Equal<IndexShape<readonly [2, 3], typeof optionalSelector>, number[]>
+>();
+assertTrue<Equal<(typeof dynamicSelection)["dtype"], "float32">>();
+// @ts-expect-error a dynamic selector list may remove source axes
+expectType<Expr<"float32", [2, 3]>>(dynamicSelection);
+// @ts-expect-error a variadic tail may remove the final source axis
+expectType<Expr<"float32", [3]>>(variadicSelection);
+
+const ntsDynamicSelection = nts.get(known, selectors);
+const ntsReadonlySelection = nts.get(known, readonlySelectors);
+const ntsVariadicSelection = nts.get(known, variadicSelectors);
+const ntsFixedSelection = nts.get(known, 0);
+assertTrue<Equal<(typeof ntsDynamicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsReadonlySelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsVariadicSelection)["shape"], number[]>>();
+assertTrue<Equal<(typeof ntsDynamicSelection)["dtype"], "float32">>();
+assertTrue<Equal<(typeof ntsFixedSelection)["shape"], [3]>>();
+
 const row = m.get(1);
 assertTrue<Equal<(typeof row)["shape"], [3]>>();
 const sl = m.get(slice(0, 1), indices([0, 2]));

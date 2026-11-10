@@ -10,10 +10,13 @@ use nmath_core::{
 };
 
 fn input(shape: Vec<usize>, buffer: Buffer) -> Expr {
-    Expr::input(&NdArray::from_dense(
-        1,
-        DenseArray::new(shape, buffer, Reservation::none()).unwrap(),
-    ))
+    Expr::input(
+        &NdArray::from_dense(
+            1,
+            DenseArray::new(shape, buffer, Reservation::none()).unwrap(),
+        )
+        .unwrap(),
+    )
 }
 
 fn execute(expr: &Expr) -> error::Result<DenseArray> {

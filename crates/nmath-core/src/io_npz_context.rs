@@ -85,7 +85,7 @@ impl Context {
         let output = Arc::new(Mutex::new(None));
         let result_slot = output.clone();
         let work: Work = Box::new(move |env| {
-            let archive = io_npz::load_npz(&path, &env.budget, &env.token)?.into_context(id);
+            let archive = io_npz::load_npz(&path, &env.budget, &env.token)?.into_context(id)?;
             *result_slot.lock().unwrap() = Some(archive);
             Ok(JobOutput::Unit)
         });
@@ -125,6 +125,7 @@ mod snapshot_tests {
             1,
             DenseArray::new(vec![len], Buffer::U8(values), Reservation::none()).unwrap(),
         )
+        .unwrap()
     }
 
     #[test]
