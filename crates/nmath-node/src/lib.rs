@@ -980,12 +980,14 @@ impl NativeContext {
             };
             match result {
                 Ok(JobOutput::Value(Value::Dense(dense))) => {
-                    let ctx_array = NdArray::from_dense(context_id, dense);
-                    deferred.resolve(Box::new(move |_| {
-                        Ok(NativeResult::Array(NativeArray {
-                            inner: Some(ctx_array),
-                        }))
-                    }));
+                    match NdArray::from_dense(context_id, dense) {
+                        Ok(ctx_array) => deferred.resolve(Box::new(move |_| {
+                            Ok(NativeResult::Array(NativeArray {
+                                inner: Some(ctx_array),
+                            }))
+                        })),
+                        Err(err) => deferred.reject(to_napi(err)),
+                    }
                 }
                 Ok(JobOutput::Value(Value::View(view))) | Ok(JobOutput::Array(view)) => deferred
                     .resolve(Box::new(move |_| {

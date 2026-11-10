@@ -138,7 +138,7 @@ fn expression_inference_and_validation() {
         Reservation::none(),
     )
     .unwrap();
-    let input = Expr::input(&NdArray::from_dense(0, dense));
+    let input = Expr::input(&NdArray::from_dense(0, dense).unwrap());
 
     let product = Expr::reduce(ReduceOp::Prod, &input, Some(vec![0])).unwrap();
     assert_eq!(product.dtype(), nmath_core::DType::Int64);

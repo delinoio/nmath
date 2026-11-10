@@ -12,7 +12,7 @@ use crate::{
     dtype::DType,
     error::{Error, ErrorCode, Result},
     kernels::{self, BinaryOp, ReduceOp, ReductionPolicy, ScanOp, ShiftOp, UnaryOp, VarianceOp},
-    memory::{Device, MemoryBudget, Reservation},
+    memory::{Device, MemoryBudget},
     random::{Generator, Pcg64, RandomOperation},
     shape::{Selector, broadcast_shapes, index_shape},
     sync::CancellationToken,
@@ -155,6 +155,7 @@ impl Expr {
     pub fn binary(op: BinaryOp, lhs: &Expr, rhs: &Expr) -> Result<Expr> {
         let context_id = join_context(lhs.context_id(), rhs.context_id())?;
         let shape = broadcast_shapes(lhs.shape(), rhs.shape())?;
+        crate::layout::checked_size(&shape)?;
         if lhs.dtype().kind() == crate::dtype::DTypeKind::Other
             || rhs.dtype().kind() == crate::dtype::DTypeKind::Other
         {
@@ -774,6 +775,7 @@ pub enum Value {
 /// Per-job state: the frozen inputs, budget, cancellation and pending generator
 /// states.
 pub struct JobEnv {
+    context_id: u64,
     pub generator_turns: Vec<crate::sync::FifoGuard>,
     pub device: Device,
     pub budget: MemoryBudget,
@@ -793,7 +795,17 @@ unsafe impl Send for JobEnv {}
 
 impl JobEnv {
     pub fn new(device: Device, budget: MemoryBudget, token: CancellationToken) -> Self {
+        Self::new_for_context(0, device, budget, token)
+    }
+
+    pub(crate) fn new_for_context(
+        context_id: u64,
+        device: Device,
+        budget: MemoryBudget,
+        token: CancellationToken,
+    ) -> Self {
         Self {
+            context_id,
             generator_turns: Vec::new(),
             device,
             budget,
@@ -817,9 +829,13 @@ impl JobEnv {
             if let ExprKind::Input(a) = &e.0.kind {
                 let key = a as *const NdArray;
                 if !self.snapshots.contains_key(&key) {
-                    match a.snapshot(&self.budget) {
+                    match a.snapshot_cancellable(&self.budget, &self.token) {
                         Ok(s) => {
                             self.snapshots.insert(key, s);
+                            #[cfg(test)]
+                            if let Some(hook) = freeze_test_hook::take(a.storage_id()) {
+                                hook();
+                            }
                         }
                         Err(err) => result = Err(err),
                     }
@@ -930,10 +946,10 @@ impl JobEnv {
     /// shape transforms over computed inputs. No live storage is read here.
     fn owned_layout(&mut self, expr: &Expr) -> Result<NdArray> {
         if self.is_shared(expr) {
-            return Ok(NdArray::from_dense(
-                expr.context_id().unwrap_or(0),
+            return NdArray::from_dense(
+                expr.context_id().unwrap_or(self.context_id),
                 self.eval_node(expr)?,
-            ));
+            );
         }
         self.owned_layout_unshared(expr)
     }
@@ -958,15 +974,15 @@ impl JobEnv {
                 let mut dense = input.snapshot_cancellable(&self.budget, &self.token)?;
                 self.token.check()?;
                 dense.shape = expr.shape().to_vec();
-                Ok(NdArray::from_dense(expr.context_id().unwrap_or(0), dense))
+                NdArray::from_dense(expr.context_id().unwrap_or(self.context_id), dense)
             }
             ExprKind::Index(e, selectors) if selectors.iter().all(Selector::is_basic) => {
                 self.owned_layout(e)?.view(selectors)
             }
-            _ => Ok(NdArray::from_dense(
-                expr.context_id().unwrap_or(0),
+            _ => NdArray::from_dense(
+                expr.context_id().unwrap_or(self.context_id),
                 self.eval_node(expr)?,
-            )),
+            ),
         }
     }
 
@@ -1097,11 +1113,8 @@ impl JobEnv {
             }
             ExprKind::Index(e, selectors) => {
                 let v = self.eval_node(e)?;
-                let tmp = NdArray::from_dense(
-                    0,
-                    DenseArray::new(v.shape.clone(), v.buffer.clone(), Reservation::none())?,
-                );
-                tmp.take(selectors, &budget)
+                let tmp = NdArray::from_dense(0, v)?;
+                tmp.take_cancellable(selectors, &budget, &token)
             }
             ExprKind::Transpose(..) | ExprKind::Reshape(..) => {
                 let array = self.owned_layout_unshared(expr)?;
@@ -1136,14 +1149,39 @@ impl JobEnv {
 }
 
 #[cfg(test)]
+pub(crate) mod freeze_test_hook {
+    use std::{
+        collections::HashMap,
+        sync::{Mutex, OnceLock},
+    };
+
+    type Hook = Box<dyn FnOnce() + Send>;
+    static HOOKS: OnceLock<Mutex<HashMap<u64, Hook>>> = OnceLock::new();
+
+    fn hooks() -> &'static Mutex<HashMap<u64, Hook>> {
+        HOOKS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub fn install(storage_id: u64, hook: Hook) {
+        assert!(hooks().lock().unwrap().insert(storage_id, hook).is_none());
+    }
+
+    pub fn take(storage_id: u64) -> Option<Hook> {
+        hooks().lock().unwrap().remove(&storage_id)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::Reservation;
 
     fn arr(ctx: u64, shape: Vec<usize>, buffer: Buffer) -> NdArray {
         NdArray::from_dense(
             ctx,
             DenseArray::new(shape, buffer, Reservation::none()).unwrap(),
         )
+        .unwrap()
     }
 
     fn eval(e: &Expr) -> DenseArray {
@@ -1411,6 +1449,18 @@ mod tests {
     }
 
     #[test]
+    fn binary_rejects_unrepresentable_empty_broadcast_at_construction() {
+        let left = Expr::input(&arr(1, vec![65_536, 65_536, 1, 1, 0], Buffer::U8(vec![])));
+        let right = Expr::input(&arr(1, vec![1, 1, 65_536, 65_536, 0], Buffer::U8(vec![])));
+        for op in [BinaryOp::Add, BinaryOp::Eq] {
+            assert_eq!(
+                Expr::binary(op, &left, &right).unwrap_err().code,
+                ErrorCode::ShapeMismatch
+            );
+        }
+    }
+
+    #[test]
     fn weak_scalars_follow_nep50() {
         let a = Expr::input(&arr(1, vec![2], Buffer::F32(vec![1.0, 2.0])));
         let e = Expr::binary(BinaryOp::Mul, &a, &Expr::scalar(Scalar::Float(2.0))).unwrap();
@@ -1495,6 +1545,53 @@ mod tests {
         .unwrap();
         let picked = Expr::index(&doubled, vec![Selector::Indices(vec![-1, 0])]).unwrap();
         assert_eq!(eval(&picked).buffer, Buffer::I64(vec![80, 20]));
+    }
+
+    #[test]
+    fn indexed_materialization_keeps_only_budgeted_data() {
+        let budget = MemoryBudget::new(Device::Cpu, 4);
+        let a = NdArray::from_dense(
+            1,
+            DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
+        )
+        .unwrap();
+        let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
+        let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
+        env.freeze(&expr).unwrap();
+        let result = env.eval(&expr).unwrap();
+        assert_eq!(budget.usage().peak, 4);
+        assert_eq!(budget.usage().used, 3);
+        let Value::View(result) = result else {
+            panic!("index result should own a view")
+        };
+        assert_eq!(result.to_buffer(), Buffer::U8(vec![7]));
+        drop(result);
+        drop(env);
+        drop(expr);
+        drop(a);
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn indexed_materialization_failure_releases_temporary_charge() {
+        let budget = MemoryBudget::new(Device::Cpu, 3);
+        let a = NdArray::from_dense(
+            1,
+            DenseArray::new(vec![1], Buffer::U8(vec![7]), budget.reserve(1).unwrap()).unwrap(),
+        )
+        .unwrap();
+        let expr = Expr::index(&Expr::input(&a), vec![Selector::Indices(vec![0])]).unwrap();
+        let mut env = JobEnv::new(Device::Cpu, budget.clone(), CancellationToken::new());
+        env.freeze(&expr).unwrap();
+        assert_eq!(
+            env.eval(&expr).unwrap_err().code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(budget.usage().used, 2);
+        drop(env);
+        drop(expr);
+        drop(a);
+        assert_eq!(budget.usage().used, 0);
     }
 
     #[test]
