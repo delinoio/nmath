@@ -74,7 +74,7 @@ type SolveCheck<A extends Shape, B extends Shape> = A extends readonly [
   : number extends A["length"]
     ? unknown
     : never;
-export type SolveDType<A extends LinalgDType, B extends LinalgDType> =
+type ConcreteSolveDType<A extends LinalgDType, B extends LinalgDType> =
   A | B extends "float32" | "complex64"
   ? "complex64" extends A | B
     ? "complex64"
@@ -82,6 +82,15 @@ export type SolveDType<A extends LinalgDType, B extends LinalgDType> =
   : Extract<A | B, "complex64" | "complex128"> extends never
     ? "float64"
     : "complex128";
+
+export type SolveDType<
+  A extends LinalgDType,
+  B extends LinalgDType,
+> = A extends LinalgDType
+  ? B extends LinalgDType
+    ? ConcreteSolveDType<A, B>
+    : never
+  : never;
 
 export function inv<D extends LinalgDType, S extends Shape>(
   a: Lazy<NoInfer<D>, S> & { readonly dtype: D } & Square<S>,
