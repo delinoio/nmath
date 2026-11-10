@@ -382,6 +382,9 @@ trait Num: Copy + PartialOrd + Send + Sync + Default {
     fn pairwise_sum(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
         Ok(None)
     }
+    fn pairwise_sum_skip_nan(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
+        Ok(None)
+    }
     fn mean(self, count: usize) -> Self;
     /// Multiplicative identity, used by the product reduction.
     fn one() -> Self;
@@ -512,6 +515,94 @@ impl Num for f32 {
             Ok(sum(&values[..mid], token)? + sum(&values[mid..], token)?)
         }
         Ok(Some(sum(values, token)?))
+    }
+
+    fn pairwise_sum_skip_nan(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+        fn count(values: &[f32], token: &CancellationToken) -> Result<usize> {
+            let mut count = 0;
+            for chunk in values.chunks(CHUNK) {
+                token.check()?;
+                count += chunk.iter().filter(|&&value| !value.is_nan()).count();
+            }
+            Ok(count)
+        }
+
+        fn split_at_non_nan(
+            values: &[f32],
+            left_count: usize,
+            token: &CancellationToken,
+        ) -> Result<usize> {
+            let mut seen = 0;
+            for (i, &value) in values.iter().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if !value.is_nan() {
+                    seen += 1;
+                    if seen == left_count {
+                        return Ok(i + 1);
+                    }
+                }
+            }
+            unreachable!("the requested finite prefix must exist");
+        }
+
+        fn sum(values: &[f32], finite_count: usize, token: &CancellationToken) -> Result<f32> {
+            token.check()?;
+            if finite_count == 0 {
+                return Ok(0.0);
+            }
+            if finite_count < 8 {
+                let mut total = -0.0_f32;
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if !value.is_nan() {
+                        total += value;
+                        seen += 1;
+                    }
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
+            }
+            if finite_count <= 128 {
+                // Apply the same eight-lane order as pairwise_sum to the
+                // logical sequence with NaNs removed, without allocating a
+                // filtered copy that would consume the reduction budget.
+                let mut lanes = [0.0_f32; 8];
+                let end = finite_count - finite_count % 8;
+                let mut seen = 0;
+                let mut tail = -0.0_f32;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen < 8 {
+                        lanes[seen] = value;
+                    } else if seen < end {
+                        lanes[seen % 8] += value;
+                    } else {
+                        tail += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))
+                    + tail);
+            }
+            let left_count = (finite_count / 2) / 8 * 8;
+            let split = split_at_non_nan(values, left_count, token)?;
+            Ok(sum(&values[..split], left_count, token)?
+                + sum(&values[split..], finite_count - left_count, token)?)
+        }
+
+        Ok(Some(sum(values, count(values, token)?, token)?))
     }
 
     fn mean(self, count: usize) -> Self {
@@ -2437,6 +2528,23 @@ pub fn reduce_with_policy(
             vec![T::default(); out_len]
         };
         if policy == ReductionPolicy::SkipNan {
+            if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
+                if T::pairwise_sum_skip_nan(&[], token)?.is_some() {
+                    for (i, chunk) in values.chunks_exact(count).enumerate() {
+                        let total = T::add(
+                            T::default(),
+                            T::pairwise_sum_skip_nan(chunk, token)?.unwrap(),
+                        );
+                        if op == ReduceOp::Mean {
+                            let valid_count = chunk.iter().filter(|&&value| !value.nan()).count();
+                            out[i] = total.mean(valid_count);
+                        } else {
+                            out[i] = total;
+                        }
+                    }
+                    return Ok(out);
+                }
+            }
             let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
                 vec![false; out_len]
             } else {
@@ -2460,11 +2568,9 @@ pub fn reduce_with_policy(
                     ReduceOp::Min | ReduceOp::Max => {
                         if !seen[slot]
                             || if op == ReduceOp::Min {
-                                x < out[slot]
-                                    || (T::take_equal(op, out[slot], x) && x == out[slot])
+                                x < out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
                             } else {
-                                x > out[slot]
-                                    || (T::take_equal(op, out[slot], x) && x == out[slot])
+                                x > out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
                             }
                         {
                             out[slot] = x;
@@ -3005,6 +3111,46 @@ mod tests {
             assert_eq!(budget.usage().peak, 82);
             drop(result);
         }
+    }
+
+    #[test]
+    fn float32_pandas_skip_nan_keeps_pairwise_precision_and_budget() {
+        let mut values = vec![0.1_f32; 1_000_000];
+        values.push(f32::NAN);
+        let input = dense(vec![values.len()], Buffer::F32(values));
+        let token = CancellationToken::new();
+
+        // Metadata (33 bytes) plus one float32 result (4 bytes).
+        let sum_budget = MemoryBudget::new(Device::Cpu, 37);
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &sum_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![100_000.007_812_5]));
+        assert_eq!(sum_budget.usage().peak, 37);
+        drop(sum);
+        assert_eq!(sum_budget.usage().used, 0);
+
+        // Mean additionally reserves one usize count per output slot.
+        let mean_budget = MemoryBudget::new(Device::Cpu, 45);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &mean_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(mean.buffer, Buffer::F32(vec![0.100_000_008_940_696_72]));
+        assert_eq!(mean_budget.usage().peak, 45);
+        drop(mean);
+        assert_eq!(mean_budget.usage().used, 0);
     }
 
     #[test]
