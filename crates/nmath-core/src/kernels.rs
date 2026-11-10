@@ -574,7 +574,6 @@ impl Num for f32 {
                 let mut lanes = [0.0_f32; 8];
                 let end = finite_count - finite_count % 8;
                 let mut seen = 0;
-                let mut tail = -0.0_f32;
                 for (i, &value) in values.iter().enumerate() {
                     if i % CHUNK == 0 {
                         token.check()?;
@@ -586,15 +585,32 @@ impl Num for f32 {
                         lanes[seen] = value;
                     } else if seen < end {
                         lanes[seen % 8] += value;
-                    } else {
-                        tail += value;
                     }
                     seen += 1;
                 }
                 debug_assert_eq!(seen, finite_count);
-                return Ok(((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
-                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))
-                    + tail);
+                // Match pairwise_sum: combine the eight lanes first, then
+                // add each remaining logical value in order. Accumulating
+                // the tail before combining the lanes changes float32
+                // cancellation behavior for large values followed by small
+                // values, even though the NaNs are only skipped logically.
+                let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen >= end {
+                        total += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
             }
             let left_count = (finite_count / 2) / 8 * 8;
             let split = split_at_non_nan(values, left_count, token)?;
@@ -3151,6 +3167,52 @@ mod tests {
         assert_eq!(mean_budget.usage().peak, 45);
         drop(mean);
         assert_eq!(mean_budget.usage().used, 0);
+    }
+
+    #[test]
+    fn float32_pandas_skip_nan_adds_tail_after_pairwise_lanes() {
+        let input = dense(
+            vec![12],
+            Buffer::F32(vec![
+                100_000_000.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -100_000_000.0,
+                1.0,
+                1.0,
+                f32::NAN,
+            ]),
+        );
+        let (budget, token) = env();
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![2.0]));
+        drop(sum);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        let Buffer::F32(values) = mean.buffer else {
+            panic!("Expected float32 mean")
+        };
+        assert!((values[0] - (2.0 / 11.0)).abs() < 1e-7);
     }
 
     #[test]
