@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: Apache-2.0
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createContext, Complex } from "../dist/index.js";
+import { linalg } from "../dist/numpy.js";
+
+const context = () =>
+  createContext({
+    maxConcurrentJobs: 1,
+    maxQueueLength: 4,
+    cpuMemoryBudget: 1n << 24n,
+    gpuMemoryBudget: 0n,
+  });
+
+test("determinants retain compensated magnitudes and phases", async () => {
+  const c = context();
+  try {
+    for (const diagonal of [
+      [1e100, 1e100, 1e100, 1e100, 1e-100, 1e-100, 1e-100, 1e-100],
+      [1e-100, 1e-100, 1e-100, 1e-100, 1e100, 1e100, 1e100, 1e100],
+    ]) {
+      const values = Array(64).fill(0);
+      diagonal.forEach((value, i) => {
+        values[i * 8 + i] = value;
+      });
+      const a = c.array(values, { dtype: "float64", shape: [8, 8] });
+      const result = await linalg.det(a).compute();
+      assert.ok(Number.isFinite(result) && result !== 0);
+      assert.ok(Math.abs(result - 1) < 1e-12, `${result}`);
+    }
+
+    const swapped = c.array(
+      [
+        [0, 1],
+        [1, 0],
+      ],
+      { dtype: "float64" },
+    );
+    assert.equal(await linalg.det(swapped).compute(), -1);
+    const complex = c.array(
+      [
+        [new Complex(1e100, 1e100), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(1e-100, 0)],
+      ],
+      { dtype: "complex128" },
+    );
+    const phase = await linalg.det(complex).compute();
+    assert.ok(Math.abs(phase.real - 1) < 1e-12);
+    assert.ok(Math.abs(phase.imag - 1) < 1e-12);
+
+    const batch = c.array(
+      [
+        [
+          [2, 0],
+          [0, 3],
+        ],
+        [
+          [0, 1],
+          [1, 0],
+        ],
+      ],
+      { dtype: "float32" },
+    );
+    const expression = linalg.det(batch);
+    assert.equal(expression.dtype, "float32");
+    assert.deepEqual(expression.shape, [2]);
+    const results = await expression.compute();
+    assert.deepEqual(results.toArray(), [6, -1]);
+    results.dispose();
+  } finally {
+    await c.close();
+  }
+});
+
+test("determinants retain finite complex components when magnitude overflows", async () => {
+  const c = context();
+  try {
+    const single = c.array([[new Complex(1.3e308, 1.3e308)]], {
+      dtype: "complex128",
+    });
+    const singleResult = await linalg.det(single).compute();
+    assert.ok(Number.isFinite(singleResult.real));
+    assert.ok(Number.isFinite(singleResult.imag));
+    assert.ok(Math.abs(singleResult.real - 1.3e308) / 1.3e308 < 1e-12);
+    assert.ok(Math.abs(singleResult.imag - 1.3e308) / 1.3e308 < 1e-12);
+
+    const tinyComponent = c.array([[new Complex(1e308, 1e-100)]], {
+      dtype: "complex128",
+    });
+    const tinyComponentResult = await linalg.det(tinyComponent).compute();
+    assert.ok(Math.abs(tinyComponentResult.real - 1e308) / 1e308 < 1e-12);
+    assert.ok(Math.abs(tinyComponentResult.imag - 1e-100) / 1e-100 < 1e-12);
+
+    const rotatedTinyComponent = c.array(
+      [
+        [new Complex(1e308, 1e-100), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(0, 1)],
+      ],
+      { dtype: "complex128" },
+    );
+    const rotatedTinyComponentResult = await linalg
+      .det(rotatedTinyComponent)
+      .compute();
+    assert.ok(
+      Math.abs(rotatedTinyComponentResult.real + 1e-100) / 1e-100 < 1e-12,
+    );
+    assert.ok(
+      Math.abs(rotatedTinyComponentResult.imag - 1e308) / 1e308 < 1e-12,
+    );
+
+    const diagonal = c.array(
+      [
+        [new Complex(1e200, 1e200), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(1.3e108, 0)],
+      ],
+      { dtype: "complex128" },
+    );
+    const diagonalResult = await linalg.det(diagonal).compute();
+    assert.ok(Number.isFinite(diagonalResult.real));
+    assert.ok(Number.isFinite(diagonalResult.imag));
+    assert.ok(Math.abs(diagonalResult.real - 1.3e308) / 1.3e308 < 1e-12);
+    assert.ok(Math.abs(diagonalResult.imag - 1.3e308) / 1.3e308 < 1e-12);
+
+    const cancellation = c.array(
+      [
+        [new Complex(1048576, 1048576), new Complex(0, 0)],
+        [new Complex(0, 0), new Complex(1048576, 1048575.9999999999)],
+      ],
+      { dtype: "complex128" },
+    );
+    const cancellationResult = await linalg.det(cancellation).compute();
+    assert.ok(Math.abs(cancellationResult.real - 0.0001220703125) < 1e-12);
+
+    const nearLimit = c.array(
+      [
+        [1e6, 0],
+        [0, 1.7976931348623154e302],
+      ],
+      { dtype: "float64" },
+    );
+    const nearLimitResult = await linalg.det(nearLimit).compute();
+    assert.ok(Number.isFinite(nearLimitResult));
+    assert.ok(
+      Math.abs(nearLimitResult - 1.7976931348623155e308) /
+        1.7976931348623155e308 <
+        1e-12,
+    );
+  } finally {
+    await c.close();
+  }
+});
+
+test("determinants retain subnormal pivot scale", async () => {
+  const c = context();
+  try {
+    const subnormal = c.array([[1e-310]], { dtype: "float64" });
+    const result = await linalg.det(subnormal).compute();
+    assert.ok(Math.abs(result - 1e-310) / 1e-310 < 1e-12);
+  } finally {
+    await c.close();
+  }
+});
+
+test("determinants round subnormal reconstruction at the boundary", async () => {
+  const c = context();
+  try {
+    const boundary = c.array(
+      [
+        [2 ** -537, 0],
+        [0, 1.5 * 2 ** -538],
+      ],
+      { dtype: "float64" },
+    );
+    const result = await linalg.det(boundary).compute();
+    assert.equal(result, 5e-324);
+  } finally {
+    await c.close();
+  }
+});

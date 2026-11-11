@@ -1,6 +1,24 @@
 //! Shapes, broadcasting and index selectors.
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::{
+    error::{Error, ErrorCode, Result},
+    memory::{MemoryBudget, Reservation},
+    sync::CancellationToken,
+};
+
+pub(crate) fn index_scratch_overflow() -> Error {
+    Error::new(
+        ErrorCode::MemoryBudgetExceeded,
+        "Index scratch exceeds the addressable allocation size.",
+    )
+}
+
+fn scratch_bytes(count: usize, element_size: usize) -> Result<usize> {
+    count
+        .checked_mul(element_size)
+        .filter(|&bytes| bytes <= isize::MAX as usize)
+        .ok_or_else(index_scratch_overflow)
+}
 
 /// NumPy broadcasting of two shapes.
 pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> Result<Vec<usize>> {
@@ -201,14 +219,33 @@ pub fn resolve_slice(
 /// places the advanced dimension first; otherwise it stays in place.
 fn separated_advanced_axis(selectors: &[Selector]) -> Option<usize> {
     let array_axis = selectors.iter().position(|s| !s.is_basic())?;
-    let advanced: Vec<usize> = selectors
+    let mut advanced = selectors
         .iter()
         .enumerate()
         .filter(|(_, s)| !matches!(s, Selector::Slice { .. }))
-        .map(|(axis, _)| axis)
-        .collect();
-    let (first, last) = (advanced[0], advanced[advanced.len() - 1]);
-    (last - first + 1 != advanced.len()).then_some(array_axis)
+        .map(|(axis, _)| axis);
+    let first = advanced.next().expect("array selector is present");
+    let mut last = first;
+    let mut count = 1;
+    for axis in advanced {
+        last = axis;
+        count += 1;
+    }
+    (last - first + 1 != count).then_some(array_axis)
+}
+
+/// Returns the output axis occupied by the broadcast advanced index block.
+pub(crate) fn advanced_axis(selectors: &[Selector]) -> Option<usize> {
+    let first_array = selectors.iter().position(|selector| !selector.is_basic())?;
+    if separated_advanced_axis(selectors).is_some() {
+        Some(0)
+    } else {
+        Some(
+            (0..first_array)
+                .filter(|&axis| matches!(selectors.get(axis), None | Some(Selector::Slice { .. })))
+                .count(),
+        )
+    }
 }
 
 /// Output shape of indexing `shape` with `selectors`. Integer-array and mask
@@ -307,6 +344,137 @@ pub fn validate_selectors(shape: &[usize], selectors: &[Selector]) -> Result<()>
     Ok(())
 }
 
+/// Rank-sized state for walking one mask without rescanning from its start for
+/// each selected element.
+pub(crate) struct MaskCursor {
+    count: usize,
+    last_index: Option<usize>,
+    position: usize,
+}
+
+impl MaskCursor {
+    pub(crate) fn new(mask: &[bool], token: &CancellationToken) -> Result<Self> {
+        let mut count = 0;
+        for (position, &selected) in mask.iter().enumerate() {
+            if position % 1024 == 0 {
+                token.check()?;
+            }
+            count += usize::from(selected);
+        }
+        Ok(Self {
+            count,
+            last_index: None,
+            position: 0,
+        })
+    }
+
+    fn position_for(
+        &mut self,
+        mask: &[bool],
+        advanced_index: usize,
+        token: &CancellationToken,
+    ) -> Result<usize> {
+        let target = if self.count == 1 { 0 } else { advanced_index };
+        if self.last_index == Some(target) {
+            return Ok(self.position);
+        }
+        let (start, mut selected) = match self.last_index {
+            Some(previous) if previous < target => (self.position + 1, previous + 1),
+            _ => (0, 0),
+        };
+        for (position, &include) in mask.iter().enumerate().skip(start) {
+            if position % 1024 == 0 {
+                token.check()?;
+            }
+            if include {
+                if selected == target {
+                    self.last_index = Some(target);
+                    self.position = position;
+                    return Ok(position);
+                }
+                selected += 1;
+            }
+        }
+        unreachable!("validated mask selection")
+    }
+}
+
+/// Maps one C-order result position to its source without allocating a
+/// selection-sized offsets vector. The caller validates selectors and shape.
+pub(crate) fn indexed_offset(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    result_shape: &[usize],
+    result_index: usize,
+    mask_cursors: &mut [MaskCursor],
+    token: &CancellationToken,
+) -> Result<usize> {
+    fn coordinate(index: usize, shape: &[usize], axis: usize) -> usize {
+        let trailing = shape[axis + 1..].iter().product::<usize>();
+        index / trailing % shape[axis]
+    }
+
+    let advanced_axis = advanced_axis(selectors);
+    let separated = separated_advanced_axis(selectors).is_some();
+    let first_array = selectors.iter().position(|selector| !selector.is_basic());
+    let advanced_index = advanced_axis.map(|axis| coordinate(result_index, result_shape, axis));
+    let mut result_axis = usize::from(separated);
+    let mut mask_axis = 0;
+    let mut offset = base;
+
+    for (axis, (&len, &stride)) in shape.iter().zip(strides).enumerate() {
+        let position = match selectors.get(axis) {
+            None => {
+                let position = coordinate(result_index, result_shape, result_axis);
+                result_axis += 1;
+                position
+            }
+            Some(Selector::Index(index)) => {
+                if *index < 0 {
+                    (*index + len as i64) as usize
+                } else {
+                    *index as usize
+                }
+            }
+            Some(Selector::Slice { start, stop, step }) => {
+                let (start, step, _) =
+                    resolve_slice(*start, *stop, *step, len).expect("validated slice");
+                let position = coordinate(result_index, result_shape, result_axis);
+                result_axis += 1;
+                (start + position as isize * step) as usize
+            }
+            Some(Selector::Indices(indices)) => {
+                if first_array == Some(axis) && !separated {
+                    result_axis += 1;
+                }
+                let k = if indices.len() == 1 {
+                    0
+                } else {
+                    advanced_index.expect("advanced axis")
+                };
+                let index = indices[k];
+                if index < 0 {
+                    (index + len as i64) as usize
+                } else {
+                    index as usize
+                }
+            }
+            Some(Selector::Mask(mask)) => {
+                if first_array == Some(axis) && !separated {
+                    result_axis += 1;
+                }
+                let cursor = &mut mask_cursors[mask_axis];
+                mask_axis += 1;
+                cursor.position_for(mask, advanced_index.expect("advanced axis"), token)?
+            }
+        };
+        offset += position as isize * stride;
+    }
+    Ok(offset as usize)
+}
+
 /// For every output element in C order, the linear element offset inside a
 /// source array described by `(shape, strides, base)`.
 pub fn index_offsets(
@@ -315,12 +483,72 @@ pub fn index_offsets(
     base: isize,
     selectors: &[Selector],
 ) -> Result<Vec<usize>> {
+    index_offsets_inner(shape, strides, base, selectors, None).map(|offsets| offsets.values)
+}
+
+pub(crate) struct BudgetedOffsets {
+    pub values: Vec<usize>,
+    // Field drop order releases the vector before its charge.
+    _reservation: Reservation,
+}
+
+pub(crate) fn index_offsets_budgeted(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    budget: &MemoryBudget,
+) -> Result<BudgetedOffsets> {
+    index_offsets_inner(shape, strides, base, selectors, Some(budget))
+}
+
+fn index_offsets_inner(
+    shape: &[usize],
+    strides: &[isize],
+    base: isize,
+    selectors: &[Selector],
+    budget: Option<&MemoryBudget>,
+) -> Result<BudgetedOffsets> {
     validate_selectors(shape, selectors)?;
     // Per axis, the source positions it contributes; a dropped integer axis
     // contributes exactly one.
     let separated = separated_advanced_axis(selectors);
     let first_array = selectors.iter().position(|s| !s.is_basic());
-    let mut arrays: Vec<(Vec<isize>, isize)> = Vec::new();
+    let advanced_count = selectors.iter().filter(|s| !s.is_basic()).count();
+    let block_len = advanced_length(selectors)?.unwrap_or(0);
+    let mut position_count = 0usize;
+    for (axis, &len) in shape.iter().enumerate() {
+        let count = match selectors.get(axis) {
+            None => len,
+            Some(Selector::Index(i)) => {
+                normalize_index(*i, len, axis)?;
+                1
+            }
+            Some(Selector::Slice { start, stop, step }) => {
+                resolve_slice(*start, *stop, *step, len)?.2
+            }
+            Some(Selector::Indices(ix)) => ix.len(),
+            Some(Selector::Mask(mask)) => mask.iter().filter(|&&selected| selected).count(),
+        };
+        position_count = position_count
+            .checked_add(count)
+            .ok_or_else(index_scratch_overflow)?;
+    }
+    let axis_bytes = scratch_bytes(shape.len(), std::mem::size_of::<(Vec<isize>, isize)>())?;
+    let array_bytes = scratch_bytes(advanced_count, std::mem::size_of::<(Vec<isize>, isize)>())?;
+    let cursor_bytes = scratch_bytes(shape.len(), std::mem::size_of::<usize>())?;
+    let working_bytes = scratch_bytes(position_count, std::mem::size_of::<isize>())?
+        .checked_add(scratch_bytes(block_len, std::mem::size_of::<isize>())?)
+        .and_then(|n| n.checked_add(axis_bytes))
+        .and_then(|n| n.checked_add(array_bytes))
+        .and_then(|n| n.checked_add(cursor_bytes))
+        .filter(|&n| n <= isize::MAX as usize)
+        .ok_or_else(index_scratch_overflow)?;
+    let _working_charge = match budget {
+        Some(budget) => budget.reserve(working_bytes as u64)?,
+        None => Reservation::none(),
+    };
+    let mut arrays: Vec<(Vec<isize>, isize)> = Vec::with_capacity(advanced_count);
     let mut block_slot = None;
     let mut axes: Vec<(Vec<isize>, isize)> = Vec::with_capacity(shape.len());
     for (axis, &len) in shape.iter().enumerate() {
@@ -331,16 +559,23 @@ pub fn index_offsets(
                 let (s, st, n) = resolve_slice(*start, *stop, *step, len)?;
                 (0..n as isize).map(|k| s + k * st).collect()
             }
-            Some(Selector::Indices(ix)) => ix
-                .iter()
-                .map(|&i| normalize_index(i, len, axis).map(|v| v as isize))
-                .collect::<Result<_>>()?,
-            Some(Selector::Mask(m)) => m
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| **b)
-                .map(|(i, _)| i as isize)
-                .collect(),
+            Some(Selector::Indices(ix)) => {
+                let mut positions = Vec::with_capacity(ix.len());
+                for &index in ix {
+                    positions.push(normalize_index(index, len, axis)? as isize);
+                }
+                positions
+            }
+            Some(Selector::Mask(m)) => {
+                let mut positions = Vec::with_capacity(m.iter().filter(|&&b| b).count());
+                positions.extend(
+                    m.iter()
+                        .enumerate()
+                        .filter(|(_, b)| **b)
+                        .map(|(i, _)| i as isize),
+                );
+                positions
+            }
         };
         if matches!(
             selectors.get(axis),
@@ -367,19 +602,33 @@ pub fn index_offsets(
         // Broadcast the array selectors together: each block entry is the sum
         // of the selected offsets on every advanced axis.
         let len = advanced_length(selectors)?.expect("an array selector is present");
-        axes[slot].0 = (0..len)
-            .map(|k| {
+        let mut positions = Vec::with_capacity(len);
+        for k in 0..len {
+            positions.push(
                 arrays
                     .iter()
                     .map(|(p, s)| p[if p.len() == 1 { 0 } else { k }] * s)
-                    .sum()
-            })
-            .collect();
+                    .sum(),
+            );
+        }
+        axes[slot].0 = positions;
     }
-    let mut out = Vec::new();
+    let out_len = axes.iter().try_fold(1usize, |n, (positions, _)| {
+        n.checked_mul(positions.len())
+            .ok_or_else(index_scratch_overflow)
+    })?;
+    let out_bytes = scratch_bytes(out_len, std::mem::size_of::<usize>())?;
+    let out_charge = match budget {
+        Some(budget) => budget.reserve(out_bytes as u64)?,
+        None => Reservation::none(),
+    };
+    let mut out = Vec::with_capacity(out_len);
     let mut cursor = vec![0usize; axes.len()];
     if axes.iter().any(|(p, _)| p.is_empty()) {
-        return Ok(out);
+        return Ok(BudgetedOffsets {
+            values: out,
+            _reservation: out_charge,
+        });
     }
     loop {
         let offset: isize = base
@@ -392,7 +641,10 @@ pub fn index_offsets(
         let mut axis = axes.len();
         loop {
             if axis == 0 {
-                return Ok(out);
+                return Ok(BudgetedOffsets {
+                    values: out,
+                    _reservation: out_charge,
+                });
             }
             axis -= 1;
             cursor[axis] += 1;
@@ -407,6 +659,83 @@ pub fn index_offsets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::Device;
+
+    #[test]
+    fn budgeted_offsets_reject_unaddressable_capacity_before_allocation() {
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let result = index_offsets_budgeted(&[usize::MAX], &[1], 0, &[], &budget);
+        assert!(matches!(
+            result,
+            Err(Error {
+                code: ErrorCode::MemoryBudgetExceeded,
+                ..
+            })
+        ));
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn direct_index_traversal_preserves_selector_order() {
+        let shape = [2, 3, 4];
+        let strides = contiguous_strides(&shape);
+        let slice = Selector::Slice {
+            start: None,
+            stop: None,
+            step: Some(-2),
+        };
+        let cases = [
+            vec![
+                Selector::Indices(vec![1, 0]),
+                slice.clone(),
+                Selector::Indices(vec![3, 0]),
+            ],
+            vec![
+                Selector::Index(1),
+                slice.clone(),
+                Selector::Indices(vec![3, 0]),
+            ],
+            vec![
+                Selector::Mask(vec![true, false]),
+                Selector::Indices(vec![2, 0]),
+                slice.clone(),
+            ],
+            vec![
+                slice.clone(),
+                Selector::Mask(vec![true, false, true]),
+                Selector::Index(0),
+            ],
+            vec![Selector::Index(1), slice],
+        ];
+        for selectors in cases {
+            let result_shape = index_shape(&shape, &selectors).unwrap();
+            let expected = index_offsets(&shape, &strides, 0, &selectors).unwrap();
+            let token = CancellationToken::new();
+            let mut masks = selectors
+                .iter()
+                .filter_map(|selector| match selector {
+                    Selector::Mask(mask) => Some(MaskCursor::new(mask, &token).unwrap()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let actual = (0..expected.len())
+                .map(|index| {
+                    indexed_offset(
+                        &shape,
+                        &strides,
+                        0,
+                        &selectors,
+                        &result_shape,
+                        index,
+                        &mut masks,
+                        &token,
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{selectors:?}");
+        }
+    }
 
     #[test]
     fn broadcasting_matches_numpy() {

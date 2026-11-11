@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { createContext, type Expr } from "../../src/index.js";
 import { polynomial, polyval } from "../../src/numpy.js";
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
+declare function exact<T extends true>(): void;
 const c = createContext({
   maxConcurrentJobs: 1,
   maxQueueLength: 1,
@@ -84,3 +89,56 @@ const dtypeAlternative: "float32" | "complex64" = maybeEmpty.dtype;
 // @ts-expect-error an empty descending coefficient array keeps the points' dtype
 const wrongDtype: "complex64" = maybeEmpty.dtype;
 void [dtypeAlternative, wrongDtype];
+
+type CoefficientShapes = readonly [0, 3] | readonly [2, 3];
+declare const coefficientShape: CoefficientShapes;
+const unionPoints = c.zeros([1] as const, "float32");
+const unionResult = polyval(c.zeros(coefficientShape, "int32"), unionPoints);
+exact<Equal<typeof unionResult.dtype, "float32" | "float64">>();
+exact<Equal<typeof unionResult.shape, readonly [1] | [3]>>();
+// @ts-expect-error the empty coefficients retain the points' dtype
+const onlyNonemptyDtype: "float64" = unionResult.dtype;
+// @ts-expect-error the empty coefficients retain the points' shape
+const onlyNonemptyShape: readonly [3] = unionResult.shape;
+async function unionStorage() {
+  const computed = await unionResult.compute();
+  exact<Equal<typeof computed.dtype, "float32" | "float64">>();
+  exact<Equal<typeof computed.shape, readonly [1] | [3]>>();
+  exact<
+    Equal<ReturnType<typeof computed.toTypedArray>, Float32Array | Float64Array>
+  >();
+  // @ts-expect-error the empty result uses Float32Array storage
+  const onlyNonemptyStorage: Float64Array = computed.toTypedArray();
+  void onlyNonemptyStorage;
+}
+void [onlyNonemptyDtype, onlyNonemptyShape, unionStorage];
+
+declare const reversedShape: readonly [2, 3] | readonly [0, 3];
+const reversed = polyval(c.zeros(reversedShape, "int32"), unionPoints);
+exact<Equal<typeof reversed.dtype, "float32" | "float64">>();
+exact<Equal<typeof reversed.shape, readonly [1] | [3]>>();
+
+declare const differentTail: readonly [0, 3] | readonly [2, 4];
+const differentTailResult = polyval(
+  c.zeros(differentTail, "int32"),
+  unionPoints,
+);
+exact<Equal<typeof differentTailResult.shape, readonly [1] | [4]>>();
+
+const fixedEmpty = polyval(c.zeros([0, 3] as const, "int32"), unionPoints);
+exact<Equal<typeof fixedEmpty.dtype, "float32">>();
+exact<Equal<typeof fixedEmpty.shape, readonly [1]>>();
+const fixedNonempty = polyval(c.zeros([2, 3] as const, "int32"), unionPoints);
+exact<Equal<typeof fixedNonempty.dtype, "float64">>();
+exact<Equal<typeof fixedNonempty.shape, [3]>>();
+declare const dynamicLength: number;
+const dynamic = polyval(
+  c.zeros([dynamicLength, 3] as const, "int32"),
+  unionPoints,
+);
+exact<Equal<typeof dynamic.dtype, "float32" | "float64">>();
+exact<Equal<typeof dynamic.shape, readonly [1] | [3]>>();
+
+const equalDtype = polyval(c.zeros(coefficientShape, "float32"), unionPoints);
+exact<Equal<typeof equalDtype.dtype, "float32">>();
+exact<Equal<typeof equalDtype.shape, readonly [1] | [3]>>();
