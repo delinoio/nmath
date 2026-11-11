@@ -100,7 +100,7 @@ The npm component also owns `packages/nmath/compatibility/` for fixed-version AP
 - [Dependency security](repository-dependency-security-contract.md)
 - [Project template](project-template.md)
 
-Numeric CSV/JSON file adapters belong to the existing core, pandas and Polars entry points. The [runtime contract](crates-nmath-runtime-contract.md#numeric-csv-and-json-records) owns numeric codecs and scheduled publication; the [package contract](packages-nmath-package-contract.md#csv-and-json-js-adaptations) owns explicit-context JS adaptation and schema fidelity.
+Numeric CSV/JSON file adapters belong to the existing core, pandas and Polars entry points. The [runtime contract](crates-nmath-runtime-contract.md#numeric-csv-and-json-records) owns numeric codecs and scheduled publication; the [package contract](packages-nmath-package-contract.md#csv-and-json-js-adaptations) owns explicit-context JS adaptation and schema fidelity. Text schemas and returned columns use only the reader's supported boolean, integer and float32/float64 dtypes.
 
 ## Reproducible workflow benchmarks
 

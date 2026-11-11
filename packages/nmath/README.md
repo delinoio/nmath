@@ -98,7 +98,30 @@ m.add(ctx.zeros([4], "float32")); // type error: shapes do not broadcast
 
 A dimension typed as `number` is dynamic. The runtime validates it, and the dtype and rank stay known.
 
+Array creation keeps an exact tuple shape when `shape` is required in the options. When the options can omit `shape`, `ctx.array`, `numpy.array` and `ctx.arrayFromFloat16Bits` use a conservative `number[]` result shape because the input data can determine the actual shape.
+
+A shape with a variable number of dimensions, such as `[2, ...number[]]`, has an unknown rank. Broadcasting and axis reductions return a conservative `number[]` shape type, while reducing over all axes still returns a scalar type.
+
+When an indexing selector list has an unknown length, `get()` retains the dtype but gives the result an unknown-rank shape. Fixed selector lists, including an empty list, keep precise shape inference.
+
+For `sum`, `mean`, `min` and `max`, an axis that may be `undefined` can produce either an all-axis scalar or an array for a selected axis. TypeScript retains both result shapes for literal axes. Narrow the computed result before calling array methods.
+
+When the rank itself is unknown, `compute()` can return either a JS scalar or an `NMathArray`. Narrow the result before calling array methods:
+
+```ts
+import { NMathArray } from "@delinoio/nmath";
+
+const result = await ctx.array(1, { dtype: "float64" }).compute();
+if (result instanceof NMathArray) {
+  console.log(result.toArray());
+} else {
+  console.log(result); // number for this dtype
+}
+```
+
 Array, `full`, `zeros` and generator `random` shapes, including their NumPy forms, accept only finite integer dimensions from `0` through `4294967295`. Invalid dimensions throw `NMathError` with code `NMATH_SHAPE_MISMATCH` before allocation. Empty dimensions and scalar shape `[]` are valid. Array data must still match the requested shape.
+
+An elementwise binary operation can also throw `NMATH_SHAPE_MISMATCH` when its broadcast output has an unrepresentable layout, even if both empty inputs are valid. The error occurs when constructing the expression, before a compute job starts. Representable empty broadcasts remain valid.
 
 ## Entry points
 
@@ -199,6 +222,8 @@ GPU execution is limited to `float32`, `int32` and `uint32` elementwise arithmet
 
 `array.save(path, { overwrite })` writes NPY files and `ctx.load(path)` reads them. NMath never replaces an existing file unless you pass `overwrite: true`. Output goes to a temporary file that is renamed into place, so cancellation or failure leaves the original file unchanged. Keep input files unchanged while a job reads them; NMath reports changes it detects with `NMATH_IO_MODIFIED`, but it cannot detect every change.
 
+NPY saves count their serialization memory against the context CPU budget. If the budget is too small, the save fails with `NMATH_MEMORY_BUDGET_EXCEEDED` before writing and leaves any existing destination unchanged. `ctx.metrics()` reports this memory while it is in use and releases the charge when the job finishes.
+
 Complex NPY output uses little-endian components in C order. Complex NPY input accepts either byte order and C or Fortran order. Loading preserves dtype, logical shape and both components.
 
 ## Errors
@@ -250,6 +275,8 @@ Apache-2.0. See `LICENSE` and `NOTICE`. Native dependencies keep their own licen
 
 The numeric table APIs are a bounded native subset of pandas 3.1.0 and Polars 2.1.0. They do not implement the complete pandas or Polars API. Columns can use bool, signed/unsigned 8-, 16-, 32- or 64-bit integers, float32 and float64. Nulls use explicit boolean validity columns; true means valid. Fixed-width strings and temporal columns support materialization, selection, filtering and access; their sorting/join/group operations remain targets. Categorical, complex and extended-precision table columns remain targets. NaN/inf and floating-point summation behavior still require broader original-derived numerical acceptance; explicit-null integer fixtures do not establish complete missing-value parity.
 
+Pandas `Series.sum()`, `mean()`, `min()` and `max()`, and `DataFrame.sum()`, skip NaNs in float32 and float64 columns. Empty or all-NaN columns return zero for sum and NaN for mean/min/max. Infinities remain values. Explicit validity-mask reductions are still unsupported. Core/NumPy and Polars reductions keep their existing NaN behavior.
+
 ```ts
 import { createContext } from '@delinoio/nmath';
 import { DataFrame, Series } from '@delinoio/nmath/polars';
@@ -272,6 +299,9 @@ await ctx.close();
 
 Supported table operations: native multi-column compute, boolean-column filtering, stable single-key sorting, single-key inner/left equijoins, sum/mean/min/max/count grouping, pivots, and basic materialized lazy plans. pandas preserves explicit labels and matches null join keys; Polars uses positional rows and requires `nullsEqual:true` to match null join keys. Full label alignment, nullable expression arithmetic, arbitrary post-row projections, multiple keys, additional join modes, windows, richer string/temporal/categorical operations, query optimization and full internal streaming remain targets.
 
+For pandas Series and DataFrame index labels, numeric NaN matches numeric NaN and `0` matches `-0`. Numeric and string labels remain distinct.
+Polars `LazyFrame.select` and `withColumns` reject repeated output names within one step with `NMATH_INDEX_INVALID`. A single `withColumns` output may replace an existing column, and a later step may replace it again.
+
 ### Pivots
 
 ```ts
@@ -287,7 +317,9 @@ const totals = await frame.pivotTable('key', 'sub', 'value', {aggfunc: 'sum'});
 
 Pandas `pivot` requires unique row/column pairs; `pivotTable` aggregates duplicates and defaults to `mean`. Polars provides `pivot(on, index, values, aggregate?)` on `DataFrame` and `LazyFrame`, where the default is unique pairs and `collect()` materializes the result. Keys and values must be numeric or boolean; invalid keys are excluded. Pandas sorts both axes ascending, while Polars keeps first-appearance order. The row key stays a regular column, and generated value columns use the string form of each column key. Missing cells are null. Multiple keys and string/temporal pivots remain targets.
 
-Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Polars `groupBy` retains NaN keys and null groups.
+Pandas `sortValues` places float32/float64 NaNs and masked nulls last by default, including when sorting descending. Pass `{ nullsLast: false }` to place them first. Equal and missing rows keep their input order, and labels stay aligned. Polars sorting keeps its numeric NaN order.
+
+Pandas `groupBy` drops null and floating NaN keys by default. Pass `{ dropna: false }` to retain those groups. Sorted retained NaN and null groups follow pandas missing placement. Polars `groupBy` retains NaN keys and null groups.
 
 ### NPZ files
 
@@ -343,7 +375,8 @@ record objects. pandas writes with `frame.toCsv(context, path, options?)` and
 `toJson`; Polars uses `writeCsv` and `writeJson`. These are explicit JS adaptations,
 including JSON records orientation instead of pandas' default columns orientation.
 Files retain numeric values and nulls. Supply a complete ordered schema Map to
-preserve narrow dtypes, all-null columns and empty JSON schemas. int64 and uint64
+preserve narrow dtypes, all-null columns and empty JSON schemas. Schemas accept
+bool, signed and unsigned 8/16/32/64-bit integers, float32 and float64. int64 and uint64
 remain exact bigint values. A custom pandas index requires `dropIndex:true` on
 write; reads create a positional index.
 
@@ -358,7 +391,7 @@ The core methods `ctx.readText(path, format, options?)` and
 `ctx.writeText(path, format, columns, validity?, options?)` use `format: 'csv'|'json'`
 and Maps of columns/masks. Dispose both Maps returned by a core read.
 Custom delimiters, compressed/alternate encodings, other JSON orientations/JSONL,
-string/datetime columns and full upstream read/write options remain unsupported.
+float16, complex, string and temporal columns and full upstream read/write options remain unsupported.
 CSV empty cells and JSON null become invalid values. JSON non-finite floats become
 null. CSV non-finite numeric tokens remain valid floating values; full pandas
 missing-token and blank-line defaults are not yet implemented.
@@ -408,6 +441,8 @@ const waitingTimes = await rng.exponential(2, [100]).compute();
 `random(shape, dtype?)` and `standard_normal(shape, dtype?)` accept float32 or float64 and default to float64. `uniform(low, high, shape)`, `normal(loc, scale, shape)` and `exponential(scale, shape)` return float64. All distribution parameters are scalars. Use `[]` as the shape for a scalar result.
 
 `integers(low, high, shape, options?)` supports bool and signed/unsigned 8/16/32/64-bit integers. It defaults to int64 and excludes high unless `endpoint: true`. Pass `undefined` for high to use zero as the lower bound. Bounds must be safe JS integers or bigint. Use bigint for exact 64-bit bounds; uint64 supports an exclusive high of `2n ** 64n`. Int64 and uint64 scalar results are bigint.
+
+If a dtype argument or option can be `undefined`, TypeScript includes the default dtype in the result type. Narrow the result dtype before assuming a specific typed array. A definitely present dtype keeps its exact result type.
 
 Parameter broadcasting, `out`, other distributions, other bit generators, optional entropy seeding, state import/export and SeedSequence spawning remain unsupported. Exact numerical acceptance on other platforms remains pending; this is not full NumPy random compatibility.
 
@@ -668,6 +703,8 @@ console.log(await a.var(undefined, 1).compute()); // 1.1428571428571428
 
 The NumPy entry point provides lazy `linalg.solve(a, b)`, `linalg.inv(a)`, and `linalg.det(a)` for square matrices, including broadcast batches. Only a one-dimensional solve right-hand side is a vector. Float16 linear algebra is unsupported; cast explicitly. Singular solve/inverse rejects with `NMATH_LINALG_SINGULAR`.
 
+Determinants preserve finite complex components when the overall complex magnitude is not representable. Wider extreme-scale and non-finite numerical behavior remains outside the documented acceptance boundary.
+
 `fft.fft(a, options)`, `fft.ifft`, `fft.rfft`, and `fft.irfft` accept `{ n?, axis?, norm? }`. The default axis is `-1`; normalization is `"backward"`, `"forward"`, or `"ortho"`. Length crops or zero-pads input. `rfft` requires real input. `irfft` defaults to `2 * (inputLength - 1)`; pass `n` to recover an odd original length. Call `.compute()` to execute on CPU. GPU execution and `out` buffers are unsupported. Complex output uses `Complex` values and interleaved typed arrays.
 
 `fft.fft2(a, { s?, axes?, norm? })` and `fft.ifft2` transform the last two axes by default; `fft.fftn` and `fft.ifftn` transform every axis. `axes` selects and orders the transformed axes, and `s` crops or zero-pads each selected axis. The helpers compose the one-axis transforms, so normalization and dtype rules match the single-axis functions. `fft.fftshift` and `fft.ifftshift` roll all axes by default, or the listed `axes`, for every dtype. `fft.fftfreq(context, n, d?)` and `fft.rfftfreq(context, n, d?)` create `float64` arrays in the given context; `n` must be a positive unsigned 32-bit integer and `d` must be finite. Other linear-algebra and FFT functions remain compatibility targets.
@@ -737,7 +774,7 @@ a.dispose();
 
 With omitted or null `copy`, compatible layouts share storage. This includes regular stepped and reversed views. `copy: true` produces independent storage; `copy: false` throws if a copy would be required. Shared results reflect later writes to the source and remain usable after the source handle is disposed. Computed operands and copied results use execution-start snapshots. These shape transforms currently execute on CPU; a GPU request rejects before queue admission.
 
-Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. Dynamic inputs retain known dtype, dimensions and rank and validate unknown sizes at runtime.
+Literal TypeScript shapes infer permutations and inferred reshape dimensions and reject incompatible counts or repeated/out-of-range axes. If a transpose axes value can be `undefined`, its result shape includes the default reversal as well as the explicit permutation. When a requested dimension is a literal union containing `-1`, its result dimension is dynamic; known axes, dtype and rank remain available. Dynamic inputs validate unknown sizes at runtime.
 
 ### Ranges, identity matrices and `_like` arrays
 

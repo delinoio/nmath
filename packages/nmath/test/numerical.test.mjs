@@ -11,6 +11,63 @@ const context = (budget = 1n << 24n) =>
     gpuMemoryBudget: 0n,
   });
 
+test("solve keeps the concrete result dtype and typed storage", async () => {
+  const c = context();
+  try {
+    const cases = [
+      {
+        matrixDtype: "float32",
+        rhsDtype: "float32",
+        resultDtype: "float32",
+        storage: Float32Array,
+      },
+      {
+        matrixDtype: "float64",
+        rhsDtype: "float32",
+        resultDtype: "float64",
+        storage: Float64Array,
+      },
+      {
+        matrixDtype: "complex64",
+        rhsDtype: "float32",
+        resultDtype: "complex64",
+        storage: Float32Array,
+      },
+    ];
+    for (const { matrixDtype, rhsDtype, resultDtype, storage } of cases) {
+      const identity =
+        matrixDtype === "complex64"
+          ? [
+              [new Complex(1, 0), new Complex(0, 0)],
+              [new Complex(0, 0), new Complex(1, 0)],
+            ]
+          : [
+              [1, 0],
+              [0, 1],
+            ];
+      const matrix = c.array(identity, { dtype: matrixDtype });
+      const rhs = c.array([1, 2], { dtype: rhsDtype });
+      const expression = linalg.solve(matrix, rhs);
+      assert.equal(expression.dtype, resultDtype);
+      const result = await expression.compute();
+      try {
+        assert.equal(result.dtype, resultDtype);
+        assert.deepEqual(result.shape, [2]);
+        const values = result.toTypedArray();
+        assert.ok(values instanceof storage);
+        assert.deepEqual(
+          [...values],
+          matrixDtype === "complex64" ? [1, 0, 2, 0] : [1, 2],
+        );
+      } finally {
+        result.dispose();
+      }
+    }
+  } finally {
+    await c.close();
+  }
+});
+
 test("linalg is lazy, preserves complex transport and broadcasts solve batches", async () => {
   const c = context();
   try {

@@ -157,7 +157,7 @@ fn run(op: LinalgOp, a: &DenseArray) -> DenseArray {
     let budget = MemoryBudget::new(Device::Cpu, 1 << 24);
     let expr = Expr::linalg(
         op,
-        &Expr::input(&NdArray::from_dense(1, a.clone_dense())),
+        &Expr::input(&NdArray::from_dense(1, a.clone_dense()).unwrap()),
         None,
     )
     .unwrap();
@@ -391,23 +391,24 @@ fn factorization_errors_and_empty_inputs() {
             .code,
         ErrorCode::LinalgNoConvergence
     );
-    let wide = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2, 3], Buffer::F64(vec![0.0; 6])),
-    ));
+    let wide =
+        Expr::input(&NdArray::from_dense(1, dense(vec![2, 3], Buffer::F64(vec![0.0; 6]))).unwrap());
     assert_eq!(
         Expr::linalg(LinalgOp::EighValues { upper: false }, &wide, None)
             .unwrap_err()
             .code,
         ErrorCode::ShapeMismatch
     );
-    let half = Expr::input(&NdArray::from_dense(
-        1,
-        dense(
-            vec![1, 1],
-            Buffer::F16(vec![nmath_core::buffer::Float16::ONE]),
-        ),
-    ));
+    let half = Expr::input(
+        &NdArray::from_dense(
+            1,
+            dense(
+                vec![1, 1],
+                Buffer::F16(vec![nmath_core::buffer::Float16::ONE]),
+            ),
+        )
+        .unwrap(),
+    );
     assert_eq!(
         Expr::linalg(LinalgOp::SvdS, &half, None).unwrap_err().code,
         ErrorCode::DTypeUnsupported
@@ -448,7 +449,7 @@ fn factorization_errors_and_empty_inputs() {
     assert_eq!(none.usage().used, 0);
     let gpu = Expr::linalg(
         LinalgOp::SvdS,
-        &Expr::input(&NdArray::from_dense(1, indefinite.clone_dense())),
+        &Expr::input(&NdArray::from_dense(1, indefinite.clone_dense()).unwrap()),
         None,
     )
     .unwrap();

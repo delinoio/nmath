@@ -196,10 +196,13 @@ fn fixed_numpy_math_oracle() {
 #[test]
 fn rejected_dtypes_and_gpu_admission() {
     let array = |buffer: Buffer| {
-        Expr::input(&NdArray::from_dense(
-            1,
-            DenseArray::new(vec![buffer.len()], buffer, Reservation::none()).unwrap(),
-        ))
+        Expr::input(
+            &NdArray::from_dense(
+                1,
+                DenseArray::new(vec![buffer.len()], buffer, Reservation::none()).unwrap(),
+            )
+            .unwrap(),
+        )
     };
     let complex = array(Buffer::C128(vec![[1.0, 2.0]]));
     let ints = array(Buffer::I32(vec![1, 0]));
