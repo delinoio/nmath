@@ -52,7 +52,7 @@ type PositiveAxis<
   ? I["length"] extends A
     ? [N, ...T]
     : [H, ...PositiveAxis<T, A, N, [...I, unknown]>]
-  : S;
+  : DynamicShape<S>;
 type LiteralFftShape<
   S extends Shape,
   O extends FftOptions = {},

@@ -122,6 +122,83 @@ test("dtype promotion and shape errors are reported at construction", () => {
   throwsWith(() => i32.get(5), "NMATH_INDEX_OUT_OF_BOUNDS");
 });
 
+test("overflowing empty broadcasts reject before job admission and preserve the context", async () => {
+  const ctx = context({ cpuMemoryBudget: 0 });
+  const left = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [65_536, 65_536, 1, 1, 0],
+  });
+  const right = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [1, 1, 65_536, 65_536, 0],
+  });
+  const submitted = ctx.metrics().totalSubmitted;
+  throwsWith(() => left.add(right), "NMATH_SHAPE_MISMATCH");
+  throwsWith(() => left.add(right).sum(), "NMATH_SHAPE_MISMATCH");
+  assert.equal(ctx.metrics().totalSubmitted, submitted);
+  assert.equal(ctx.metrics().cpuMemory.used, 0n);
+
+  const largeLeft = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [65_536, 1, 0],
+  });
+  const largeRight = ctx.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [1, 65_536, 0],
+  });
+  const large = await largeLeft.add(largeRight).compute();
+  assert.deepEqual(large.shape, [65_536, 65_536, 0]);
+  assert.equal(large.dtype, "uint8");
+  assert.equal(large.toTypedArray().length, 0);
+  await ctx.close();
+
+  const smallContext = context();
+  const smallLeft = smallContext.array(new Uint8Array(0), {
+    dtype: "uint8",
+    shape: [0, 3],
+  });
+  const smallRight = smallContext.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const small = await smallLeft.add(smallRight).compute();
+  assert.deepEqual(small.shape, [0, 3]);
+  assert.equal(small.dtype, "uint8");
+  assert.equal(small.toTypedArray().length, 0);
+  await smallContext.close();
+
+  const budgeted = context({ cpuMemoryBudget: 5 });
+  const row = budgeted.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const column = budgeted.array(new Uint8Array([10, 20]), {
+    dtype: "uint8",
+    shape: [2, 1],
+  });
+  await rejectsWith(row.add(column).compute(), "NMATH_MEMORY_BUDGET_EXCEEDED");
+  assert.equal(budgeted.metrics().cpuMemory.used, 5n);
+  await budgeted.close();
+
+  const ordinary = context();
+  const ordinaryRow = ordinary.array(new Uint8Array([1, 2, 3]), {
+    dtype: "uint8",
+    shape: [1, 3],
+  });
+  const ordinaryColumn = ordinary.array(new Uint8Array([10, 20]), {
+    dtype: "uint8",
+    shape: [2, 1],
+  });
+  const result = await ordinaryRow.add(ordinaryColumn).compute();
+  assert.deepEqual(result.shape, [2, 3]);
+  assert.equal(result.dtype, "uint8");
+  assert.deepEqual(result.toArray(), [
+    [11, 12, 13],
+    [21, 22, 23],
+  ]);
+  await ordinary.close();
+});
+
 test("indexing reads are lazy; basic reads return shared views", async () => {
   const ctx = context();
   const a = ctx.array(
@@ -244,6 +321,10 @@ test("creation helpers reject over-budget input before building buffers", async 
     () => np.arange(ctx, 0, 2 ** 40, 1, "float64"),
     "NMATH_MEMORY_BUDGET_EXCEEDED",
   );
+  throwsWith(
+    () => np.arange(ctx, 0, 5, 0.5, "int32"),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
   await ctx.close();
   // The native check rejects mismatched input before copying it.
   const roomy = context();
@@ -252,6 +333,56 @@ test("creation helpers reject over-budget input before building buffers", async 
     "NMATH_SHAPE_MISMATCH",
   );
   await roomy.close();
+});
+
+test("NumPy arange fills from dtype-converted initial values", async () => {
+  const ctx = context();
+  const cases = [
+    { args: [0, 5, 0.5, "int32"], expected: Array(10).fill(0) },
+    { args: [0, 5, 0.5, "uint32"], expected: Array(10).fill(0) },
+    {
+      args: [100_000_000, 100_000_016, 1, "float32"],
+      expected: Array(16).fill(100_000_000),
+    },
+    { args: [0, 5, 1, "int32"], expected: [0, 1, 2, 3, 4] },
+    { args: [5, 0, -1, "int32"], expected: [5, 4, 3, 2, 1] },
+    { args: [0, 2, 0.5], expected: [0, 0.5, 1, 1.5] },
+  ];
+  for (const { args, expected } of cases) {
+    const result = np.arange(ctx, ...args);
+    assert.equal(result.dtype, args[3] ?? "float64");
+    assert.deepEqual(result.shape, [expected.length]);
+    assert.deepEqual(result.toArray(), expected);
+    result.dispose();
+  }
+
+  for (const dtype of ["int32", "uint32", "float32", "float64"]) {
+    const first = dtype === "int32" || dtype === "uint32" ? 3 : 3.75;
+    const second = dtype === "int32" || dtype === "uint32" ? 4 : 4.25;
+    for (const [stop, expected] of [
+      [3.75, []],
+      [4.25, [first]],
+      [4.75, [first, second]],
+    ]) {
+      const result = np.arange(ctx, 3.75, stop, 0.5, dtype);
+      assert.equal(result.dtype, dtype);
+      assert.deepEqual(result.shape, [expected.length]);
+      assert.deepEqual(result.toArray(), expected);
+      result.dispose();
+    }
+  }
+  const descendingUint32 = np.arange(ctx, 2_100_000, 0, -1, "uint32");
+  assert.equal(descendingUint32.item(2_097_153), 2_847);
+  assert.equal(descendingUint32.item(2_099_999), 1);
+  descendingUint32.dispose();
+
+  const longFloat32 = np.arange(ctx, 0, 18_454_940, 1.1, "float32");
+  assert.equal(longFloat32.item(16_777_216), 18_454_938);
+  assert.equal(longFloat32.item(16_777_217), 18_454_938);
+  longFloat32.dispose();
+
+  assert.throws(() => np.arange(ctx, 0, 1, 0), RangeError);
+  await ctx.close();
 });
 
 test("creation rejects invalid dimensions before allocation or native conversion", async () => {
@@ -319,6 +450,54 @@ test("valid dimensions retain shape and length checks", async () => {
   assert.deepEqual(random.shape, [0, 0xffff_ffff]);
   for (const array of arrays) array.dispose();
   await ctx.close();
+});
+
+test("optional creation shapes use input data when absent", async () => {
+  const ctx = context();
+  const arrays = [];
+  try {
+    const data = Float32Array.of(1, 2);
+    const bits = Uint16Array.of(0x3c00, 0x4000);
+    const optional = { dtype: "float32" };
+    const optionalBits = {};
+    const absent = [
+      ctx.array(data, optional),
+      np.array(ctx, data, optional),
+      ctx.arrayFromFloat16Bits(bits, optionalBits),
+    ];
+    arrays.push(...absent);
+    for (const array of absent) assert.deepEqual(array.shape, [2]);
+
+    const present = [
+      ctx.array(data, { dtype: "float32", shape: [1, 2] }),
+      np.array(ctx, data, { dtype: "float32", shape: [1, 2] }),
+      ctx.arrayFromFloat16Bits(bits, { shape: [1, 2] }),
+    ];
+    arrays.push(...present);
+    for (const array of present) assert.deepEqual(array.shape, [1, 2]);
+
+    const optionalScalar = ctx.array(Float32Array.of(1), optional);
+    const explicitScalar = ctx.array(Float32Array.of(1), {
+      dtype: "float32",
+      shape: [],
+    });
+    const explicitBitScalar = ctx.arrayFromFloat16Bits(Uint16Array.of(0x3c00), {
+      shape: [],
+    });
+    arrays.push(optionalScalar, explicitScalar, explicitBitScalar);
+    assert.deepEqual(optionalScalar.shape, [1]);
+    assert.deepEqual(explicitScalar.shape, []);
+    assert.deepEqual(explicitBitScalar.shape, []);
+    const computedVector = await optionalScalar.compute();
+    assert.ok(computedVector instanceof NMathArray);
+    assert.deepEqual(computedVector.shape, [1]);
+    computedVector.dispose();
+    assert.equal(await explicitScalar.compute(), 1);
+    assert.equal(await explicitBitScalar.compute(), 1);
+  } finally {
+    for (const array of arrays) array.dispose();
+    await ctx.close();
+  }
 });
 
 test("ragged nested input is rejected", async () => {

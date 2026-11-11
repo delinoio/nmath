@@ -129,7 +129,7 @@ pub(super) fn generate(expr: &Expr) -> Result<String> {
                 index(rhs.shape(), expr.shape(), "i")
             )
         }
-        ExprKind::Reduce(op, input, axes) => {
+        ExprKind::Reduce(op, input, axes, _) => {
             let axes = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
             let n: usize = axes
                 .iter()
