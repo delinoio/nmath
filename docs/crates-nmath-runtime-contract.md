@@ -182,6 +182,8 @@ Complex NPY output uses C order with `<c8` or `<c16` descriptors. Complex input 
 
 NPY output uses version 1.0 and limits the complete padded header to 10,000 bytes, matching the shared decoder limit. A save whose header exceeds this limit fails with `NMATH_IO_FORMAT` before file publication. Successful output declares the exact padded header length in its version-1 length field. NPZ retains its separate member rank limit.
 
+The core retains its `usize` shape domain for decoded NPY and NPZ arrays. The Node binding rejects a loaded NPY array or any NPZ member with a dimension above `4294967295` as `NMATH_IO_FORMAT` before fulfilling the file-load Promise. It releases all decoded arrays and reservations on rejection, including earlier valid NPZ members. Shape getters use checked unsigned 32-bit conversion so no array or expression reports a wrapped dimension.
+
 ## Security
 
 - NMath uses the calling process's file permissions. It has no authentication, tenancy or sandbox.
