@@ -195,9 +195,11 @@ export function arange(
     increment[0] = values[1] - values[0];
     for (let i = 2; i < length; i++) {
       values[i] =
-        dtype === "float32"
-          ? Math.fround(values[0] + Math.fround(i * increment[0]))
-          : values[0] + i * increment[0];
+        dtype === "int32" || dtype === "uint32"
+          ? values[0] + Math.imul(i, increment[0])
+          : dtype === "float32"
+            ? Math.fround(values[0] + Math.fround(i * increment[0]))
+            : values[0] + i * increment[0];
     }
   }
   return context.array(values as never, { dtype, shape: [length] as [number] });
