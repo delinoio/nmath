@@ -208,8 +208,18 @@ type Inferred<S extends Shape, R extends Shape> =
             : never
       : never
     : never;
+type HasInferenceUnion<R extends Shape> = R extends readonly [
+  infer H extends number,
+  ...infer T extends Shape,
+]
+  ? -1 extends H
+    ? [H] extends [-1]
+      ? HasInferenceUnion<T>
+      : true
+    : HasInferenceUnion<T>
+  : false;
 type ReplaceInference<R extends Shape, N extends number> = {
-  -readonly [K in keyof R]: R[K] extends -1 ? N : R[K];
+  -readonly [K in keyof R]: -1 extends R[K] ? N : R[K];
 };
 export type ReshapeShape<S extends Shape, R extends Shape> =
   ValidDimensions<R> extends false
@@ -219,9 +229,11 @@ export type ReshapeShape<S extends Shape, R extends Shape> =
       : -1 extends R[number]
         ? number extends R[number]
           ? ReplaceInference<R, number>
-          : [Inferred<S, R>] extends [never]
-            ? never
-            : ReplaceInference<R, Inferred<S, R>>
+          : HasInferenceUnion<R> extends true
+            ? ReplaceInference<R, number>
+            : [Inferred<S, R>] extends [never]
+              ? never
+              : ReplaceInference<R, Inferred<S, R>>
         : string extends Product<S> | Product<R>
           ? ReplaceInference<R, number>
           : Product<S> extends Product<R>

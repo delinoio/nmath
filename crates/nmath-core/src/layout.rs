@@ -68,11 +68,26 @@ pub fn checked_strides(shape: &[usize]) -> Result<Vec<isize>> {
     let mut stride = 1isize;
     for (axis, &dim) in shape.iter().enumerate().rev() {
         strides[axis] = stride;
+        let dim =
+            isize::try_from(dim.max(1)).map_err(|_| invalid("The array strides are too large."))?;
         stride = stride
-            .checked_mul(dim.max(1) as isize)
+            .checked_mul(dim)
             .ok_or_else(|| invalid("The array strides are too large."))?;
     }
     Ok(strides)
+}
+
+/// Validate a C-order layout and return its element count. A zero axis does
+/// not hide an unrepresentable signed stride in another axis.
+pub fn checked_size(shape: &[usize]) -> Result<usize> {
+    checked_strides(shape)?;
+    if shape.contains(&0) {
+        return Ok(0);
+    }
+    shape
+        .iter()
+        .try_fold(1usize, |size, &dim| size.checked_mul(dim))
+        .ok_or_else(|| invalid("The array size is too large."))
 }
 
 pub fn permutation(rank: usize, axes: Option<&[i64]>) -> Result<Vec<usize>> {

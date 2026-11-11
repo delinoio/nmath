@@ -74,6 +74,7 @@ export declare class NativeExpr {
   static where(condition: NativeExpr, x: NativeExpr, y: NativeExpr): NativeExpr
   static unary(op: string, input: NativeExpr): NativeExpr
   static reduce(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
+  static pandasReduce(op: string, input: NativeExpr): NativeExpr
   static shift(op: string, input: NativeExpr, axes?: Array<number> | undefined | null): NativeExpr
   static concat(parts: Array<NativeExpr>, axis: number): NativeExpr
   static variance(op: string, input: NativeExpr, axis: number | undefined | null, ddof: number): NativeExpr
@@ -105,7 +106,7 @@ export declare class NativeTable {
   static source(values: Array<NativeExpr>, validity: Array<NativeExpr>, nullable: Array<boolean>): NativeTable
   select(positions: Array<number>): NativeTable
   filter(position: number): NativeTable
-  sort(position: number, descending: boolean, nullsLast: boolean): NativeTable
+  sort(position: number, descending: boolean, nullsLast: boolean, pandas: boolean): NativeTable
   join(other: NativeTable, leftKey: number, rightKey: number, left: boolean, nullsEqual: boolean): NativeTable
   group(key: number, value: number, operation: string, dropNulls: boolean, pandas: boolean): NativeTable
   pivot(rowKey: number, columnKey: number, value: number, mode: string, pandas: boolean): NativeTable
