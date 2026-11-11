@@ -176,13 +176,60 @@ fn budgets_contexts_exact_wide_keys_and_empty() {
     assert_eq!(out.columns[1].values.buffer, Buffer::I64(vec![2, 1]));
     let a = c.array(vec![0], Buffer::I64(vec![])).unwrap();
     assert_eq!(
-        run(&c, Plan::Sort(Box::new(source(&a)), 0, false, true))
-            .unwrap()
-            .rows,
+        run(
+            &c,
+            Plan::Sort(Box::new(source(&a)), 0, false, true, Flavor::Polars)
+        )
+        .unwrap()
+        .rows,
         0
     );
     c.close();
     other.close();
+}
+#[test]
+fn pandas_sort_places_nan_and_invalid_rows_without_changing_polars_order() {
+    let c = context(8192);
+    let keys = c
+        .array(
+            vec![7],
+            Buffer::F64(vec![2.0, f64::NAN, 1.0, f64::NAN, 2.0, 99.0, 1.0]),
+        )
+        .unwrap();
+    let valid = c
+        .array(
+            vec![7],
+            Buffer::Bool(vec![true, true, true, true, true, false, true]),
+        )
+        .unwrap();
+    let companion = c.array(vec![7], Buffer::I32((0..7).collect())).unwrap();
+    let source = || {
+        Plan::Source(vec![
+            Column {
+                values: Expr::input(&keys),
+                valid: Some(Expr::input(&valid)),
+            },
+            Column {
+                values: Expr::input(&companion),
+                valid: None,
+            },
+        ])
+    };
+    for (flavor, descending, nulls_last, expected) in [
+        (Flavor::Pandas, false, true, vec![2, 6, 0, 4, 1, 3, 5]),
+        (Flavor::Pandas, false, false, vec![1, 3, 5, 2, 6, 0, 4]),
+        (Flavor::Pandas, true, true, vec![0, 4, 2, 6, 1, 3, 5]),
+        (Flavor::Pandas, true, false, vec![1, 3, 5, 0, 4, 2, 6]),
+        (Flavor::Polars, true, true, vec![1, 3, 0, 4, 2, 6, 5]),
+    ] {
+        let result = run(
+            &c,
+            Plan::Sort(Box::new(source()), 0, descending, nulls_last, flavor),
+        )
+        .unwrap();
+        assert_eq!(result.columns[1].values.buffer, Buffer::I32(expected));
+    }
+    c.close();
 }
 #[test]
 fn pandas_group_excludes_nan_without_changing_polars_or_null_groups() {
@@ -228,6 +275,110 @@ fn pandas_group_excludes_nan_without_changing_polars_or_null_groups() {
     c.close();
 }
 #[test]
+fn polars_grouped_float_max_prefers_non_nan_values() {
+    let c = context(32768);
+    let group = |dtype: DType, values: Vec<f64>, validity: Vec<bool>, op, flavor| {
+        let len = values.len();
+        let keys = c.array(vec![len], Buffer::I32(vec![1; len])).unwrap();
+        let values = c
+            .array(
+                vec![len],
+                match dtype {
+                    DType::Float32 => Buffer::F32(values.into_iter().map(|n| n as f32).collect()),
+                    _ => Buffer::F64(values),
+                },
+            )
+            .unwrap();
+        let mask = c.array(vec![len], Buffer::Bool(validity)).unwrap();
+        run(
+            &c,
+            Plan::Group(
+                Box::new(Plan::Source(vec![
+                    Column {
+                        values: Expr::input(&keys),
+                        valid: None,
+                    },
+                    Column {
+                        values: Expr::input(&values),
+                        valid: Some(Expr::input(&mask)),
+                    },
+                ])),
+                0,
+                1,
+                op,
+                true,
+                flavor,
+            ),
+        )
+        .unwrap()
+    };
+
+    for dtype in [DType::Float32, DType::Float64] {
+        for (values, validity, expected) in [
+            (vec![1.0, f64::NAN], vec![true, true], Some(1.0)),
+            (vec![f64::NAN, 1.0], vec![true, true], Some(1.0)),
+            (
+                vec![f64::NAN, f64::NEG_INFINITY],
+                vec![true, true],
+                Some(f64::NEG_INFINITY),
+            ),
+            (
+                vec![f64::INFINITY, f64::NAN],
+                vec![true, true],
+                Some(f64::INFINITY),
+            ),
+            (vec![f64::NAN, f64::NAN], vec![true, true], Some(f64::NAN)),
+            (vec![f64::NAN, 2.0], vec![true, false], Some(f64::NAN)),
+            (
+                vec![1.0, f64::NAN, 99.0],
+                vec![true, true, false],
+                Some(1.0),
+            ),
+            (vec![1.0, 2.0], vec![true, true], Some(2.0)),
+            (vec![1.0, 2.0], vec![false, false], None),
+        ] {
+            let out = group(dtype, values, validity, Aggregate::Max, Flavor::Polars);
+            assert_eq!(out.rows, 1);
+            assert_eq!(
+                out.columns[1].valid.buffer.get(0),
+                Scalar::Bool(expected.is_some())
+            );
+            if let Some(expected) = expected {
+                let Scalar::Float(actual) = out.columns[1].values.buffer.get(0) else {
+                    panic!("group max must retain floating dtype");
+                };
+                assert!(actual == expected || (actual.is_nan() && expected.is_nan()));
+            }
+        }
+        let empty = group(dtype, vec![], vec![], Aggregate::Max, Flavor::Polars);
+        assert_eq!(empty.rows, 0);
+        let pandas = group(
+            dtype,
+            vec![1.0, f64::NAN],
+            vec![true, true],
+            Aggregate::Max,
+            Flavor::Pandas,
+        );
+        assert_eq!(pandas.columns[1].values.buffer.get(0), Scalar::Float(1.0));
+        for (op, expected) in [
+            (Aggregate::Count, 2.0),
+            (Aggregate::Sum, f64::NAN),
+            (Aggregate::Mean, f64::NAN),
+        ] {
+            let out = group(
+                dtype,
+                vec![1.0, f64::NAN],
+                vec![true, true],
+                op,
+                Flavor::Polars,
+            );
+            let actual = out.columns[1].values.buffer.get(0).as_f64();
+            assert!(actual == expected || (actual.is_nan() && expected.is_nan()));
+        }
+    }
+    c.close();
+}
+#[test]
 fn running_cancellation_releases_intermediates() {
     let c = context(2_000_000);
     let a = c
@@ -238,7 +389,7 @@ fn running_cancellation_releases_intermediates() {
     let token = CancellationToken::new();
     compute(
         &c,
-        Plan::Sort(Box::new(source(&a)), 0, false, true),
+        Plan::Sort(Box::new(source(&a)), 0, false, true, Flavor::Polars),
         token.clone(),
         Box::new(move |r| tx.send(r).unwrap()),
     )
@@ -348,8 +499,7 @@ fn batched_rejection_and_cancellation_release_all_charges() {
     let c = context(100_000);
     let a = c.array(vec![4096], Buffer::I64(vec![1; 4096])).unwrap();
     let baseline = c.metrics().cpu_memory.used;
-    // Snapshot and its offsets fit, but the completed result plus a batch do
-    // not.
+    // The snapshot fits, but the completed result plus a batch do not.
     let error = run(&c, source(&a)).err().unwrap();
     assert_eq!(error.code, ErrorCode::MemoryBudgetExceeded);
     c.close();

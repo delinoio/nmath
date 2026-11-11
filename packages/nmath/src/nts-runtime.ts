@@ -17,26 +17,35 @@ import type {
   WeakScalar,
 } from "./types.js";
 
+// Modern decorator emit uses a temporary symbol method to preserve evaluation
+// order. Create its key in this module so user-local Symbol/globalThis bindings
+// cannot capture it. Remove this helper when the emitter supports these awaits.
+export function decoratorKey(): symbol {
+  return Symbol();
+}
+
 // Reuse the public signatures, including dtype promotion and shape checks.
 export { add, sub, mul, div, mod, pow } from "./index.js";
 export { ellipsis, indices, mask, newaxis, slice } from "./core.js";
 
 export function neg<
-  D extends Exclude<ComputableDType, "bool">,
+  D extends Exclude<ComputableDType, "bool" | "str" | "datetime64">,
   S extends Shape,
 >(a: Lazy<NoInfer<D>, S> & { readonly dtype: D }): Expr<D, S> {
   // TypeScript cannot resolve the conditional receiver for a generic dtype.
-  // D excludes bool above; widen only the internal call until it can.
+  // D excludes bool, str and datetime64 above; widen only the internal call
+  // until TypeScript can resolve the conditional receiver.
   return (a as unknown as Lazy<ComputableDType, S>).neg() as unknown as Expr<
     D,
     S
   >;
 }
 export function pos<
-  D extends Exclude<ComputableDType, "bool">,
+  D extends Exclude<ComputableDType, "bool" | "str" | "datetime64">,
   S extends Shape,
 >(a: Lazy<NoInfer<D>, S> & { readonly dtype: D }): Expr<D, S> {
-  // Match neg: the public constraint excludes bool before this internal cast.
+  // Match neg: the public constraint excludes unsupported unary dtypes before
+  // this internal cast.
   return (a as unknown as Lazy<ComputableDType, S>).pos() as unknown as Expr<
     D,
     S

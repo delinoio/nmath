@@ -15,6 +15,7 @@ fn array() -> NdArray {
         )
         .unwrap(),
     )
+    .unwrap()
 }
 fn env(limit: u64) -> JobEnv {
     JobEnv::new(
@@ -26,7 +27,7 @@ fn env(limit: u64) -> JobEnv {
 fn result(env: &mut JobEnv, expr: &Expr) -> NdArray {
     match env.eval(expr).unwrap() {
         Value::View(a) => a,
-        Value::Dense(a) => NdArray::from_dense(1, a),
+        Value::Dense(a) => NdArray::from_dense(1, a).unwrap(),
     }
 }
 fn write(a: &NdArray, index: &[Selector], value: i32) {
