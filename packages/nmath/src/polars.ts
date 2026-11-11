@@ -304,6 +304,8 @@ export class LazyFrame {
   #plan(): Map<string, Column> {
     let frame = new Map(this.#source);
     for (const step of this.#steps) {
+      const names = step.exprs.map((expr) => expr.outputName);
+      if (new Set(names).size !== names.length) throw tableError();
       const outputs = step.exprs.map(
         (e) => [e.outputName, e.evaluate(frame)] as const,
       );
@@ -338,6 +340,7 @@ export class LazyFrame {
         column,
         options.descending ?? false,
         options.nullsLast ?? false,
+        false,
       ),
     );
   }

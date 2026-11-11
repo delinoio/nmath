@@ -19,7 +19,7 @@ This contract owns the `nmath-vscode` component of the [`nmath` project](project
 
 - Language ID: `nts`. File extension: `.nts`.
 - Setting `nmath.compilerPath` (string, default empty): path to `nmath-compiler`. When empty, the extension resolves `node_modules/.bin/nmath-compiler` in the workspace folder and then `nmath-compiler` on `PATH`.
-- Command `nmath.restartLanguageServer` restarts the server.
+- Command `nmath.restartLanguageServer` restarts the server. Activation, trust grants, restart requests, compiler-path changes and deactivation use one serialized lifecycle. A client remains owned until shutdown completes; deactivation drains pending operations and prevents later startup. A failed start or stop does not prevent a later authorized restart.
 - The extension uses standard VS Code diagnostics, completion, definition and command palette UI. Semantic results use original `.nts` positions and include unsaved dependency changes from the language server. It adds no custom views or webviews.
 - All extension text is English.
 - If the compiler cannot start, the extension shows a standard error notification with the resolved path and recovery guidance.

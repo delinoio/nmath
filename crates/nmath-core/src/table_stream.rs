@@ -50,8 +50,6 @@ impl Frozen {
                         if batched {
                             self.freeze_expr(e, env)?;
                         } else {
-                            let largest = e.inputs().iter().map(|a| a.size()).max().unwrap_or(0);
-                            let _offsets = reserve(env, largest, std::mem::size_of::<usize>())?;
                             env.freeze(e)?;
                         }
                     }
@@ -76,10 +74,7 @@ impl Frozen {
             ExprKind::Input(a) => {
                 let id = a as *const crate::NdArray as usize;
                 if let std::collections::hash_map::Entry::Vacant(entry) = self.inputs.entry(id) {
-                    // NdArray::snapshot gathers through a temporary offset
-                    // vector.
-                    let _offsets = reserve(env, a.size(), std::mem::size_of::<usize>())?;
-                    entry.insert(a.snapshot(&env.budget)?);
+                    entry.insert(a.snapshot_cancellable(&env.budget, &env.token)?);
                 }
             }
             ExprKind::Unary(_, e) | ExprKind::Cast(e, _) => self.freeze_expr(e, env)?,

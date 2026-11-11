@@ -43,6 +43,10 @@ import * as polars from "./polars.js";
 import type { ComputableDType, Shape } from "./types.js";
 
 export type Label = string | number;
+function labelsEqual(left: Label, right: Label): boolean {
+  return left === right || (Number.isNaN(left) && Number.isNaN(right));
+}
+
 function unwrap(value: Series | Operand, source: Series): Operand {
   if (source.validity)
     throw tableError(
@@ -55,7 +59,7 @@ function unwrap(value: Series | Operand, source: Series): Operand {
     );
   if (
     source.index.length === value.index.length &&
-    source.index.every((label, i) => label === value.index[i])
+    source.index.every((label, i) => labelsEqual(label, value.index[i]))
   )
     return value.values;
   if (
@@ -66,7 +70,9 @@ function unwrap(value: Series | Operand, source: Series): Operand {
     throw tableError(
       "This arithmetic requires unique matching labels. Align labels explicitly.",
     );
-  const positions = source.index.map((label) => value.index.indexOf(label));
+  const positions = source.index.map((label) =>
+    value.index.findIndex((candidate) => labelsEqual(candidate, label)),
+  );
   if (positions.some((i) => i < 0))
     throw tableError(
       "Outer label alignment is pending. Supply matching labels.",
@@ -155,28 +161,36 @@ export class Series {
       throw tableError(
         "Nullable Series reductions are pending. Use groupBy with a validity mask.",
       );
-    return this.values.sum();
+    return this.dtype === "float32" || this.dtype === "float64"
+      ? this.values.pandasReduce("sum")
+      : this.values.sum();
   }
   mean() {
     if (this.validity)
       throw tableError(
         "Nullable Series reductions are pending. Use groupBy with a validity mask.",
       );
-    return this.values.mean();
+    return this.dtype === "float32" || this.dtype === "float64"
+      ? this.values.pandasReduce("mean")
+      : this.values.mean();
   }
   min() {
     if (this.validity)
       throw tableError(
         "Nullable Series reductions are pending. Use groupBy with a validity mask.",
       );
-    return this.values.min();
+    return this.dtype === "float32" || this.dtype === "float64"
+      ? this.values.pandasReduce("min")
+      : this.values.min();
   }
   max() {
     if (this.validity)
       throw tableError(
         "Nullable Series reductions are pending. Use groupBy with a validity mask.",
       );
-    return this.values.max();
+    return this.dtype === "float32" || this.dtype === "float64"
+      ? this.values.pandasReduce("max")
+      : this.values.max();
   }
 
   /**
@@ -229,7 +243,9 @@ export class Series {
   }
 
   loc(label: Label): Series {
-    const positions = this.index.flatMap((v, i) => (v === label ? [i] : []));
+    const positions = this.index.flatMap((v, i) =>
+      labelsEqual(v, label) ? [i] : [],
+    );
     if (!positions.length) throw tableError();
     return new Series(
       this.values.get(indices(positions)),
@@ -355,7 +371,7 @@ export class DataFrame {
     if (
       this.index.length !== length ||
       series.some(([, s]) =>
-        s.index.some((label, i) => label !== this.index[i]),
+        s.index.some((label, i) => !labelsEqual(label, this.index[i])),
       )
     )
       throw tableError(
@@ -430,7 +446,12 @@ export class DataFrame {
     if (this.validity.size)
       throw tableError("Nullable frame reductions are pending. Use groupBy.");
     return Object.fromEntries(
-      [...this.#columns].map(([name, col]) => [name, col.sum()]),
+      [...this.#columns].map(([name, col]) => [
+        name,
+        col.dtype === "float32" || col.dtype === "float64"
+          ? col.pandasReduce("sum")
+          : col.sum(),
+      ]),
     );
   }
 
@@ -498,7 +519,13 @@ export class DataFrame {
     options: ComputeOptions & { ascending?: boolean; nullsLast?: boolean } = {},
   ): Promise<DataFrame> {
     return this.#rows(
-      (p) => p.sort(by, options.ascending === false, options.nullsLast ?? true),
+      (p) =>
+        p.sort(
+          by,
+          options.ascending === false,
+          options.nullsLast ?? true,
+          true,
+        ),
       options,
     );
   }
@@ -554,7 +581,7 @@ export class DataFrame {
       options.dropna ?? true,
       true,
     );
-    if (options.sort !== false) plan = plan.sort(key);
+    if (options.sort !== false) plan = plan.sort(key, false, true, true);
     const out = await plan.compute(options);
     return new DataFrame(out.columns, { validity: out.validity });
   }

@@ -35,6 +35,168 @@ function rows(frame, names = frame.columns) {
     }),
   );
 }
+test("Polars projections reject duplicate output names without native admission", async () => {
+  const ctx = context();
+  try {
+    const a = ctx.array([1], { dtype: "float64" });
+    const b = ctx.array([2], { dtype: "float64" });
+    const keep = ctx.array([true], { dtype: "bool" });
+    const frame = new pl.DataFrame(
+      new Map([
+        ["a", a],
+        ["b", b],
+        ["keep", keep],
+      ]),
+    );
+    const invalid = [
+      frame.lazy().select("a", "a"),
+      frame.lazy().select(pl.col("a").alias("x"), pl.col("b").alias("x")),
+      frame.lazy().withColumns(pl.col("a").alias("x"), pl.col("b").alias("x")),
+      frame.lazy().withColumns(pl.col("a").alias("a"), pl.col("b").alias("a")),
+    ];
+    for (const query of invalid) {
+      const executions = ctx.metrics().executions.length;
+      await assert.rejects(query.collect(), { code: "NMATH_INDEX_INVALID" });
+      assert.equal(ctx.metrics().executions.length, executions);
+    }
+
+    const selected = await frame
+      .lazy()
+      .select(pl.col("a").alias("x"), pl.col("b").alias("y"))
+      .collect();
+    assert.deepEqual(selected.columns, ["x", "y"]);
+    assert.deepEqual(rows(selected), [[1, 2]]);
+
+    const replaced = await frame
+      .lazy()
+      .withColumns(pl.col("b").alias("a"))
+      .collect();
+    assert.deepEqual(replaced.columns, ["a", "b", "keep"]);
+    assert.deepEqual(rows(replaced, ["a", "b"]), [[2, 2]]);
+
+    const sequential = await frame
+      .lazy()
+      .withColumns(pl.col("a").alias("x"))
+      .withColumns(pl.col("b").alias("x"))
+      .collect();
+    assert.deepEqual(sequential.columns, ["a", "b", "keep", "x"]);
+    assert.deepEqual(rows(sequential, ["x"]), [[2]]);
+
+    const nullable = new pl.DataFrame([
+      new pl.Series("a", a, ctx.array([true], { dtype: "bool" })),
+      new pl.Series("b", b),
+    ]);
+    assert.throws(() => nullable.lazy().select("a", "a"), {
+      code: "NMATH_INDEX_INVALID",
+    });
+    assert.throws(() => frame.lazy().filter("keep").select("a", "a"), {
+      code: "NMATH_INDEX_INVALID",
+    });
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("pandas floating reductions skip NaNs while core reductions propagate them", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const values of [
+        [NaN, 1, 3],
+        [1, NaN, 3],
+        [1, 3, NaN],
+      ]) {
+        const input = ctx.array(values, { dtype });
+        const series = new pd.Series(input);
+        for (const [name, expected] of Object.entries({
+          sum: 4,
+          mean: 2,
+          min: 1,
+          max: 3,
+        })) {
+          assert.equal(series[name]().dtype, dtype);
+          assert.equal(await series[name]().compute(), expected);
+          assert.ok(Number.isNaN(await input[name]().compute()));
+        }
+        assert.equal(await new pd.DataFrame({ x: input }).sum().x.compute(), 4);
+      }
+      for (const values of [[], [NaN, NaN]]) {
+        const input = ctx.array(values, { dtype });
+        const series = new pd.Series(input);
+        assert.equal(await series.sum().compute(), 0);
+        assert.ok(Number.isNaN(await series.mean().compute()));
+        assert.ok(Number.isNaN(await series.min().compute()));
+        assert.ok(Number.isNaN(await series.max().compute()));
+        assert.equal(await new pd.DataFrame({ x: input }).sum().x.compute(), 0);
+      }
+      const plain = new pd.Series(ctx.array([1, 3], { dtype }));
+      assert.equal(await plain.mean().compute(), 2);
+      const infinite = new pd.Series(ctx.array([Infinity, 1], { dtype }));
+      assert.equal(await infinite.sum().compute(), Infinity);
+      assert.equal(await infinite.min().compute(), 1);
+      const opposed = new pd.Series(
+        ctx.array([Infinity, -Infinity], { dtype }),
+      );
+      assert.ok(Number.isNaN(await opposed.sum().compute()));
+    }
+    const values = ctx.array([1, NaN, 3], { dtype: "float64" });
+    const validity = ctx.array([true, false, true], { dtype: "bool" });
+    const nullable = new pd.Series(values, "x", undefined, validity);
+    assert.throws(() => nullable.sum(), /Nullable Series reductions/);
+    assert.throws(
+      () => new pd.DataFrame({ x: nullable }).sum(),
+      /Nullable frame reductions/,
+    );
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("pandas reduction keeps execution-start snapshots, cancellation and budgets", async () => {
+  const ctx = context({ maxConcurrentJobs: 1, maxQueueLength: 8 });
+  try {
+    const blocker = ctx.zeros([512, 512], "float64");
+    const running = blocker.matmul(blocker).compute();
+    const input = ctx.array([1, NaN, 3], { dtype: "float64" });
+    const write = input.set([0], 5);
+    const queued = new pd.Series(input).sum().compute();
+    await write;
+    assert.equal(await queued, 8);
+    await running;
+    const runningAgain = blocker.matmul(blocker).compute();
+    const queuedCancel = new AbortController();
+    const pending = new pd.Series(input)
+      .sum()
+      .compute({ signal: queuedCancel.signal });
+    queuedCancel.abort();
+    await assert.rejects(pending, { code: "NMATH_CANCELLED" });
+    await runningAgain;
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await assert.rejects(
+      new pd.Series(input).sum().compute({ signal: cancelled.signal }),
+      {
+        code: "NMATH_CANCELLED",
+      },
+    );
+    await assert.rejects(
+      new pd.Series(input).sum().compute({ device: "gpu" }),
+      { code: "NMATH_GPU_UNSUPPORTED_OPERATION" },
+    );
+  } finally {
+    await ctx.close();
+  }
+  const tiny = context({ cpuMemoryBudget: 24n });
+  try {
+    const input = tiny.array([1, NaN, 3], { dtype: "float64" });
+    await assert.rejects(new pd.Series(input).mean().compute(), {
+      code: "NMATH_MEMORY_BUDGET_EXCEEDED",
+    });
+    assert.equal(tiny.metrics().cpuMemory.used, 24n);
+  } finally {
+    await tiny.close();
+  }
+});
 test("fixed pandas and Polars duplicate/null joins, groups, stable sort and empty groups", async () => {
   const ctx = context();
   try {
@@ -163,6 +325,15 @@ test("pandas dropna excludes float NaN keys while Polars retains them", async ()
         ],
       );
       assert.deepEqual(
+        rows(await pandas.groupBy("k", "v", "sum", { dropna: false })),
+        [
+          [1, 10],
+          [2, 9],
+          [Number.NaN, 50],
+          [null, 100],
+        ],
+      );
+      assert.deepEqual(
         rows(await frame.lazy().groupBy("k", "v", "sum").collect()),
         [
           [2, 9],
@@ -180,6 +351,212 @@ test("pandas dropna excludes float NaN keys while Polars retains them", async ()
       assert.deepEqual(rows(empty), []);
       assert.equal(empty.get("k").dtype, dtype);
       assert.equal(empty.get("v").dtype, "int32");
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("pandas float sorts place valid NaNs and masked rows independently of direction", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      const basic = new pd.DataFrame(
+        { k: ctx.array([1, Number.NaN, 2], { dtype }) },
+        { index: ["one", "nan", "two"] },
+      );
+      for (const [ascending, nullsLast, expected] of [
+        [true, true, ["one", "two", "nan"]],
+        [true, false, ["nan", "one", "two"]],
+        [false, true, ["two", "one", "nan"]],
+        [false, false, ["nan", "two", "one"]],
+      ]) {
+        const sorted = await basic.sortValues("k", { ascending, nullsLast });
+        assert.deepEqual(
+          sorted.index,
+          expected,
+          `${dtype}/${ascending}/${nullsLast}`,
+        );
+        assert.equal(sorted.get("k").dtype, dtype);
+        assert.equal(
+          Number.isNaN(
+            sorted.get("k").values.item(sorted.index.indexOf("nan")),
+          ),
+          true,
+        );
+      }
+      assert.deepEqual(
+        (await basic.sortValues("k", { ascending: false })).index,
+        ["two", "one", "nan"],
+      );
+
+      const labels = [
+        "two-a",
+        "nan-a",
+        "one-a",
+        "nan-b",
+        "two-b",
+        "masked",
+        "one-b",
+      ];
+      const keys = [2, Number.NaN, 1, Number.NaN, 2, 99, 1];
+      const mask = [true, true, true, true, true, false, true];
+      const frame = new pd.DataFrame(
+        {
+          k: ctx.array(keys, { dtype }),
+          companion: ctx.array([0, 1, 2, 3, 4, 5, 6], { dtype: "int32" }),
+        },
+        {
+          index: labels,
+          validity: new Map([["k", ctx.array(mask, { dtype: "bool" })]]),
+        },
+      );
+      for (const [ascending, nullsLast, positions] of [
+        [true, true, [2, 6, 0, 4, 1, 3, 5]],
+        [true, false, [1, 3, 5, 2, 6, 0, 4]],
+        [false, true, [0, 4, 2, 6, 1, 3, 5]],
+        [false, false, [1, 3, 5, 0, 4, 2, 6]],
+      ]) {
+        const sorted = await frame.sortValues("k", { ascending, nullsLast });
+        const key = sorted.get("k");
+        assert.deepEqual(
+          sorted.index,
+          positions.map((i) => labels[i]),
+        );
+        assert.deepEqual(sorted.get("companion").values.toArray(), positions);
+        assert.deepEqual(
+          key.values.toArray(),
+          positions.map((i) => keys[i]),
+        );
+        assert.deepEqual(
+          key.validity.toArray(),
+          positions.map((i) => mask[i]),
+        );
+        assert.equal(key.dtype, dtype);
+      }
+
+      for (const values of [[], [Number.NaN, Number.NaN]]) {
+        const allNaN = new pd.DataFrame({ k: ctx.array(values, { dtype }) });
+        for (const ascending of [true, false]) {
+          const sorted = await allNaN.sortValues("k", { ascending });
+          assert.equal(sorted.shape[0], values.length);
+          assert.equal(sorted.get("k").dtype, dtype);
+          assert.deepEqual(sorted.get("k").values.toArray(), values);
+        }
+      }
+      const invalid = new pd.DataFrame(
+        { k: ctx.array([3, 1], { dtype }) },
+        {
+          index: ["first", "second"],
+          validity: new Map([
+            ["k", ctx.array([false, false], { dtype: "bool" })],
+          ]),
+        },
+      );
+      assert.deepEqual((await invalid.sortValues("k")).index, [
+        "first",
+        "second",
+      ]);
+      const finite = new pd.DataFrame(
+        { k: ctx.array([Infinity, -Infinity, -0, 0], { dtype }) },
+        { index: ["pos-inf", "neg-inf", "neg-zero", "pos-zero"] },
+      );
+      for (const [ascending, expected] of [
+        [true, ["neg-inf", "neg-zero", "pos-zero", "pos-inf"]],
+        [false, ["pos-inf", "neg-zero", "pos-zero", "neg-inf"]],
+      ]) {
+        const sorted = await finite.sortValues("k", { ascending });
+        assert.deepEqual(sorted.index, expected);
+        assert.equal(Object.is(sorted.get("k").values.item(1), -0), true);
+      }
+
+      const polars = new pl.DataFrame([
+        new pl.Series("k", ctx.array([1, Number.NaN, 2], { dtype })),
+      ]);
+      assert.deepEqual(rows(await polars.lazy().sort("k").collect()), [
+        [1],
+        [2],
+        [Number.NaN],
+      ]);
+      assert.deepEqual(
+        rows(await polars.lazy().sort("k", { descending: true }).collect()),
+        [[Number.NaN], [2], [1]],
+      );
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+test("Polars grouped float max ignores NaN without changing other aggregates", async () => {
+  const ctx = context();
+  async function grouped(dtype, input, valid, op = "max", pandas = false) {
+    const keys = ctx.array(
+      input.map(() => 1),
+      { dtype: "int32" },
+    );
+    const values = ctx.array(input, { dtype });
+    const mask = ctx.array(valid, { dtype: "bool" });
+    const frame = new pl.DataFrame([
+      new pl.Series("k", keys),
+      new pl.Series("v", values, mask),
+    ]);
+    try {
+      const out = pandas
+        ? await frame.toPandas().groupBy("k", "v", op)
+        : await frame.lazy().groupBy("k", "v", op).collect();
+      try {
+        if (input.length === 0) return { rows: 0 };
+        const column = pandas ? out.get("v") : out.getColumn("v");
+        return {
+          rows: 1,
+          value: Number(column.values.item(0)),
+          valid: column.validity?.item(0) ?? true,
+        };
+      } finally {
+        for (const name of out.columns) {
+          const column = pandas ? out.get(name) : out.getColumn(name);
+          column.values.dispose();
+          column.validity?.dispose();
+        }
+      }
+    } finally {
+      keys.dispose();
+      values.dispose();
+      mask.dispose();
+    }
+  }
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const [input, valid, expected] of [
+        [[1, NaN], [true, true], 1],
+        [[NaN, 1], [true, true], 1],
+        [[NaN, -Infinity], [true, true], -Infinity],
+        [[Infinity, NaN], [true, true], Infinity],
+        [[NaN, NaN], [true, true], NaN],
+        [[NaN, 2], [true, false], NaN],
+        [[1, NaN, 99], [true, true, false], 1],
+        [[1, 2], [true, true], 2],
+        [[1, 2], [false, false], null],
+      ]) {
+        const actual = await grouped(dtype, input, valid);
+        assert.equal(actual.rows, 1);
+        assert.equal(actual.valid, expected !== null);
+        if (expected !== null) assert.ok(Object.is(actual.value, expected));
+      }
+      assert.deepEqual(await grouped(dtype, [], []), { rows: 0 });
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "max", true)).value,
+        1,
+      );
+      assert.equal(
+        (await grouped(dtype, [1, NaN], [true, true], "count")).value,
+        2,
+      );
+      for (const op of ["sum", "mean"])
+        assert.ok(
+          Number.isNaN(
+            (await grouped(dtype, [1, NaN], [true, true], op)).value,
+          ),
+        );
     }
   } finally {
     await ctx.close();
@@ -430,6 +807,118 @@ test("pandas Series arithmetic rejects mismatched duplicate labels in either ope
     assert.throws(
       () => nullable.add(unique),
       (error) => error.code === "NMATH_INDEX_INVALID",
+    );
+  } finally {
+    await ctx.close();
+  }
+});
+test("pandas NaN labels select and align with the same equality as frame indexes", async () => {
+  const ctx = context();
+  try {
+    const make = (values, index, name = "x", validity) =>
+      new pd.Series(
+        ctx.array(values, { dtype: "float64" }),
+        name,
+        index,
+        validity && ctx.array(validity, { dtype: "bool" }),
+      );
+    const nullable = make([10, 20, 30], [Number.NaN, "a", Number.NaN], "x", [
+      true,
+      true,
+      false,
+    ]);
+    const selected = await nullable.loc(Number.NaN).compute();
+    assert.deepEqual(selected.index, [Number.NaN, Number.NaN]);
+    assert.deepEqual(selected.values.toArray(), [10, 30]);
+    assert.deepEqual(selected.validity.toArray(), [true, false]);
+    assert.throws(() => nullable.loc("missing"), /NMATH_INDEX_INVALID/);
+
+    const frame = new pd.DataFrame({ x: nullable });
+    const explicit = new pd.DataFrame(
+      { x: nullable },
+      { index: [Number.NaN, "a", Number.NaN] },
+    );
+    for (const result of [frame, explicit]) {
+      assert.deepEqual(result.shape, [3, 1]);
+      assert.deepEqual(result.index, [Number.NaN, "a", Number.NaN]);
+      assert.deepEqual(result.get("x").values.toArray(), [10, 20, 30]);
+      assert.deepEqual(result.get("x").validity.toArray(), [true, true, false]);
+    }
+    assert.throws(
+      () =>
+        new pd.DataFrame(
+          { x: nullable },
+          { index: [Number.NaN, Number.NaN, "a"] },
+        ),
+      /NMATH_INDEX_INVALID/,
+    );
+
+    const left = make([10, 20], [Number.NaN, "a"]);
+    const right = make([2, 1], ["a", Number.NaN], "right");
+    const duplicate = make([10, 20], [Number.NaN, Number.NaN]);
+    const matchingDuplicate = make([1, 2], [Number.NaN, Number.NaN], "right");
+    const expected = {
+      add: [
+        [11, 22],
+        [11, 22],
+      ],
+      sub: [
+        [9, 18],
+        [9, 18],
+      ],
+      mul: [
+        [10, 40],
+        [10, 40],
+      ],
+      div: [
+        [10, 10],
+        [10, 10],
+      ],
+      mod: [
+        [0, 0],
+        [0, 0],
+      ],
+      pow: [
+        [10, 400],
+        [10, 400],
+      ],
+    };
+    for (const [operation, [uniqueValues, duplicateValues]] of Object.entries(
+      expected,
+    )) {
+      const aligned = left[operation](right);
+      assert.deepEqual(aligned.index, [Number.NaN, "a"]);
+      assert.deepEqual((await aligned.toArray()).toArray(), uniqueValues);
+      const positional = duplicate[operation](matchingDuplicate);
+      assert.deepEqual(positional.index, [Number.NaN, Number.NaN]);
+      assert.deepEqual((await positional.toArray()).toArray(), duplicateValues);
+    }
+    assert.throws(
+      () =>
+        make([1, 2, 3], [Number.NaN, Number.NaN, "a"]).add(
+          make([4, 5, 6], [Number.NaN, "a", Number.NaN]),
+        ),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.throws(
+      () => left.add(make([1, 2], [Number.NaN, "b"])),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.throws(
+      () => left.add(make([1, 2], [Number.NaN, "a"], "right", [true, false])),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.deepEqual(
+      (
+        await make([10], [0])
+          .add(make([1], [-0]))
+          .toArray()
+      ).toArray(),
+      [11],
+    );
+    assert.throws(
+      () => make([10], [1]).add(make([1], ["1"])),
+      /NMATH_INDEX_INVALID/,
     );
   } finally {
     await ctx.close();

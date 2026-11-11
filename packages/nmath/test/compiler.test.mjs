@@ -59,7 +59,7 @@ function project(files) {
   return dir;
 }
 
-const MAIN = `import { createContext } from "@delinoio/nmath";
+const MAIN = `import { createContext, NMathArray } from "@delinoio/nmath";
 import { scale } from "./scale.nts";
 
 const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 4, cpuMemoryBudget: 1n << 20n, gpuMemoryBudget: 0n });
@@ -67,6 +67,7 @@ const a = ctx.array([1, 2, 3], { dtype: "float64" });
 const b = scale(a) + a ** 2;
 a[0] = 10;
 const result = await (b - -a).compute();
+if (!(result instanceof NMathArray)) throw new Error("expected an array result");
 console.log(JSON.stringify(result.toArray()));
 console.log(1 + 2);
 await ctx.close();
@@ -130,6 +131,106 @@ test(
     }
   },
 );
+
+test(".nts unary rejects known string and datetime operands at source positions", async () => {
+  const source = `import { createContext } from "@delinoio/nmath";
+const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 1, cpuMemoryBudget: 1024n, gpuMemoryBudget: 0n });
+const text = ctx.array(["a"], { dtype: "str" });
+const dates = ctx.array(new BigInt64Array([1n]), { dtype: "datetime64" });
+const a = -text;
+const b = +text;
+const c = -dates;
+const d = +dates;
+export { a, b, c, d };
+`;
+  const dir = project({ "main.nts": source });
+  try {
+    const tsconfig = join(dir, "tsconfig.json");
+    const expectedLines = [5, 6, 7, 8];
+    const expectedColumns = expectedLines.map(
+      (line) =>
+        source.split("\n")[line - 1].indexOf(line < 7 ? "text" : "dates") + 1,
+    );
+    const checked = await check({ tsconfig });
+    assert.equal(checked.ok, false);
+    const typeErrors = checked.diagnostics.filter(
+      (diagnostic) => diagnostic.code === "NMATH_COMPILER_TYPE_ERROR",
+    );
+    assert.equal(typeErrors.length, 4, JSON.stringify(checked.diagnostics));
+    assert.deepEqual(
+      typeErrors.map(({ file, line, column }) => ({
+        file: file?.endsWith("main.nts"),
+        line,
+        column,
+      })),
+      expectedLines.map((line, index) => ({
+        file: true,
+        line,
+        column: expectedColumns[index],
+      })),
+    );
+    mkdirSync(join(dir, "out"));
+    writeFileSync(join(dir, "out", "main.js"), "old");
+    const built = await build({ tsconfig });
+    assert.equal(built.ok, false);
+    assert.deepEqual(built.outputFiles, []);
+    assert.equal(readFileSync(join(dir, "out", "main.js"), "utf8"), "old");
+    assert.equal(existsSync(join(dir, "out", "main.d.ts")), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test(".nts unary preserves supported dtypes and ordinary JavaScript unary", async () => {
+  const source = `import { createContext, type Expr } from "@delinoio/nmath";
+const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 4, cpuMemoryBudget: 4096n, gpuMemoryBudget: 0n });
+const floats = ctx.full([2] as const, 2, "float32");
+const integers = ctx.full([2] as const, 2, "int32");
+const complex = ctx.zeros([2] as const, "complex64");
+const durations = ctx.zeros([2] as const, "timedelta64");
+const floatNeg: Expr<"float32", readonly [2]> = -floats;
+const floatPos: Expr<"float32", readonly [2]> = +floats;
+const integerNeg: Expr<"int32", readonly [2]> = -integers;
+const complexNeg: Expr<"complex64", readonly [2]> = -complex;
+const durationPos: Expr<"timedelta64", readonly [2]> = +durations;
+const ordinaryNegative = -3;
+const ordinaryPositive = +4;
+const floatResult = await floatNeg.compute();
+const complexResult = await complexNeg.compute();
+const durationResult = await durationPos.compute();
+console.log(JSON.stringify({ floatValues: floatResult.toArray(), floatPosDtype: floatPos.dtype, integerDtype: integerNeg.dtype, complexDtype: complexResult.dtype, complexShape: complexResult.shape, durationDtype: durationResult.dtype, durationShape: durationResult.shape, ordinaryNegative, ordinaryPositive }));
+floatResult.dispose(); complexResult.dispose(); durationResult.dispose();
+await ctx.close();
+`;
+  const dir = project({ "main.nts": source });
+  try {
+    const built = await build({ tsconfig: join(dir, "tsconfig.json") });
+    assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
+    const mainJs = readFileSync(join(dir, "out", "main.js"), "utf8");
+    assert.match(mainJs, /__nmath\.neg\(floats\)/);
+    assert.match(mainJs, /__nmath\.pos\(durations\)/);
+    assert.doesNotMatch(mainJs, /__nmath\.(?:neg|pos)\([34]\)/);
+    const output = JSON.parse(
+      execFileSync(process.execPath, [join(dir, "out", "main.js")], {
+        cwd: dir,
+        encoding: "utf8",
+      }).trim(),
+    );
+    assert.deepEqual(output, {
+      floatValues: [-2, -2],
+      floatPosDtype: "float32",
+      integerDtype: "int32",
+      complexDtype: "complex64",
+      complexShape: [2],
+      durationDtype: "timedelta64",
+      durationShape: [2],
+      ordinaryNegative: -3,
+      ordinaryPositive: 4,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test(
   "the CLI wrapper forwards arguments and exit codes",
@@ -240,12 +341,14 @@ a.dispose(); result.dispose(); await ctx.close();
 });
 
 test("nts bracket indexing accepts newaxis and ellipsis", async () => {
-  const source = `import { createContext, ellipsis, newaxis } from "@delinoio/nmath";
+  const source = `import { createContext, ellipsis, newaxis, NMathArray } from "@delinoio/nmath";
 const ctx = createContext({ maxConcurrentJobs: 1, maxQueueLength: 1, cpuMemoryBudget: 4096, gpuMemoryBudget: 0 });
 const a = ctx.zeros([2, 3], "int32");
 a[[ellipsis, 1]] = 5n;
 const view = a[[newaxis, ellipsis, 1]];
-console.log(JSON.stringify([view.shape, (await view.compute()).toArray(), a[newaxis].shape]));
+const result = await view.compute();
+if (!(result instanceof NMathArray)) throw new Error("expected an array result");
+console.log(JSON.stringify([view.shape, result.toArray(), a[newaxis].shape]));
 await ctx.close();
 `;
   const dir = project({ "main.nts": source });
