@@ -392,11 +392,13 @@ test("creation rejects invalid dimensions before allocation or native conversion
   const creators = [
     (shape) => ctx.arrayFromFloat16Bits(new Uint16Array([0x3c00]), { shape }),
     (shape) => ctx.array([7], { dtype: "int32", shape }),
+    (shape) => ctx.array(["x"], { dtype: "str", shape }),
     (shape) => ctx.array(new Int32Array([7]), { dtype: "int32", shape }),
     (shape) => ctx.full(shape, 1, "int32"),
     (shape) => ctx.zeros(shape, "int32"),
     (shape) => rng.random(shape),
     (shape) => np.array(ctx, [7], { dtype: "int32", shape }),
+    (shape) => np.array(ctx, ["x"], { dtype: "str", shape }),
     (shape) => np.zeros(ctx, shape, "int32"),
     (shape) => np.ones(ctx, shape, "int32"),
     (shape) => np.full(ctx, shape, 1, "int32"),
@@ -419,6 +421,62 @@ test("creation rejects invalid dimensions before allocation or native conversion
     "NMATH_MEMORY_BUDGET_EXCEEDED",
   );
   await ctx.close();
+});
+
+test("string array dimensions are checked before input and budget work", async () => {
+  const unread = ["x"];
+  Object.defineProperty(unread, 0, {
+    get() {
+      throw new Error("Input was scanned before shape validation.");
+    },
+  });
+  const roomy = context();
+  throwsWith(
+    () => roomy.array(unread, { dtype: "str", shape: [NaN] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  throwsWith(
+    () => np.array(roomy, unread, { dtype: "str", shape: [NaN] }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  assert.equal(roomy.metrics().cpuMemory.used, 0n);
+
+  const inferred = roomy.array(["😀"], { dtype: "str", shape: [1] });
+  assert.deepEqual(inferred.shape, [1]);
+  assert.equal(inferred.stringWidth, 1);
+  assert.equal(inferred.item(0), "😀");
+  const wide = np.array(roomy, ["한😀"], {
+    dtype: "str",
+    shape: [1],
+    stringWidth: 3,
+  });
+  assert.equal(wide.stringWidth, 3);
+  assert.equal(wide.item(0), "한😀");
+  throwsWith(
+    () => roomy.array([["x"], ["y", "z"]], { dtype: "str" }),
+    "NMATH_SHAPE_MISMATCH",
+  );
+  assert.throws(
+    () => roomy.array(["x"], { dtype: "str", shape: [1], stringWidth: 0 }),
+    /width/,
+  );
+  inferred.dispose();
+  wide.dispose();
+  await roomy.close();
+
+  const fourBytes = context({ cpuMemoryBudget: 4 });
+  const one = fourBytes.array(["x"], { dtype: "str", shape: [1] });
+  assert.equal(fourBytes.metrics().cpuMemory.used, 4n);
+  assert.equal(one.item(0), "x");
+  one.dispose();
+  await fourBytes.close();
+
+  const exhausted = context({ cpuMemoryBudget: 0 });
+  throwsWith(
+    () => exhausted.array(["x"], { dtype: "str", shape: [1] }),
+    "NMATH_MEMORY_BUDGET_EXCEEDED",
+  );
+  await exhausted.close();
 });
 
 test("valid dimensions retain shape and length checks", async () => {

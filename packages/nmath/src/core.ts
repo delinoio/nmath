@@ -1702,6 +1702,9 @@ export class NMathContext {
     data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
     options: ArrayOptions<D, S>,
   ): NMathArray<D, Shape> {
+    const explicitShape = options.shape
+      ? validatedShape(options.shape)
+      : undefined;
     if (options.dtype === "str") {
       let width = 1;
       const visit = (v: unknown): void => {
@@ -1726,9 +1729,6 @@ export class NMathContext {
     }
     let values: ArrayLike<unknown>;
     let shape: number[];
-    const explicitShape = options.shape
-      ? validatedShape(options.shape)
-      : undefined;
     if (
       options.dtype === "float16" &&
       typeof Float16Array !== "undefined" &&
@@ -1737,7 +1737,7 @@ export class NMathContext {
       this.ensureCpuBudget(data.length, options.dtype);
       const array = native(() =>
         this.nativeContext.array(
-          options.shape ? [...options.shape] : [data.length],
+          explicitShape ?? [data.length],
           options.dtype,
           Buffer.from(data.buffer, data.byteOffset, data.byteLength),
         ),
