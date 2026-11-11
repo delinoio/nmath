@@ -76,28 +76,31 @@ impl MemoryBudget {
     pub fn reserve(&self, bytes: u64) -> Result<Reservation> {
         let mut state = self.state.lock().unwrap();
         let usage = &mut state.usage;
-        if usage.used.saturating_add(bytes) > usage.limit {
-            usage.rejected += 1;
-            tracing::debug!(
-                event = "nmath.memory.rejected",
-                device = self.device.id(),
-                requested = bytes,
-                used = usage.used,
-                limit = usage.limit
-            );
-            return Err(Error::new(
-                ErrorCode::MemoryBudgetExceeded,
-                format!(
-                    "Reserving {bytes} bytes on {} would exceed the budget ({} of {} bytes in \
-                     use).",
-                    self.device.id(),
-                    usage.used,
-                    usage.limit
-                ),
-            ));
-        }
-        usage.used += bytes;
-        usage.cumulative_reserved += bytes;
+        let next_used = match usage.used.checked_add(bytes) {
+            Some(total) if total <= usage.limit => total,
+            _ => {
+                usage.rejected += 1;
+                tracing::debug!(
+                    event = "nmath.memory.rejected",
+                    device = self.device.id(),
+                    requested = bytes,
+                    used = usage.used,
+                    limit = usage.limit
+                );
+                return Err(Error::new(
+                    ErrorCode::MemoryBudgetExceeded,
+                    format!(
+                        "Reserving {bytes} bytes on {} would exceed the budget ({} of {} bytes in \
+                         use).",
+                        self.device.id(),
+                        usage.used,
+                        usage.limit
+                    ),
+                ));
+            }
+        };
+        usage.used = next_used;
+        usage.cumulative_reserved = usage.cumulative_reserved.saturating_add(bytes);
         usage.peak = usage.peak.max(usage.used);
         Ok(Reservation {
             budget: Some(self.clone()),
@@ -160,5 +163,48 @@ mod tests {
         let budget = MemoryBudget::new(Device::Gpu, 0);
         assert!(budget.reserve(0).is_ok());
         assert!(budget.reserve(1).is_err());
+    }
+
+    #[test]
+    fn overflowing_active_total_rejects_without_changing_held_charge() {
+        for device in [Device::Cpu, Device::Gpu] {
+            let budget = MemoryBudget::new(device, u64::MAX);
+            let held = budget.reserve(u64::MAX).unwrap();
+            let before = budget.usage();
+            assert_eq!(
+                budget.reserve(1).unwrap_err().code,
+                ErrorCode::MemoryBudgetExceeded
+            );
+            assert_eq!(
+                budget.usage(),
+                MemoryUsage {
+                    rejected: before.rejected + 1,
+                    ..before
+                }
+            );
+
+            drop(held);
+            assert_eq!(budget.usage().used, 0);
+            let next = budget.reserve(1).unwrap();
+            assert_eq!(budget.usage().cumulative_reserved, u64::MAX);
+            drop(next);
+            assert_eq!(budget.usage().used, 0);
+        }
+    }
+
+    #[test]
+    fn exact_maximum_active_total_fits() {
+        let budget = MemoryBudget::new(Device::Cpu, u64::MAX);
+        let first = budget.reserve(u64::MAX - 1).unwrap();
+        let last = budget.reserve(1).unwrap();
+        let usage = budget.usage();
+        assert_eq!(usage.used, u64::MAX);
+        assert_eq!(usage.peak, u64::MAX);
+        assert_eq!(usage.cumulative_reserved, u64::MAX);
+        assert_eq!(usage.rejected, 0);
+        drop(first);
+        assert_eq!(budget.usage().used, 1);
+        drop(last);
+        assert_eq!(budget.usage().used, 0);
     }
 }

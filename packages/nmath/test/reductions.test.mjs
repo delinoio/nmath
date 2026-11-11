@@ -10,6 +10,92 @@ const values = [
   [4, 5, 6],
 ];
 
+test("floating extrema select signed zeros across reduction axes", async () => {
+  const ctx = context();
+  try {
+    for (const dtype of ["float32", "float64"]) {
+      for (const order of [
+        [-0, 0],
+        [0, -0],
+      ]) {
+        const flat = ctx.array(order, { dtype });
+        assert.equal(Object.is(await flat.min().compute(), -0), true);
+        assert.equal(Object.is(await flat.max().compute(), 0), true);
+
+        const row = ctx.array([order], { dtype });
+        const column = ctx.array(
+          order.map((value) => [value]),
+          { dtype },
+        );
+        for (const [array, axis] of [
+          [row, 1],
+          [column, 0],
+        ]) {
+          for (const [op, expected] of [
+            ["min", -0],
+            ["max", 0],
+          ]) {
+            const result = await array[op](axis, { keepdims: true }).compute();
+            assert.equal(result.dtype, dtype);
+            assert.deepEqual(result.shape, [1, 1]);
+            assert.equal(Object.is(result.toArray()[0][0], expected), true);
+            result.dispose();
+          }
+        }
+      }
+
+      const grid = ctx.array(
+        [
+          [-0, 0],
+          [0, -0],
+        ],
+        { dtype },
+      );
+      for (const axis of [0, 1]) {
+        for (const [op, expected] of [
+          ["min", -0],
+          ["max", 0],
+        ]) {
+          const result = await grid[op](axis).compute();
+          assert.equal(result.dtype, dtype);
+          assert.deepEqual(result.shape, [2]);
+          assert.equal(
+            result.toArray().every((value) => Object.is(value, expected)),
+            true,
+          );
+          result.dispose();
+        }
+      }
+
+      const finite = ctx.array([-3, 2, Number.POSITIVE_INFINITY], { dtype });
+      assert.equal(await finite.min().compute(), -3);
+      assert.equal(await finite.max().compute(), Number.POSITIVE_INFINITY);
+      const nan = ctx.array([1, Number.NaN, -1], { dtype });
+      assert.equal(Number.isNaN(await nan.min().compute()), true);
+      assert.equal(Number.isNaN(await nan.max().compute()), true);
+    }
+
+    for (const bits of [
+      [0x8000, 0],
+      [0, 0x8000],
+    ]) {
+      const half = ctx.arrayFromFloat16Bits(Uint16Array.from(bits), {
+        shape: [2],
+      });
+      assert.equal(
+        Object.is(await half.min().compute(), bits[0] ? -0 : 0),
+        true,
+      );
+      assert.equal(
+        Object.is(await half.max().compute(), bits[0] ? -0 : 0),
+        true,
+      );
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("product reductions promote like NumPy sums", async () => {
   const ctx = context();
   try {

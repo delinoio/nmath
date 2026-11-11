@@ -66,7 +66,7 @@ fn shifts_roll_the_requested_axes_in_numpy_direction() {
 #[test]
 fn expression_validation_rejects_repeated_and_out_of_range_axes() {
     let matrix = dense(&[2, 3], Buffer::I32(vec![0, 1, 2, 3, 4, 5]));
-    let input = Expr::input(&NdArray::from_dense(0, matrix));
+    let input = Expr::input(&NdArray::from_dense(0, matrix).unwrap());
     let all = Expr::shift(ShiftOp::FftShift, &input, None).unwrap();
     assert_eq!(all.shape(), &[2, 3]);
     assert_eq!(all.dtype(), nmath_core::DType::Int32);

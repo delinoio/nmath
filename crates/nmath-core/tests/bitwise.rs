@@ -68,7 +68,7 @@ fn packed(j: &Json) -> DenseArray {
 }
 
 fn input(a: DenseArray) -> Expr {
-    Expr::input(&NdArray::from_dense(1, a))
+    Expr::input(&NdArray::from_dense(1, a).unwrap())
 }
 
 #[test]
