@@ -27,10 +27,10 @@ impl ToNapiValue for TextResult {
         let mut valid = Vec::with_capacity(val.0.table.columns.len());
         for c in std::mem::take(&mut val.0.table.columns) {
             values.push(NativeArray {
-                inner: Some(NdArray::from_dense(val.1, c.values)),
+                inner: Some(NdArray::from_dense(val.1, c.values).map_err(to_napi)?),
             });
             valid.push(NativeArray {
-                inner: Some(NdArray::from_dense(val.1, c.valid)),
+                inner: Some(NdArray::from_dense(val.1, c.valid).map_err(to_napi)?),
             });
         }
         let object = NativeTextTable {
