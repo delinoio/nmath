@@ -180,7 +180,31 @@ export function arange(
   }
   const length = Math.max(0, Math.ceil((stop - start) / step));
   context.ensureCpuBudget(length, dtype);
-  const values = Array.from({ length }, (_, i) => start + i * step);
+  const ValueArray = {
+    int32: Int32Array,
+    uint32: Uint32Array,
+    float32: Float32Array,
+    float64: Float64Array,
+  }[dtype];
+  const values = new ValueArray(length);
+  if (length > 0) values[0] = start;
+  if (length > 1) values[1] = start + step;
+  if (length > 2) {
+    // NumPy derives the fill increment from the first two stored values.
+    const increment = new ValueArray(1);
+    increment[0] = values[1] - values[0];
+    for (let i = 2; i < length; i++) {
+      values[i] =
+        dtype === "int32" || dtype === "uint32"
+          ? values[0] + Math.imul(i, increment[0])
+          : dtype === "float32"
+            ? // NumPy converts the integer index to float32 before multiplying.
+              Math.fround(
+                values[0] + Math.fround(Math.fround(i) * increment[0]),
+              )
+            : values[0] + i * increment[0];
+    }
+  }
   return context.array(values as never, { dtype, shape: [length] as [number] });
 }
 

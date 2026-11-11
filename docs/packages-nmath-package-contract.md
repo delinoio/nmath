@@ -54,6 +54,8 @@ NPY saves charge their encoded output and serialization workspace to the context
 
 Array creation helpers (`ctx.array`, `ctx.full`, `ctx.zeros` and the NumPy `ones`, `full` and `arange` forms) check the CPU budget before they build JS or native input buffers and fail with `NMATH_MEMORY_BUDGET_EXCEEDED` when the input cannot fit. The context still makes the authoritative reservation when it creates the array.
 
+The supported `numpy.arange` form calculates its length from the JavaScript arguments, then stores its first two values in the requested dtype. Its remaining values use the difference between those stored values as the dtype-specific fill increment. This preserves the first two conversions when the output has only one or two elements.
+
 Explicit and inferred dimensions in `ctx.array`, `ctx.full`, `ctx.zeros` and `ctx.generator(seed).random(shape)` must be finite integers from `0` through `4294967295`, inclusive. Their NumPy wrappers use the same rule. Invalid dimensions fail with `NMATH_SHAPE_MISMATCH` before budget arithmetic, input allocation or native shape conversion. Rank-zero shape `[]` and zero dimensions remain valid. A valid shape whose data length differs from its element count also fails with `NMATH_SHAPE_MISMATCH`.
 
 Elementwise binary expression construction rejects an inferred output whose signed layout is unrepresentable with `NMATH_SHAPE_MISMATCH`, including when individually valid empty operands broadcast to such an output. This happens before a compute job is submitted. Representable empty broadcasts remain valid.
