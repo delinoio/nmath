@@ -4,7 +4,10 @@
 //! Call `validate` before queue admission, then `execute` on the worker after
 //! freezing inputs. A job owns one device; failures never retry or fall back.
 
-use std::sync::{Arc, Mutex, mpsc};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex, mpsc},
+};
 
 use crate::{
     array::NdArray,
@@ -12,7 +15,7 @@ use crate::{
     dtype::DType,
     error::{Error, ErrorCode, Result},
     expr::{Expr, ExprKind},
-    kernels::{self, ReduceOp},
+    kernels::{self, ReduceOp, ReductionPolicy},
     memory::{Device, MemoryBudget, Reservation},
     sync::CancellationToken,
 };
@@ -62,10 +65,26 @@ fn elements(shape: &[usize]) -> Result<u32> {
 /// Check the complete graph before admission. A weak scalar adopts only its
 /// binary parent's already-inferred compute dtype. No result dtype is narrowed.
 pub fn validate(expr: &Expr) -> Result<()> {
-    validate_node(expr, None)
+    validate_with_visit(expr, &mut || {})
 }
 
-fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
+fn validate_with_visit(expr: &Expr, visit: &mut impl FnMut()) -> Result<()> {
+    validate_node(expr, None, &mut HashSet::new(), visit)
+}
+
+fn validate_node(
+    expr: &Expr,
+    weak: Option<DType>,
+    validated: &mut HashSet<(*const ExprKind, Option<DType>)>,
+    visit: &mut impl FnMut(),
+) -> Result<()> {
+    // The kind lives in the shared Arc node, so its address identifies the
+    // node for the lifetime of this validation call.
+    let key = (expr.kind() as *const ExprKind, weak);
+    if validated.contains(&key) {
+        return Ok(());
+    }
+    visit();
     let dtype = weak.unwrap_or(expr.dtype());
     if !supported_dtype(dtype) {
         return Err(unsupported(
@@ -85,7 +104,7 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             }
             Ok(())
         }
-        ExprKind::Unary(_, a) => validate_node(a, None),
+        ExprKind::Unary(_, a) => validate_node(a, None, validated, visit),
         ExprKind::Binary {
             op,
             lhs,
@@ -106,11 +125,16 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
                 validate_node(
                     a,
                     matches!(a.kind(), ExprKind::Scalar(_)).then_some(*compute_dtype),
+                    validated,
+                    visit,
                 )?;
             }
             Ok(())
         }
-        ExprKind::Reduce(op, a, axes) => {
+        ExprKind::Reduce(op, a, axes, policy) => {
+            if *policy == ReductionPolicy::SkipNan {
+                return Err(unsupported("Pandas reductions run on the CPU."));
+            }
             if !matches!(
                 op,
                 ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
@@ -119,7 +143,7 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
                     "The reduction is outside the GPU subset. Compute it on the CPU.",
                 ));
             }
-            validate_node(a, None)?;
+            validate_node(a, None, validated, visit)?;
             let axes = kernels::reduce_axes(a.shape().len(), axes.as_deref())?;
             if matches!(op, ReduceOp::Min | ReduceOp::Max)
                 && axes
@@ -135,12 +159,57 @@ fn validate_node(expr: &Expr, weak: Option<DType>) -> Result<()> {
             Ok(())
         }
         ExprKind::MatMul(a, b) => {
-            validate_node(a, None)?;
-            validate_node(b, None)
+            validate_node(a, None, validated, visit)?;
+            validate_node(b, None, validated, visit)
         }
         _ => Err(unsupported(
             "The graph contains an operation outside the GPU subset.",
         )),
+    }?;
+    // Failed states are never cached, preserving first-encounter errors.
+    validated.insert(key);
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn validation_visits(expr: &Expr) -> Result<usize> {
+    let mut visits = 0;
+    validate_with_visit(expr, &mut || visits += 1)?;
+    Ok(visits)
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use std::cell::Cell;
+
+    use super::*;
+    use crate::buffer::Scalar;
+
+    #[test]
+    fn shared_weak_scalar_is_checked_for_each_effective_dtype() {
+        let scalar = Expr::scalar(Scalar::Int(1));
+        let mut validated = HashSet::new();
+        let visits = Cell::new(0);
+        let mut count = || visits.set(visits.get() + 1);
+
+        validate_node(&scalar, Some(DType::Float32), &mut validated, &mut count).unwrap();
+        validate_node(&scalar, Some(DType::Float32), &mut validated, &mut count).unwrap();
+        validate_node(&scalar, Some(DType::Int32), &mut validated, &mut count).unwrap();
+        validate_node(&scalar, Some(DType::UInt32), &mut validated, &mut count).unwrap();
+        assert_eq!(visits.get(), 3);
+        assert_eq!(
+            validate_node(&scalar, None, &mut validated, &mut count)
+                .unwrap_err()
+                .code,
+            ErrorCode::GpuUnsupportedOperation
+        );
+        assert_eq!(
+            validate_node(&scalar, Some(DType::Float64), &mut validated, &mut count)
+                .unwrap_err()
+                .code,
+            ErrorCode::GpuUnsupportedOperation
+        );
+        assert_eq!(visits.get(), 5);
     }
 }
 
@@ -260,8 +329,8 @@ impl<'a> Runtime<'a> {
         let b = self.upload(&right.buffer)?;
         let expression = Expr::binary(
             crate::kernels::BinaryOp::Mul,
-            &Expr::input(&NdArray::from_dense(0, left)),
-            &Expr::input(&NdArray::from_dense(0, right)),
+            &Expr::input(&NdArray::from_dense(0, left)?),
+            &Expr::input(&NdArray::from_dense(0, right)?),
         )?;
         let result = self.run(&expression, &a, Some(&b))?;
         let _host = self.cpu.reserve(8)?;
@@ -415,7 +484,7 @@ impl<'a> Runtime<'a> {
             });
         self.check()?;
         let inner = match expr.kind() {
-            ExprKind::Reduce(_, input, axes) => {
+            ExprKind::Reduce(_, input, axes, _) => {
                 let axes = kernels::reduce_axes(input.shape().len(), axes.as_deref())?;
                 axes.iter()
                     .zip(input.shape())
@@ -550,7 +619,7 @@ impl<'a> Runtime<'a> {
                     value.clone(),
                 )?)
             }
-            ExprKind::Unary(_, a) | ExprKind::Reduce(_, a, _) => {
+            ExprKind::Unary(_, a) | ExprKind::Reduce(_, a, _, _) => {
                 let a = self.evaluate(a, None, snapshot)?;
                 self.run(expr, &a, None)
             }

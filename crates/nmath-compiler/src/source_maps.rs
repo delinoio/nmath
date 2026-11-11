@@ -283,6 +283,105 @@ pub(crate) fn compose(path: &str, text: &str, sources: &Sources) -> Result<Strin
     serde_json::to_string(&map).map_err(|e| e.to_string())
 }
 
+/// Move generated mappings with the emitter text they came from. Newly
+/// synthesized wrapper and cleanup syntax has no original source location.
+pub(crate) fn relocate_generated(
+    text: &str,
+    old: &str,
+    new: &str,
+    copies: &[crate::async_decorators::CopySpan],
+) -> Result<String, String> {
+    let mut map: Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
+    let mut generator = new_generator(
+        map["file"].as_str().unwrap_or_default(),
+        "",
+        "",
+        Default::default(),
+    );
+    let sources = map["sources"]
+        .as_array()
+        .ok_or("Source map has no sources")?;
+    let mut ids = Vec::with_capacity(sources.len());
+    for (index, source) in sources.iter().enumerate() {
+        let id = generator.add_source(source.as_str().ok_or("Invalid source path")?);
+        if let Some(content) = map["sourcesContent"][index].as_str() {
+            generator.set_source_content(id, content)?;
+        }
+        ids.push(id);
+    }
+    let old_coordinates = EcmaCoordinateIndex::new(old);
+    let new_coordinates = EcmaCoordinateIndex::new(new);
+    let mut mappings = Vec::new();
+    let mut decoder = decode_mappings(map["mappings"].as_str().ok_or("Missing mappings")?);
+    for mapping in decoder.values() {
+        let old = old_coordinates
+            .offset_of_line_character(mapping.generated_line, mapping.generated_character)
+            as usize;
+        if let Some(copy) = copies
+            .iter()
+            .find(|copy| copy.old_start <= old && old < copy.old_end)
+        {
+            let new = copy.new_start + old - copy.old_start;
+            let (line, column) = new_coordinates.line_character(new as u32);
+            mappings.push((
+                line,
+                column,
+                mapping.source_index.get(),
+                mapping.source_line,
+                mapping.source_character,
+                mapping.name_index.get(),
+            ));
+        }
+    }
+    if let Some(error) = decoder.error() {
+        return Err(format!("Invalid source map mappings: {error}"));
+    }
+    // End a prior source range at every synthesized gap. A later mapped
+    // segment restarts the source mapping at its new generated position.
+    let mut new_cursor = 0;
+    for copy in copies {
+        if copy.new_start > new_cursor {
+            let (line, column) = new_coordinates.line_character(new_cursor as u32);
+            mappings.push((line, column, None, None, None, None));
+        }
+        new_cursor = copy.new_start + copy.old_end - copy.old_start;
+    }
+    if new_cursor < new.len() {
+        let (line, column) = new_coordinates.line_character(new_cursor as u32);
+        mappings.push((line, column, None, None, None, None));
+    }
+    mappings.sort_by_key(|entry| (entry.0, entry.1));
+    mappings.dedup_by_key(|entry| (entry.0, entry.1));
+    for (line, column, source, source_line, source_column, name) in mappings {
+        if let (Some(source), Some(source_line), Some(source_column)) =
+            (source, source_line, source_column)
+        {
+            let id = *ids.get(source as usize).ok_or("Invalid source index")?;
+            if let Some(name) = name.and_then(|index| map["names"][index as usize].as_str()) {
+                let name = generator.add_name(name);
+                generator.add_named_source_mapping(
+                    line,
+                    column,
+                    id,
+                    source_line,
+                    source_column,
+                    name,
+                )?;
+            } else {
+                generator.add_source_mapping(line, column, id, source_line, source_column)?;
+            }
+        } else {
+            generator.add_generated_mapping(line, column)?;
+        }
+    }
+    let relocated: Value =
+        serde_json::from_str(&generator.string()).map_err(|error| error.to_string())?;
+    for key in ["sources", "sourcesContent", "names", "mappings"] {
+        map[key] = relocated[key].clone();
+    }
+    serde_json::to_string(&map).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use tsrs_sourcemap::{decode_mappings, new_generator};

@@ -29,7 +29,10 @@ export default function SecureChat({ content }: { content: string }) {
         onLinkCheck: (url) => {
           const trusted = ["your-domain.com"];
           const hostname = new URL(url).hostname;
-          return trusted.some((d) => hostname.endsWith(d));
+          return trusted.some(
+            (domain) =>
+              hostname === domain || hostname.endsWith("." + domain),
+          );
         },
       }}
       plugins={{ code }}

@@ -3,10 +3,21 @@ import { NMathArray, type NMathContext } from "./core.js";
 import { binding } from "./native.js";
 import { nativeAsync } from "./errors.js";
 import type { Column, Validity } from "./frame.js";
-import type { ComputableDType, Shape } from "./types.js";
+import type { Shape } from "./types.js";
 
 export type TextFormat = "csv" | "json";
-export type TextDType = Exclude<ComputableDType, "complex64" | "complex128">;
+export type TextDType =
+  | "bool"
+  | "int8"
+  | "int16"
+  | "int32"
+  | "int64"
+  | "uint8"
+  | "uint16"
+  | "uint32"
+  | "uint64"
+  | "float32"
+  | "float64";
 export interface TextReadOptions {
   /** Complete ordered schema. Required to preserve narrow and all-null dtypes. */
   schema?: ReadonlyMap<string, TextDType>;

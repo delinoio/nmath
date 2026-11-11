@@ -48,17 +48,18 @@ fi
 mkdir -p "$(dirname "$OUTPUT")"
 
 echo "Opening: $URL"
-agent-browser:open "$URL"
+agent-browser open "$URL"
 
 echo "Waiting for page load..."
-agent-browser:wait --load networkidle
+agent-browser wait --load networkidle
 
 if [[ "$MODE" == "element" && -n "$SELECTOR" ]]; then
     echo "Capturing element: $SELECTOR"
-    agent-browser:screenshot --selector "$SELECTOR" --output "$OUTPUT"
+    agent-browser screenshot "$SELECTOR" "$OUTPUT"
 else
     echo "Capturing full page (1500x1000)"
-    agent-browser:screenshot --viewport 1500x1000 --output "$OUTPUT"
+    agent-browser set viewport 1500 1000
+    agent-browser screenshot "$OUTPUT" --full
 fi
 
 echo "Screenshot saved: $OUTPUT"
