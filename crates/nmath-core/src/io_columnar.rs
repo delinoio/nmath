@@ -63,6 +63,13 @@ fn io_error(_: impl std::error::Error) -> Error {
         "A local file operation failed. Check permissions and the destination directory.",
     )
 }
+fn modified_error() -> Error {
+    Error::new(
+        ErrorCode::IoModified,
+        "The input file changed during decoding. Retry with a stable file.",
+    )
+}
+
 fn writer_error(error: impl std::error::Error + 'static) -> Error {
     let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(&error);
     while let Some(current) = cause {
@@ -255,15 +262,32 @@ pub fn read(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<FileTable> {
+    read_with(path, format, budget, token, |_| {})
+}
+fn read_with(
+    path: &Path,
+    format: Format,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+    mut on_read_boundary: impl FnMut(usize),
+) -> Result<FileTable> {
     token.check()?;
     let mut file = File::open(path).map_err(io_error)?;
     let before = file.metadata().map_err(io_error)?;
     let len = usize::try_from(before.len()).map_err(|_| size_error())?;
     let _input = budget.reserve(before.len())?;
     let mut bytes = vec![0; len];
-    for chunk in bytes.chunks_mut(64 * 1024) {
+    on_read_boundary(0);
+    for (index, chunk) in bytes.chunks_mut(64 * 1024).enumerate() {
         token.check()?;
-        file.read_exact(chunk).map_err(io_error)?;
+        file.read_exact(chunk).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::UnexpectedEof {
+                modified_error()
+            } else {
+                io_error(error)
+            }
+        })?;
+        on_read_boundary(index + 1);
     }
     // Conservative metadata/codec bound for the pinned Arrow/Parquet versions.
     // Preflight constrains nested lengths before any library parse. Numeric
@@ -375,10 +399,7 @@ fn check_unchanged(path: &Path, file: &File, before: &fs::Metadata) -> Result<()
     if stamp(before) != stamp(&file.metadata().map_err(io_error)?)
         || stamp(before) != stamp(&fs::metadata(path).map_err(io_error)?)
     {
-        return Err(Error::new(
-            ErrorCode::IoModified,
-            "The input file changed during decoding. Retry with a stable file.",
-        ));
+        return Err(modified_error());
     }
     Ok(())
 }
