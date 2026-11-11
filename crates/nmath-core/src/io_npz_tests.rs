@@ -45,6 +45,45 @@ fn zip_members(entries: &[(&str, &[u8])]) -> Vec<u8> {
 }
 
 #[test]
+fn stored_and_deflated_members_accept_alternate_npy_header_forms() {
+    let headers = [
+        "{\"descr\": \"<f8\", \"fortran_order\": False, \"shape\": (1,), }",
+        "{'descr' : '<f8', 'fortran_order' : False, 'shape' : (1,), }",
+        "{'descr': \"<f8\", 'fortran_order': False, 'shape': (1,), }",
+        "{'descr': '<f8', 'fortran_order': False, 'shape': (1,), }",
+    ];
+    for compression in [CompressionMethod::Stored, CompressionMethod::Deflated] {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        for (index, header) in headers.iter().enumerate() {
+            let mut padded = header.as_bytes().to_vec();
+            padded.extend(vec![b' '; (64 - (10 + padded.len() + 1) % 64) % 64]);
+            padded.push(b'\n');
+            let mut npy = b"\x93NUMPY\x01\x00".to_vec();
+            npy.extend_from_slice(&(padded.len() as u16).to_le_bytes());
+            npy.extend_from_slice(&padded);
+            npy.extend_from_slice(&1.25f64.to_le_bytes());
+            zip.start_file(
+                format!("header-{index}.npy"),
+                SimpleFileOptions::default().compression_method(compression),
+            )
+            .unwrap();
+            zip.write_all(&npy).unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let budget = budget();
+        let archive = io_npz::decode_npz(&bytes, &budget, &token()).unwrap();
+        assert_eq!(archive.arrays.len(), headers.len());
+        for (index, array) in archive.arrays.iter().enumerate() {
+            assert_eq!(array.name, format!("header-{index}"));
+            assert_eq!(array.array.shape, vec![1]);
+            assert_eq!(array.array.buffer, Buffer::F64(vec![1.25]));
+        }
+        drop(archive);
+        assert_eq!(budget.usage().used, 0);
+    }
+}
+
+#[test]
 fn exact_numpy_254_fixtures_and_both_roundtrips() {
     for fixture in [STORED, DEFLATED] {
         let budget = budget();
