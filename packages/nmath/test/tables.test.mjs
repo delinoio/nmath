@@ -812,6 +812,118 @@ test("pandas Series arithmetic rejects mismatched duplicate labels in either ope
     await ctx.close();
   }
 });
+test("pandas NaN labels select and align with the same equality as frame indexes", async () => {
+  const ctx = context();
+  try {
+    const make = (values, index, name = "x", validity) =>
+      new pd.Series(
+        ctx.array(values, { dtype: "float64" }),
+        name,
+        index,
+        validity && ctx.array(validity, { dtype: "bool" }),
+      );
+    const nullable = make([10, 20, 30], [Number.NaN, "a", Number.NaN], "x", [
+      true,
+      true,
+      false,
+    ]);
+    const selected = await nullable.loc(Number.NaN).compute();
+    assert.deepEqual(selected.index, [Number.NaN, Number.NaN]);
+    assert.deepEqual(selected.values.toArray(), [10, 30]);
+    assert.deepEqual(selected.validity.toArray(), [true, false]);
+    assert.throws(() => nullable.loc("missing"), /NMATH_INDEX_INVALID/);
+
+    const frame = new pd.DataFrame({ x: nullable });
+    const explicit = new pd.DataFrame(
+      { x: nullable },
+      { index: [Number.NaN, "a", Number.NaN] },
+    );
+    for (const result of [frame, explicit]) {
+      assert.deepEqual(result.shape, [3, 1]);
+      assert.deepEqual(result.index, [Number.NaN, "a", Number.NaN]);
+      assert.deepEqual(result.get("x").values.toArray(), [10, 20, 30]);
+      assert.deepEqual(result.get("x").validity.toArray(), [true, true, false]);
+    }
+    assert.throws(
+      () =>
+        new pd.DataFrame(
+          { x: nullable },
+          { index: [Number.NaN, Number.NaN, "a"] },
+        ),
+      /NMATH_INDEX_INVALID/,
+    );
+
+    const left = make([10, 20], [Number.NaN, "a"]);
+    const right = make([2, 1], ["a", Number.NaN], "right");
+    const duplicate = make([10, 20], [Number.NaN, Number.NaN]);
+    const matchingDuplicate = make([1, 2], [Number.NaN, Number.NaN], "right");
+    const expected = {
+      add: [
+        [11, 22],
+        [11, 22],
+      ],
+      sub: [
+        [9, 18],
+        [9, 18],
+      ],
+      mul: [
+        [10, 40],
+        [10, 40],
+      ],
+      div: [
+        [10, 10],
+        [10, 10],
+      ],
+      mod: [
+        [0, 0],
+        [0, 0],
+      ],
+      pow: [
+        [10, 400],
+        [10, 400],
+      ],
+    };
+    for (const [operation, [uniqueValues, duplicateValues]] of Object.entries(
+      expected,
+    )) {
+      const aligned = left[operation](right);
+      assert.deepEqual(aligned.index, [Number.NaN, "a"]);
+      assert.deepEqual((await aligned.toArray()).toArray(), uniqueValues);
+      const positional = duplicate[operation](matchingDuplicate);
+      assert.deepEqual(positional.index, [Number.NaN, Number.NaN]);
+      assert.deepEqual((await positional.toArray()).toArray(), duplicateValues);
+    }
+    assert.throws(
+      () =>
+        make([1, 2, 3], [Number.NaN, Number.NaN, "a"]).add(
+          make([4, 5, 6], [Number.NaN, "a", Number.NaN]),
+        ),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.throws(
+      () => left.add(make([1, 2], [Number.NaN, "b"])),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.throws(
+      () => left.add(make([1, 2], [Number.NaN, "a"], "right", [true, false])),
+      /NMATH_INDEX_INVALID/,
+    );
+    assert.deepEqual(
+      (
+        await make([10], [0])
+          .add(make([1], [-0]))
+          .toArray()
+      ).toArray(),
+      [11],
+    );
+    assert.throws(
+      () => make([10], [1]).add(make([1], ["1"])),
+      /NMATH_INDEX_INVALID/,
+    );
+  } finally {
+    await ctx.close();
+  }
+});
 test("table errors reject mixed contexts, malformed masks, GPU and cancellation without leaking names", async () => {
   const a = context(),
     b = context();

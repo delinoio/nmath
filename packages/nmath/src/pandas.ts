@@ -43,6 +43,10 @@ import * as polars from "./polars.js";
 import type { ComputableDType, Shape } from "./types.js";
 
 export type Label = string | number;
+function labelsEqual(left: Label, right: Label): boolean {
+  return left === right || (Number.isNaN(left) && Number.isNaN(right));
+}
+
 function unwrap(value: Series | Operand, source: Series): Operand {
   if (source.validity)
     throw tableError(
@@ -55,7 +59,7 @@ function unwrap(value: Series | Operand, source: Series): Operand {
     );
   if (
     source.index.length === value.index.length &&
-    source.index.every((label, i) => label === value.index[i])
+    source.index.every((label, i) => labelsEqual(label, value.index[i]))
   )
     return value.values;
   if (
@@ -66,7 +70,9 @@ function unwrap(value: Series | Operand, source: Series): Operand {
     throw tableError(
       "This arithmetic requires unique matching labels. Align labels explicitly.",
     );
-  const positions = source.index.map((label) => value.index.indexOf(label));
+  const positions = source.index.map((label) =>
+    value.index.findIndex((candidate) => labelsEqual(candidate, label)),
+  );
   if (positions.some((i) => i < 0))
     throw tableError(
       "Outer label alignment is pending. Supply matching labels.",
@@ -237,7 +243,9 @@ export class Series {
   }
 
   loc(label: Label): Series {
-    const positions = this.index.flatMap((v, i) => (v === label ? [i] : []));
+    const positions = this.index.flatMap((v, i) =>
+      labelsEqual(v, label) ? [i] : [],
+    );
     if (!positions.length) throw tableError();
     return new Series(
       this.values.get(indices(positions)),
@@ -363,7 +371,7 @@ export class DataFrame {
     if (
       this.index.length !== length ||
       series.some(([, s]) =>
-        s.index.some((label, i) => label !== this.index[i]),
+        s.index.some((label, i) => !labelsEqual(label, this.index[i])),
       )
     )
       throw tableError(
