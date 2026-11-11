@@ -35,6 +35,67 @@ function rows(frame, names = frame.columns) {
     }),
   );
 }
+test("Polars projections reject duplicate output names without native admission", async () => {
+  const ctx = context();
+  try {
+    const a = ctx.array([1], { dtype: "float64" });
+    const b = ctx.array([2], { dtype: "float64" });
+    const keep = ctx.array([true], { dtype: "bool" });
+    const frame = new pl.DataFrame(
+      new Map([
+        ["a", a],
+        ["b", b],
+        ["keep", keep],
+      ]),
+    );
+    const invalid = [
+      frame.lazy().select("a", "a"),
+      frame.lazy().select(pl.col("a").alias("x"), pl.col("b").alias("x")),
+      frame.lazy().withColumns(pl.col("a").alias("x"), pl.col("b").alias("x")),
+      frame.lazy().withColumns(pl.col("a").alias("a"), pl.col("b").alias("a")),
+    ];
+    for (const query of invalid) {
+      const executions = ctx.metrics().executions.length;
+      await assert.rejects(query.collect(), { code: "NMATH_INDEX_INVALID" });
+      assert.equal(ctx.metrics().executions.length, executions);
+    }
+
+    const selected = await frame
+      .lazy()
+      .select(pl.col("a").alias("x"), pl.col("b").alias("y"))
+      .collect();
+    assert.deepEqual(selected.columns, ["x", "y"]);
+    assert.deepEqual(rows(selected), [[1, 2]]);
+
+    const replaced = await frame
+      .lazy()
+      .withColumns(pl.col("b").alias("a"))
+      .collect();
+    assert.deepEqual(replaced.columns, ["a", "b", "keep"]);
+    assert.deepEqual(rows(replaced, ["a", "b"]), [[2, 2]]);
+
+    const sequential = await frame
+      .lazy()
+      .withColumns(pl.col("a").alias("x"))
+      .withColumns(pl.col("b").alias("x"))
+      .collect();
+    assert.deepEqual(sequential.columns, ["a", "b", "keep", "x"]);
+    assert.deepEqual(rows(sequential, ["x"]), [[2]]);
+
+    const nullable = new pl.DataFrame([
+      new pl.Series("a", a, ctx.array([true], { dtype: "bool" })),
+      new pl.Series("b", b),
+    ]);
+    assert.throws(() => nullable.lazy().select("a", "a"), {
+      code: "NMATH_INDEX_INVALID",
+    });
+    assert.throws(() => frame.lazy().filter("keep").select("a", "a"), {
+      code: "NMATH_INDEX_INVALID",
+    });
+  } finally {
+    await ctx.close();
+  }
+});
 
 test("pandas floating reductions skip NaNs while core reductions propagate them", async () => {
   const ctx = context();
