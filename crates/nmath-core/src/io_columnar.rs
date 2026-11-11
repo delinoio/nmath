@@ -57,12 +57,23 @@ fn unsupported() -> Error {
          without custom metadata.",
     )
 }
-fn io_error(_: std::io::Error) -> Error {
+fn io_error(_: impl std::error::Error) -> Error {
     Error::new(
         ErrorCode::IoFailed,
         "A local file operation failed. Check permissions and the destination directory.",
     )
 }
+fn writer_error(error: impl std::error::Error + 'static) -> Error {
+    let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(&error);
+    while let Some(current) = cause {
+        if current.is::<std::io::Error>() {
+            return io_error(error);
+        }
+        cause = current.source();
+    }
+    format_error()
+}
+
 fn size_error() -> Error {
     Error::new(
         ErrorCode::MemoryBudgetExceeded,
@@ -498,6 +509,61 @@ fn batch(
     .map_err(|_| format_error())
 }
 
+fn write_payload<W: Write + Send>(
+    sink: &mut W,
+    format: Format,
+    schema: SchemaRef,
+    table: &Table,
+    token: &CancellationToken,
+) -> Result<()> {
+    match format {
+        Format::ArrowIpc => {
+            let mut writer = arrow_ipc::writer::FileWriter::try_new(&mut *sink, &schema)
+                .map_err(writer_error)?;
+            for start in (0..table.rows).step_by(4096) {
+                token.check()?;
+                writer
+                    .write(&batch(
+                        schema.clone(),
+                        table,
+                        start,
+                        (table.rows - start).min(4096),
+                        token,
+                    )?)
+                    .map_err(writer_error)?;
+            }
+            writer.finish().map_err(writer_error)?;
+        }
+        Format::Parquet => {
+            // Snappy has bounded workspace and broad interoperability. Other
+            // codecs need separate workspace preflight before enabling them.
+            let props = WriterProperties::builder()
+                .set_compression(Compression::SNAPPY)
+                .set_dictionary_enabled(false)
+                .set_encoding(Encoding::PLAIN)
+                .set_max_row_group_row_count(Some(4096))
+                .build();
+            let mut writer = ArrowWriter::try_new(&mut *sink, schema.clone(), Some(props))
+                .map_err(writer_error)?;
+            for start in (0..table.rows).step_by(4096) {
+                token.check()?;
+                writer
+                    .write(&batch(
+                        schema.clone(),
+                        table,
+                        start,
+                        (table.rows - start).min(4096),
+                        token,
+                    )?)
+                    .map_err(writer_error)?;
+                writer.flush().map_err(writer_error)?;
+            }
+            writer.close().map_err(writer_error)?;
+        }
+    }
+    Ok(())
+}
+
 /// Streaming serialization into a sibling temporary file. No output-file-sized
 /// buffer is constructed, and only publication can turn this into success.
 pub fn write(
@@ -509,6 +575,31 @@ pub fn write(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<()> {
+    write_with_payload(
+        path,
+        format,
+        schema,
+        table,
+        mode,
+        budget,
+        token,
+        write_payload::<File>,
+    )
+}
+
+fn write_with_payload<F>(
+    path: &Path,
+    format: Format,
+    schema: SchemaRef,
+    table: &Table,
+    mode: WriteMode,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+    payload: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut File, Format, SchemaRef, &Table, &CancellationToken) -> Result<()>,
+{
     token.check()?;
     check_schema(&schema)?;
     if schema.fields().len() != table.columns.len() {
@@ -576,51 +667,7 @@ pub fn write(
         }
     }
     let cleanup = Cleanup(tmp);
-    match format {
-        Format::ArrowIpc => {
-            let mut writer = arrow_ipc::writer::FileWriter::try_new(&mut file, &schema)
-                .map_err(|_| format_error())?;
-            for start in (0..table.rows).step_by(4096) {
-                token.check()?;
-                writer
-                    .write(&batch(
-                        schema.clone(),
-                        table,
-                        start,
-                        (table.rows - start).min(4096),
-                        token,
-                    )?)
-                    .map_err(|_| format_error())?;
-            }
-            writer.finish().map_err(|_| format_error())?;
-        }
-        Format::Parquet => {
-            // Snappy has bounded workspace and broad interoperability. Other
-            // codecs need separate workspace preflight before enabling them.
-            let props = WriterProperties::builder()
-                .set_compression(Compression::SNAPPY)
-                .set_dictionary_enabled(false)
-                .set_encoding(Encoding::PLAIN)
-                .set_max_row_group_row_count(Some(4096))
-                .build();
-            let mut writer = ArrowWriter::try_new(&mut file, schema.clone(), Some(props))
-                .map_err(|_| format_error())?;
-            for start in (0..table.rows).step_by(4096) {
-                token.check()?;
-                writer
-                    .write(&batch(
-                        schema.clone(),
-                        table,
-                        start,
-                        (table.rows - start).min(4096),
-                        token,
-                    )?)
-                    .map_err(|_| format_error())?;
-                writer.flush().map_err(|_| format_error())?;
-            }
-            writer.close().map_err(|_| format_error())?;
-        }
-    }
+    payload(&mut file, format, schema, table, token)?;
     file.flush().map_err(io_error)?;
     file.sync_all().map_err(io_error)?;
     drop(file);
