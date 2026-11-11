@@ -1284,7 +1284,10 @@ impl NativeContext {
                         .try_for_each(|(_, array)| checked_shape(array.shape()).map(|_| ()))
                     {
                         Ok(()) => deferred.resolve(Box::new(move |_| Ok(NativeNpzResult(archive)))),
-                        Err(error) => deferred.reject(to_napi(error)),
+                        Err(error) => {
+                            drop(archive);
+                            deferred.reject(to_napi(error));
+                        }
                     },
                     Err(error) => deferred.reject(to_napi(error)),
                 }
