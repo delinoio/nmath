@@ -123,6 +123,22 @@ struct Queued {
     cancel: Cancel,
 }
 
+impl Queued {
+    fn cancel(self, error: Error) {
+        let Queued {
+            token,
+            start,
+            cancel,
+            ..
+        } = self;
+        // The start closure owns unused FIFO tickets. Release them before
+        // user completion code can submit and wait for a successor.
+        drop(start);
+        drop(token);
+        cancel(error);
+    }
+}
+
 #[derive(Default)]
 struct Sched {
     running: HashMap<u64, CancellationToken>,
@@ -522,7 +538,7 @@ impl Context {
         }
         for job in queued {
             finish_record(inner, job.id, ExecutionStatus::Cancelled);
-            (job.cancel)(Error::new(ErrorCode::Cancelled, "The context was closed."));
+            job.cancel(Error::new(ErrorCode::Cancelled, "The context was closed."));
         }
         let mut sched = inner.sched.lock().unwrap();
         while !sched.running.is_empty() {
@@ -569,7 +585,7 @@ fn cancel_queued(inner: &Arc<Inner>, id: u64) {
     };
     if let Some(job) = job {
         finish_record(inner, id, ExecutionStatus::Cancelled);
-        (job.cancel)(Error::new(
+        job.cancel(Error::new(
             ErrorCode::Cancelled,
             "The computation was cancelled while queued.",
         ));
@@ -1380,6 +1396,7 @@ mod publication_tests {
     use std::{fs, sync::mpsc, time::Duration};
 
     use super::*;
+    use crate::{Buffer, Scalar};
 
     fn context() -> Context {
         Context::new(ContextOptions {
@@ -1513,6 +1530,185 @@ mod publication_tests {
                     panic!("completion case {case} exceeded 10 seconds");
                 }
                 std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    #[test]
+    fn queued_cancellation_callback_releases_tickets() {
+        use std::{process::Command, sync::atomic::AtomicUsize, thread};
+
+        const CASE_ENV: &str = "NMATH_QUEUED_CANCELLATION_TEST_CASE";
+        if let Ok(case) = std::env::var(CASE_ENV) {
+            let ctx = context();
+            let target = ctx.array(vec![1], Buffer::I32(vec![0])).unwrap();
+            let generator = ctx.generator(73);
+            let initial_state = generator.current();
+            let mut expected_state = initial_state;
+            let expected_sample = expected_state.next_f64();
+            let (started_tx, started_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let (block_done, block_rx) = completion();
+            ctx.submit(
+                OperationKind::Compute,
+                "blocker",
+                Device::Cpu,
+                CancellationToken::new(),
+                Box::new(move |_| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(JobOutput::Unit)
+                }),
+                block_done,
+            )
+            .unwrap();
+            started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+            let cancelled = CancellationToken::new();
+            let (callback_tx, callback_rx) = mpsc::channel();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let callback_calls = calls.clone();
+            let callback_ctx = ctx.clone();
+            let callback_target = target.clone();
+            let callback_generator = generator.clone();
+            let callback_release = release_tx.clone();
+            let callback_case = case.clone();
+            let on_cancel: Done = Box::new(move |result| {
+                callback_calls.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+                let metrics = callback_ctx.metrics();
+                assert_eq!(metrics.total_cancelled, 1);
+                assert_eq!(
+                    metrics
+                        .executions
+                        .iter()
+                        .filter(|record| record.status == ExecutionStatus::Cancelled)
+                        .count(),
+                    1
+                );
+                assert_eq!(callback_generator.current(), initial_state);
+                if callback_case == "control" {
+                    callback_tx.send(()).unwrap();
+                    return;
+                }
+
+                let (replacement_done, replacement_rx) = completion();
+                if callback_case == "generator" {
+                    callback_ctx
+                        .compute(
+                            &Expr::random(callback_ctx.id(), &callback_generator, vec![1]),
+                            Device::Cpu,
+                            CancellationToken::new(),
+                            replacement_done,
+                        )
+                        .unwrap();
+                } else {
+                    callback_ctx
+                        .assign(
+                            &callback_target,
+                            vec![],
+                            &Expr::scalar(Scalar::Int(2)),
+                            CancellationToken::new(),
+                            replacement_done,
+                        )
+                        .unwrap();
+                }
+                callback_release.send(()).unwrap();
+                let result = replacement_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                if callback_case == "generator" {
+                    match result.unwrap() {
+                        JobOutput::Value(Value::Dense(value)) => {
+                            assert_eq!(value.buffer, Buffer::F64(vec![expected_sample]));
+                        }
+                        output => panic!("unexpected replacement output: {output:?}"),
+                    }
+                    assert_eq!(callback_generator.current(), expected_state);
+                } else {
+                    assert!(result.is_ok());
+                    assert_eq!(callback_target.to_buffer(), Buffer::I32(vec![2]));
+                }
+                callback_tx.send(()).unwrap();
+            });
+
+            if case == "generator" {
+                ctx.compute(
+                    &Expr::random(ctx.id(), &generator, vec![1]),
+                    Device::Cpu,
+                    cancelled.clone(),
+                    on_cancel,
+                )
+                .unwrap();
+            } else {
+                ctx.assign(
+                    &target,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(1)),
+                    cancelled.clone(),
+                    on_cancel,
+                )
+                .unwrap();
+            }
+            let cancel_thread = thread::spawn(move || cancelled.cancel());
+            callback_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            cancel_thread.join().unwrap();
+
+            if case == "control" {
+                let (replacement_done, replacement_rx) = completion();
+                ctx.assign(
+                    &target,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(2)),
+                    CancellationToken::new(),
+                    replacement_done,
+                )
+                .unwrap();
+                release_tx.send(()).unwrap();
+                replacement_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(target.to_buffer(), Buffer::I32(vec![2]));
+            }
+            block_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            let metrics = ctx.metrics();
+            assert_eq!(metrics.total_submitted, 3);
+            assert_eq!(metrics.total_succeeded, 2);
+            assert_eq!(metrics.total_cancelled, 1);
+            assert_eq!(metrics.total_failed, 0);
+            assert_eq!(metrics.total_rejected, 0);
+            ctx.close();
+            return;
+        }
+
+        for case in ["storage", "generator", "control"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "context::publication_tests::queued_cancellation_callback_releases_tickets",
+                    "--nocapture",
+                ])
+                .env(CASE_ENV, case)
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(12);
+            loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    assert!(
+                        status.success(),
+                        "queued cancellation case {case} failed: {status}"
+                    );
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    child.kill().unwrap();
+                    child.wait().unwrap();
+                    panic!("queued cancellation case {case} exceeded 12 seconds");
+                }
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
