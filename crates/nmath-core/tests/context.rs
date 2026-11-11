@@ -1175,6 +1175,43 @@ fn load_npy_reserves_encoded_and_decoded_buffers() {
 }
 
 #[test]
+fn load_npy_fits_exact_encoded_and_decoded_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("one.npy");
+    let bytes = nmath_core::io::encode_npy(&[1], &Buffer::F64(vec![1.0])).unwrap();
+    assert_eq!(bytes.len(), 136);
+    std::fs::write(&path, bytes).unwrap();
+
+    for (limit, succeeds) in [(143, false), (144, true)] {
+        let context = Context::new(ContextOptions {
+            max_concurrent_jobs: 1,
+            max_queue_length: 0,
+            cpu_memory_budget: limit,
+            gpu_memory_budget: 0,
+        })
+        .unwrap();
+        let (done, rx) = channel();
+        context
+            .load_npy(path.clone(), CancellationToken::new(), done)
+            .unwrap();
+        if succeeds {
+            let JobOutput::Array(array) = wait(&rx).unwrap() else {
+                panic!("expected an array")
+            };
+            assert_eq!(array.shape(), &[1]);
+            assert_eq!(array.to_buffer(), Buffer::F64(vec![1.0]));
+            assert_eq!(context.metrics().cpu_memory.used, 8);
+            assert_eq!(context.metrics().cpu_memory.peak, 144);
+            drop(array);
+        } else {
+            assert_eq!(wait(&rx).unwrap_err().code, ErrorCode::MemoryBudgetExceeded);
+            assert_eq!(context.metrics().cpu_memory.peak, 136);
+        }
+        assert_eq!(context.metrics().cpu_memory.used, 0);
+    }
+}
+
+#[test]
 fn scheduled_load_npy_accepts_alternate_header_quotes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("quoted.npy");
