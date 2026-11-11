@@ -65,7 +65,12 @@ export function columnContext(
 interface NativeTable {
   select(positions: number[]): NativeTable;
   filter(position: number): NativeTable;
-  sort(position: number, descending: boolean, nullsLast: boolean): NativeTable;
+  sort(
+    position: number,
+    descending: boolean,
+    nullsLast: boolean,
+    pandas: boolean,
+  ): NativeTable;
   join(
     other: NativeTable,
     leftKey: number,
@@ -182,9 +187,16 @@ export class TablePlan {
       this.nullable,
     );
   }
-  sort(name: string, descending = false, nullsLast = true): TablePlan {
+  sort(
+    name: string,
+    descending = false,
+    nullsLast = true,
+    pandas = false,
+  ): TablePlan {
     return new TablePlan(
-      native(() => this.plan.sort(this.position(name), descending, nullsLast)),
+      native(() =>
+        this.plan.sort(this.position(name), descending, nullsLast, pandas),
+      ),
       this.names,
       this.context,
       this.nullable,

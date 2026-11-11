@@ -6,6 +6,7 @@ use crate::{
     buffer::{Buffer, DenseArray, Float16},
     dtype::{DType, DTypeKind},
     error::{Error, ErrorCode, Result},
+    layout::checked_size,
     memory::MemoryBudget,
     shape::{broadcast_shapes, broadcast_strides},
     sync::CancellationToken,
@@ -375,10 +376,13 @@ trait Num: Copy + PartialOrd + Send + Sync + Default {
     fn nan(self) -> bool {
         false
     }
-    fn take_equal() -> bool {
+    fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool {
         true
     }
     fn pairwise_sum(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
+        Ok(None)
+    }
+    fn pairwise_sum_skip_nan(_: &[Self], _: &CancellationToken) -> Result<Option<Self>> {
         Ok(None)
     }
     fn mean(self, count: usize) -> Self;
@@ -442,6 +446,13 @@ macro_rules! float_num {
     ($($t:ty),*) => {$(
         impl Num for $t {
             fn nan(self) -> bool { self.is_nan() }
+            fn take_equal(op: ReduceOp, old: Self, next: Self) -> bool {
+                if old == 0.0 && next == 0.0 {
+                    if op == ReduceOp::Min { next.is_sign_negative() } else { next.is_sign_positive() }
+                } else {
+                    true
+                }
+            }
             fn mean(self, count: usize) -> Self { self / count as $t }
             fn one() -> Self { 1.0 }
             fn add(a: Self, b: Self) -> Self { a + b }
@@ -463,6 +474,18 @@ float_num!(f64);
 impl Num for f32 {
     fn nan(self) -> bool {
         self.is_nan()
+    }
+
+    fn take_equal(op: ReduceOp, old: Self, next: Self) -> bool {
+        if old == 0.0 && next == 0.0 {
+            if op == ReduceOp::Min {
+                next.is_sign_negative()
+            } else {
+                next.is_sign_positive()
+            }
+        } else {
+            true
+        }
     }
 
     fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
@@ -492,6 +515,110 @@ impl Num for f32 {
             Ok(sum(&values[..mid], token)? + sum(&values[mid..], token)?)
         }
         Ok(Some(sum(values, token)?))
+    }
+
+    fn pairwise_sum_skip_nan(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
+        fn count(values: &[f32], token: &CancellationToken) -> Result<usize> {
+            let mut count = 0;
+            for chunk in values.chunks(CHUNK) {
+                token.check()?;
+                count += chunk.iter().filter(|&&value| !value.is_nan()).count();
+            }
+            Ok(count)
+        }
+
+        fn split_at_non_nan(
+            values: &[f32],
+            left_count: usize,
+            token: &CancellationToken,
+        ) -> Result<usize> {
+            let mut seen = 0;
+            for (i, &value) in values.iter().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if !value.is_nan() {
+                    seen += 1;
+                    if seen == left_count {
+                        return Ok(i + 1);
+                    }
+                }
+            }
+            unreachable!("the requested finite prefix must exist");
+        }
+
+        fn sum(values: &[f32], finite_count: usize, token: &CancellationToken) -> Result<f32> {
+            token.check()?;
+            if finite_count == 0 {
+                return Ok(0.0);
+            }
+            if finite_count < 8 {
+                let mut total = -0.0_f32;
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if !value.is_nan() {
+                        total += value;
+                        seen += 1;
+                    }
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
+            }
+            if finite_count <= 128 {
+                // Apply the same eight-lane order as pairwise_sum to the
+                // logical sequence with NaNs removed, without allocating a
+                // filtered copy that would consume the reduction budget.
+                let mut lanes = [0.0_f32; 8];
+                let end = finite_count - finite_count % 8;
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen < 8 {
+                        lanes[seen] = value;
+                    } else if seen < end {
+                        lanes[seen % 8] += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                // Match pairwise_sum: combine the eight lanes first, then
+                // add each remaining logical value in order. Accumulating
+                // the tail before combining the lanes changes float32
+                // cancellation behavior for large values followed by small
+                // values, even though the NaNs are only skipped logically.
+                let mut total = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+                    + ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+                let mut seen = 0;
+                for (i, &value) in values.iter().enumerate() {
+                    if i % CHUNK == 0 {
+                        token.check()?;
+                    }
+                    if value.is_nan() {
+                        continue;
+                    }
+                    if seen >= end {
+                        total += value;
+                    }
+                    seen += 1;
+                }
+                debug_assert_eq!(seen, finite_count);
+                return Ok(total);
+            }
+            let left_count = (finite_count / 2) / 8 * 8;
+            let split = split_at_non_nan(values, left_count, token)?;
+            Ok(sum(&values[..split], left_count, token)?
+                + sum(&values[split..], finite_count - left_count, token)?)
+        }
+
+        Ok(Some(sum(values, count(values, token)?, token)?))
     }
 
     fn mean(self, count: usize) -> Self {
@@ -547,7 +674,7 @@ impl Num for Float16 {
         self.is_nan()
     }
 
-    fn take_equal() -> bool {
+    fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool {
         false
     }
 
@@ -623,7 +750,7 @@ fn half_pairwise(values: &[Float16], token: &CancellationToken) -> Result<f32> {
 macro_rules! complex_num {
     ($($t:ty),*) => {$(
         impl Num for [$t; 2] {
-            fn take_equal() -> bool { false }
+            fn take_equal(_: ReduceOp, _: Self, _: Self) -> bool { false }
             fn pairwise_sum(values: &[Self], token: &CancellationToken) -> Result<Option<Self>> {
                 token.check()?;
                 let n = values.len();
@@ -911,7 +1038,12 @@ pub(crate) struct BroadcastPairs {
 }
 
 impl BroadcastPairs {
-    pub(crate) fn new(shape: &[usize], a_strides: Vec<isize>, b_strides: Vec<isize>) -> Self {
+    pub(crate) fn new(
+        shape: &[usize],
+        a_strides: Vec<isize>,
+        b_strides: Vec<isize>,
+        remaining: usize,
+    ) -> Self {
         Self {
             shape: shape.to_vec(),
             a_strides,
@@ -919,7 +1051,7 @@ impl BroadcastPairs {
             index: vec![0; shape.len()],
             a: 0,
             b: 0,
-            remaining: shape.iter().product(),
+            remaining,
         }
     }
 }
@@ -1003,6 +1135,7 @@ pub fn binary(
         return crate::ufunc::binary(op, lhs, rhs, compute_dtype, budget, token);
     }
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
+    let size = checked_size(&shape)?;
     let result_dtype = op.result_dtype(compute_dtype)?;
     let work_dtype = if op.is_logical() {
         DType::Bool
@@ -1014,13 +1147,14 @@ pub fn binary(
     } else {
         compute_dtype
     };
-    let reservation = reserve_for(budget, result_dtype, shape.iter().product())?;
+    let reservation = reserve_for(budget, result_dtype, size)?;
     let (a, _a_reservation) = cast_operand(&lhs.buffer, work_dtype, budget, token)?;
     let (b, _b_reservation) = cast_operand(&rhs.buffer, work_dtype, budget, token)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
+        size,
     );
     if op.is_logical() {
         let (Buffer::Bool(x), Buffer::Bool(y)) = (a.as_ref(), b.as_ref()) else {
@@ -1665,8 +1799,13 @@ fn variance_loop<T: VarianceSample>(
 ) -> Result<Vec<f64>> {
     let mut mean = vec![[0.0f64; 2]; out_len];
     let mut counts = vec![0usize; out_len];
-    for (i, (slot, _)) in
-        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    for (i, (slot, _)) in BroadcastPairs::new(
+        shape,
+        out_strides.to_vec(),
+        vec![0; shape.len()],
+        values.len(),
+    )
+    .enumerate()
     {
         if i % CHUNK == 0 {
             token.check()?;
@@ -1683,8 +1822,13 @@ fn variance_loop<T: VarianceSample>(
         }
     }
     let mut squares = vec![0.0f64; out_len];
-    for (i, (slot, _)) in
-        BroadcastPairs::new(shape, out_strides.to_vec(), vec![0; shape.len()]).enumerate()
+    for (i, (slot, _)) in BroadcastPairs::new(
+        shape,
+        out_strides.to_vec(),
+        vec![0; shape.len()],
+        values.len(),
+    )
+    .enumerate()
     {
         if i % CHUNK == 0 {
             token.check()?;
@@ -1839,12 +1983,13 @@ fn select_loop<T: Copy>(
     x: &[T],
     y: &[T],
     shape: &[usize],
+    size: usize,
     strides: [Vec<isize>; 3],
     token: &CancellationToken,
 ) -> Result<Vec<T>> {
     let [c_strides, x_strides, y_strides] = strides;
-    let picks = BroadcastPairs::new(shape, c_strides, x_strides);
-    let others = BroadcastPairs::new(shape, y_strides, vec![0; shape.len()]);
+    let picks = BroadcastPairs::new(shape, c_strides, x_strides, size);
+    let others = BroadcastPairs::new(shape, y_strides, vec![0; shape.len()], size);
     let mut out = Vec::with_capacity(picks.remaining);
     for (n, ((c, i), (j, _))) in picks.zip(others).enumerate() {
         if n % CHUNK == 0 {
@@ -1867,7 +2012,8 @@ pub fn select(
 ) -> Result<DenseArray> {
     validate_select(condition.dtype(), x.dtype(), y.dtype())?;
     let shape = broadcast_shapes(&broadcast_shapes(&condition.shape, &x.shape)?, &y.shape)?;
-    let reservation = reserve_for(budget, dtype, shape.iter().product())?;
+    let size = checked_size(&shape)?;
+    let reservation = reserve_for(budget, dtype, size)?;
     let (c, _c_reservation) = cast_operand(&condition.buffer, DType::Bool, budget, token)?;
     let (a, _a_reservation) = cast_operand(&x.buffer, dtype, budget, token)?;
     let (b, _b_reservation) = cast_operand(&y.buffer, dtype, budget, token)?;
@@ -1881,7 +2027,7 @@ pub fn select(
     ];
     macro_rules! pick {
         ($x:expr, $y:expr) => {
-            select_loop(c, $x, $y, &shape, strides, token)?.into()
+            select_loop(c, $x, $y, &shape, size, strides, token)?.into()
         };
     }
     let buffer = match (a.as_ref(), b.as_ref()) {
@@ -1949,7 +2095,8 @@ pub fn shift(
                 coordinate
             } else {
                 match op {
-                    // fftshift rolls elements forward; ifftshift is its inverse.
+                    // fftshift rolls elements forward; ifftshift is its
+                    // inverse.
                     ShiftOp::FftShift => (coordinate + length - length / 2) % length,
                     ShiftOp::IfftShift => (coordinate + length / 2) % length,
                 }
@@ -2134,7 +2281,40 @@ pub fn reduce(
     budget: &MemoryBudget,
     token: &CancellationToken,
 ) -> Result<DenseArray> {
+    reduce_with_policy(
+        op,
+        input,
+        axes,
+        ReductionPolicy::PropagateNan,
+        budget,
+        token,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReductionPolicy {
+    PropagateNan,
+    SkipNan,
+}
+
+pub fn reduce_with_policy(
+    op: ReduceOp,
+    input: &DenseArray,
+    axes: Option<&[i64]>,
+    policy: ReductionPolicy,
+    budget: &MemoryBudget,
+    token: &CancellationToken,
+) -> Result<DenseArray> {
     validate_special_reduce(op, input.dtype(), axes)?;
+    if policy == ReductionPolicy::SkipNan
+        && (!matches!(input.dtype(), DType::Float32 | DType::Float64)
+            || !matches!(
+                op,
+                ReduceOp::Sum | ReduceOp::Mean | ReduceOp::Min | ReduceOp::Max
+            ))
+    {
+        return Err(crate::dtype::unsupported());
+    }
     let rank = input.shape.len();
     let reduced = reduce_axes_cancellable(input.shape.len(), axes, token)?;
     // An empty reduced dimension has no min/max identity, regardless of the
@@ -2144,7 +2324,10 @@ pub fn reduce(
         .iter()
         .zip(&reduced)
         .any(|(&len, &r)| r && len == 0);
-    if (matches!(op, ReduceOp::Min | ReduceOp::Max) || op.is_arg()) && empty_reduction {
+    if ((matches!(op, ReduceOp::Min | ReduceOp::Max) && policy == ReductionPolicy::PropagateNan)
+        || op.is_arg())
+        && empty_reduction
+    {
         return Err(Error::new(
             ErrorCode::ShapeMismatch,
             if op.is_arg() {
@@ -2200,7 +2383,12 @@ pub fn reduce(
         }
     }
     token.check()?;
-    let slots = BroadcastPairs::new(&input.shape, out_strides, vec![0; input.shape.len()]);
+    let slots = BroadcastPairs::new(
+        &input.shape,
+        out_strides,
+        vec![0; input.shape.len()],
+        input.buffer.len(),
+    );
     let count = if out_len == 0 {
         0
     } else {
@@ -2304,11 +2492,42 @@ pub fn reduce(
     // Borrow matching input storage. Widening for sum/mean is reserved before
     // conversion; no input-sized offset or i128 scratch vectors are needed.
     let (values, _cast_reservation) = cast_operand(&input.buffer, dtype, budget, token)?;
+    fn contains_nan<T: Num>(values: &[T], token: &CancellationToken) -> Result<bool> {
+        for chunk in values.chunks(CHUNK) {
+            token.check()?;
+            if chunk.iter().any(|&value| value.nan()) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    // Keep the existing accumulation and budget path for clean floating data.
+    let policy = if policy == ReductionPolicy::SkipNan {
+        let has_nan = match values.as_ref() {
+            Buffer::F32(values) => contains_nan(values, token)?,
+            Buffer::F64(values) => contains_nan(values, token)?,
+            _ => unreachable!("the pandas policy admits only float32 and float64"),
+        };
+        if has_nan || (empty_reduction && matches!(op, ReduceOp::Min | ReduceOp::Max)) {
+            ReductionPolicy::SkipNan
+        } else {
+            ReductionPolicy::PropagateNan
+        }
+    } else {
+        policy
+    };
     let _seen_reservation = budget.reserve(if matches!(op, ReduceOp::Min | ReduceOp::Max) {
         out_len as u64
     } else {
         0
     })?;
+    let _count_reservation = budget.reserve(
+        if policy == ReductionPolicy::SkipNan && op == ReduceOp::Mean {
+            checked_reduction_bytes(out_len, std::mem::size_of::<usize>())?
+        } else {
+            0
+        },
+    )?;
     fn run<T: Num>(
         op: ReduceOp,
         values: &[T],
@@ -2316,6 +2535,7 @@ pub fn reduce(
         out_len: usize,
         count: usize,
         contiguous: bool,
+        policy: ReductionPolicy,
         token: &CancellationToken,
     ) -> Result<Vec<T>> {
         let mut out = if op == ReduceOp::Prod {
@@ -2323,6 +2543,74 @@ pub fn reduce(
         } else {
             vec![T::default(); out_len]
         };
+        if policy == ReductionPolicy::SkipNan {
+            if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
+                if T::pairwise_sum_skip_nan(&[], token)?.is_some() {
+                    for (i, chunk) in values.chunks_exact(count).enumerate() {
+                        let total = T::add(
+                            T::default(),
+                            T::pairwise_sum_skip_nan(chunk, token)?.unwrap(),
+                        );
+                        if op == ReduceOp::Mean {
+                            let valid_count = chunk.iter().filter(|&&value| !value.nan()).count();
+                            out[i] = total.mean(valid_count);
+                        } else {
+                            out[i] = total;
+                        }
+                    }
+                    return Ok(out);
+                }
+            }
+            let mut seen = if matches!(op, ReduceOp::Min | ReduceOp::Max) {
+                vec![false; out_len]
+            } else {
+                Vec::new()
+            };
+            let mut counts = if op == ReduceOp::Mean {
+                vec![0usize; out_len]
+            } else {
+                Vec::new()
+            };
+            for (i, (slot, _)) in slots.enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                let x = values[i];
+                if x.nan() {
+                    continue;
+                }
+                match op {
+                    ReduceOp::Sum | ReduceOp::Mean => out[slot] = T::add(out[slot], x),
+                    ReduceOp::Min | ReduceOp::Max => {
+                        if !seen[slot]
+                            || if op == ReduceOp::Min {
+                                x < out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
+                            } else {
+                                x > out[slot] || (T::take_equal(op, out[slot], x) && x == out[slot])
+                            }
+                        {
+                            out[slot] = x;
+                        }
+                        seen[slot] = true;
+                    }
+                    _ => unreachable!("pandas reduction policy admits four operators"),
+                }
+                if op == ReduceOp::Mean {
+                    counts[slot] += 1;
+                }
+            }
+            for (i, value) in out.iter_mut().enumerate() {
+                if i % CHUNK == 0 {
+                    token.check()?;
+                }
+                if op == ReduceOp::Mean {
+                    *value = value.mean(counts[i]);
+                } else if matches!(op, ReduceOp::Min | ReduceOp::Max) && !seen[i] {
+                    *value = T::default().mean(0);
+                }
+            }
+            return Ok(out);
+        }
         if contiguous && count > 0 && matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
             if T::pairwise_sum(&[], token)?.is_some() {
                 for (i, chunk) in values.chunks_exact(count).enumerate() {
@@ -2358,9 +2646,9 @@ pub fn reduce(
                         || (!old.nan()
                             && (x.nan()
                                 || if op == ReduceOp::Min {
-                                    x < old || (T::take_equal() && x == old)
+                                    x < old || (x == old && T::take_equal(op, old, x))
                                 } else {
-                                    x > old || (T::take_equal() && x == old)
+                                    x > old || (x == old && T::take_equal(op, old, x))
                                 }));
                     seen[slot] = true;
                     if take { x } else { old }
@@ -2381,15 +2669,15 @@ pub fn reduce(
     let first_reduced = reduced.iter().position(|&r| r).unwrap_or(reduced.len());
     let contiguous = reduced[first_reduced..].iter().all(|&r| r);
     let buffer = match values.as_ref() {
-        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::Bool(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::I64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U8(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::U64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         Buffer::F16(x) if matches!(op, ReduceOp::Sum | ReduceOp::Mean) => {
             let mut out = vec![Float16::ZERO; out_len];
             if contiguous && count > 0 {
@@ -2428,11 +2716,11 @@ pub fn reduce(
             }
             Buffer::F16(out)
         }
-        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
-        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, token)?.into(),
+        Buffer::F16(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F32(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::F64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C64(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
+        Buffer::C128(x) => run(op, x, slots, out_len, count, contiguous, policy, token)?.into(),
         _ => return Err(crate::dtype::unsupported()),
     };
     DenseArray::new(out_shape, buffer, reservation)
@@ -2842,6 +3130,92 @@ mod tests {
     }
 
     #[test]
+    fn float32_pandas_skip_nan_keeps_pairwise_precision_and_budget() {
+        let mut values = vec![0.1_f32; 1_000_000];
+        values.push(f32::NAN);
+        let input = dense(vec![values.len()], Buffer::F32(values));
+        let token = CancellationToken::new();
+
+        // Metadata (33 bytes) plus one float32 result (4 bytes).
+        let sum_budget = MemoryBudget::new(Device::Cpu, 37);
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &sum_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![100_000.007_812_5]));
+        assert_eq!(sum_budget.usage().peak, 37);
+        drop(sum);
+        assert_eq!(sum_budget.usage().used, 0);
+
+        // Mean additionally reserves one usize count per output slot.
+        let mean_budget = MemoryBudget::new(Device::Cpu, 45);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &mean_budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(mean.buffer, Buffer::F32(vec![0.100_000_008_940_696_72]));
+        assert_eq!(mean_budget.usage().peak, 45);
+        drop(mean);
+        assert_eq!(mean_budget.usage().used, 0);
+    }
+
+    #[test]
+    fn float32_pandas_skip_nan_adds_tail_after_pairwise_lanes() {
+        let input = dense(
+            vec![12],
+            Buffer::F32(vec![
+                100_000_000.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -100_000_000.0,
+                1.0,
+                1.0,
+                f32::NAN,
+            ]),
+        );
+        let (budget, token) = env();
+        let sum = reduce_with_policy(
+            ReduceOp::Sum,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        assert_eq!(sum.buffer, Buffer::F32(vec![2.0]));
+        drop(sum);
+        let mean = reduce_with_policy(
+            ReduceOp::Mean,
+            &input,
+            None,
+            ReductionPolicy::SkipNan,
+            &budget,
+            &token,
+        )
+        .unwrap();
+        let Buffer::F32(values) = mean.buffer else {
+            panic!("Expected float32 mean")
+        };
+        assert!((values[0] - (2.0 / 11.0)).abs() < 1e-7);
+    }
+
+    #[test]
     fn float32_pairwise_matches_numpy_at_block_boundaries() {
         // NumPy 2.5.4 float32 sums for [1e8, 1, ..., 1, -1e8].
         let (budget, token) = env();
@@ -3089,6 +3463,85 @@ mod tests {
     }
 
     #[test]
+    fn floating_extrema_select_zero_sign_across_axes() {
+        let (budget, token) = env();
+        let cases = [
+            (vec![2], vec![-0.0, 0.0], None, vec![]),
+            (vec![2], vec![0.0, -0.0], None, vec![]),
+            (vec![1, 2], vec![-0.0, 0.0], Some(vec![1]), vec![1]),
+            (vec![2, 1], vec![0.0, -0.0], Some(vec![0]), vec![1]),
+            (
+                vec![2, 2],
+                vec![-0.0, 0.0, 0.0, -0.0],
+                Some(vec![0]),
+                vec![2],
+            ),
+            (
+                vec![2, 2],
+                vec![-0.0, 0.0, 0.0, -0.0],
+                Some(vec![1]),
+                vec![2],
+            ),
+        ];
+        for (shape, values, axes, expected_shape) in cases {
+            let single = dense(
+                shape.clone(),
+                Buffer::F32(values.iter().map(|&value| value as f32).collect()),
+            );
+            let double = dense(shape, Buffer::F64(values));
+            for op in [ReduceOp::Min, ReduceOp::Max] {
+                let expected32 = if op == ReduceOp::Min {
+                    (-0.0_f32).to_bits()
+                } else {
+                    0.0_f32.to_bits()
+                };
+                let expected64 = if op == ReduceOp::Min {
+                    (-0.0_f64).to_bits()
+                } else {
+                    0.0_f64.to_bits()
+                };
+                let out32 = reduce(op, &single, axes.as_deref(), &budget, &token).unwrap();
+                assert_eq!(out32.shape, expected_shape);
+                let Buffer::F32(out32) = out32.buffer else {
+                    panic!("expected float32 result");
+                };
+                assert!(out32.iter().all(|value| value.to_bits() == expected32));
+                let out64 = reduce(op, &double, axes.as_deref(), &budget, &token).unwrap();
+                assert_eq!(out64.shape, expected_shape);
+                let Buffer::F64(out64) = out64.buffer else {
+                    panic!("expected float64 result");
+                };
+                assert!(out64.iter().all(|value| value.to_bits() == expected64));
+            }
+        }
+    }
+
+    #[test]
+    fn float16_extrema_keep_first_equal_zero_and_float_nan() {
+        let (budget, token) = env();
+        for bits in [[0x8000, 0], [0, 0x8000]] {
+            let input = dense(vec![2], Buffer::F16(bits.map(Float16::from_bits).to_vec()));
+            for op in [ReduceOp::Min, ReduceOp::Max] {
+                let out = reduce(op, &input, None, &budget, &token).unwrap();
+                let Buffer::F16(values) = out.buffer else {
+                    panic!("expected float16 result");
+                };
+                assert_eq!(values[0].to_bits(), bits[0]);
+            }
+        }
+        let first = f64::from_bits(0x7ff8_0000_0000_0001);
+        let second = f64::from_bits(0x7ff8_0000_0000_0002);
+        let input = dense(vec![4], Buffer::F64(vec![1.0, first, -1.0, second]));
+        for op in [ReduceOp::Min, ReduceOp::Max] {
+            let out = reduce(op, &input, None, &budget, &token).unwrap();
+            let Buffer::F64(values) = out.buffer else {
+                panic!("expected float64 result");
+            };
+            assert_eq!(values[0].to_bits(), first.to_bits());
+        }
+    }
+
+    #[test]
     fn min_max_allow_empty_inputs_with_nonempty_reduced_axes() {
         // NumPy 2.5.4: np.zeros((0, 2)).min(axis=1) has shape (0,), while
         // np.zeros((0, 2)).max(axis=0) raises ValueError.
@@ -3211,8 +3664,8 @@ mod tests {
         ] {
             assert_eq!(crate::shape::matmul_shape(&a, &b).unwrap_err().code, code);
         }
-        let overflow_left = dense(vec![usize::MAX, 0], Buffer::I32(vec![]));
-        let overflow_right = dense(vec![0, 2], Buffer::I32(vec![]));
+        let overflow_left = dense(vec![isize::MAX as usize / 2, 0], Buffer::I32(vec![]));
+        let overflow_right = dense(vec![0, 3], Buffer::I32(vec![]));
         assert_eq!(
             matmul(
                 &overflow_left,
@@ -3399,6 +3852,78 @@ mod tests {
     }
 
     #[test]
+    fn binary_rejects_unrepresentable_empty_broadcast_before_reserving() {
+        let budget = MemoryBudget::new(Device::Cpu, 0);
+        let token = CancellationToken::new();
+        let left_shape = vec![65_536, 65_536, 1, 1, 0];
+        let right_shape = vec![1, 1, 65_536, 65_536, 0];
+        let uint8 =
+            |shape| DenseArray::new(shape, Buffer::U8(vec![]), budget.reserve(0).unwrap()).unwrap();
+        let left = uint8(left_shape.clone());
+        let right = uint8(right_shape.clone());
+        for op in [BinaryOp::Add, BinaryOp::Eq] {
+            assert_eq!(
+                binary(op, &left, &right, DType::UInt8, &budget, &token)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ShapeMismatch
+            );
+        }
+        let string = |shape| {
+            DenseArray::new(
+                shape,
+                Buffer::Unicode {
+                    width: 1,
+                    values: vec![],
+                },
+                budget.reserve(0).unwrap(),
+            )
+            .unwrap()
+        };
+        assert_eq!(
+            binary(
+                BinaryOp::Add,
+                &string(left_shape),
+                &string(right_shape),
+                DType::Str(2),
+                &budget,
+                &token,
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::ShapeMismatch
+        );
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
+    fn binary_preserves_representable_empty_broadcasts() {
+        let (budget, token) = env();
+        for (left_shape, right_shape, right_buffer, output_shape) in [
+            (
+                vec![0, 3],
+                vec![1, 3],
+                Buffer::U8(vec![1, 2, 3]),
+                vec![0, 3],
+            ),
+            (
+                vec![65_536, 1, 0],
+                vec![1, 65_536, 0],
+                Buffer::U8(vec![]),
+                vec![65_536, 65_536, 0],
+            ),
+        ] {
+            let left = dense(left_shape, Buffer::U8(vec![]));
+            let right = dense(right_shape, right_buffer);
+            let result =
+                binary(BinaryOp::Add, &left, &right, DType::UInt8, &budget, &token).unwrap();
+            assert_eq!(result.shape, output_shape);
+            assert_eq!(result.buffer, Buffer::U8(vec![]));
+        }
+        assert_eq!(budget.usage().used, 0);
+    }
+
+    #[test]
     fn binary_charges_operand_casts() {
         // The int32 operand is cast to float64 (16 bytes) on top of the
         // 16-byte result; 24 bytes are not enough.
@@ -3472,12 +3997,13 @@ fn special_binary(
     token.check()?;
     let dtype = special_binary_dtype(op, lhs.dtype(), rhs.dtype())?;
     let shape = broadcast_shapes(&lhs.shape, &rhs.shape)?;
-    let size = shape.iter().product();
+    let size = checked_size(&shape)?;
     let reservation = reserve_for(budget, dtype, size)?;
     let pairs = BroadcastPairs::new(
         &shape,
         broadcast_strides(&lhs.shape, &shape),
         broadcast_strides(&rhs.shape, &shape),
+        size,
     );
     if let DType::Str(width) = dtype {
         let (
@@ -3529,7 +4055,8 @@ fn special_binary(
             // NumPy's temporal integer loop casts uint64 operands to int64
             // by preserving their bits. Do not reject the operand before the
             // operation: zero multiplication and small quotients remain valid.
-            // checked_tick below still rejects result overflow and NaT collisions.
+            // checked_tick below still rejects result overflow and NaT
+            // collisions.
             Scalar::UInt(t) => Ok(t as i64),
             _ => Err(unsupported()),
         }

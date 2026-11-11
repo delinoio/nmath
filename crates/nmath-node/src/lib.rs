@@ -37,6 +37,20 @@ fn core_err(code: ErrorCode, message: impl Into<String>) -> Error {
     to_napi(CoreError::new(code, message))
 }
 
+fn checked_shape(shape: &[usize]) -> nmath_core::Result<Vec<u32>> {
+    shape
+        .iter()
+        .map(|&dimension| {
+            u32::try_from(dimension).map_err(|_| {
+                CoreError::new(
+                    ErrorCode::IoFormat,
+                    "An array dimension exceeds the JS unsigned 32-bit shape range.",
+                )
+            })
+        })
+        .collect()
+}
+
 fn disposed() -> Error {
     core_err(ErrorCode::Disposed, "The object was disposed.")
 }
@@ -269,7 +283,7 @@ impl NativeArray {
 
     #[napi(getter)]
     pub fn shape(&self) -> Result<Vec<u32>> {
-        Ok(self.get()?.shape().iter().map(|&d| d as u32).collect())
+        checked_shape(self.get()?.shape()).map_err(to_napi)
     }
 
     #[napi(getter)]
@@ -493,6 +507,25 @@ impl NativeExpr {
         };
         Ok(Self {
             inner: Expr::reduce(op, &input.inner, axes).map_err(to_napi)?,
+        })
+    }
+
+    #[napi(factory)]
+    pub fn pandas_reduce(op: String, input: &NativeExpr) -> Result<Self> {
+        let op = match op.as_str() {
+            "sum" => ReduceOp::Sum,
+            "mean" => ReduceOp::Mean,
+            "min" => ReduceOp::Min,
+            "max" => ReduceOp::Max,
+            other => {
+                return Err(core_err(
+                    ErrorCode::IndexInvalid,
+                    format!("Unknown pandas reduction '{other}'."),
+                ));
+            }
+        };
+        Ok(Self {
+            inner: Expr::pandas_reduce(op, &input.inner).map_err(to_napi)?,
         })
     }
 
@@ -842,8 +875,8 @@ impl NativeExpr {
     }
 
     #[napi(getter)]
-    pub fn shape(&self) -> Vec<u32> {
-        self.inner.shape().iter().map(|&d| d as u32).collect()
+    pub fn shape(&self) -> Result<Vec<u32>> {
+        checked_shape(self.inner.shape()).map_err(to_napi)
     }
 
     #[napi(getter)]
@@ -961,12 +994,14 @@ impl NativeContext {
             };
             match result {
                 Ok(JobOutput::Value(Value::Dense(dense))) => {
-                    let ctx_array = NdArray::from_dense(context_id, dense);
-                    deferred.resolve(Box::new(move |_| {
-                        Ok(NativeResult::Array(NativeArray {
-                            inner: Some(ctx_array),
-                        }))
-                    }));
+                    match NdArray::from_dense(context_id, dense) {
+                        Ok(ctx_array) => deferred.resolve(Box::new(move |_| {
+                            Ok(NativeResult::Array(NativeArray {
+                                inner: Some(ctx_array),
+                            }))
+                        })),
+                        Err(err) => deferred.reject(to_napi(err)),
+                    }
                 }
                 Ok(JobOutput::Value(Value::View(view))) | Ok(JobOutput::Array(view)) => deferred
                     .resolve(Box::new(move |_| {
@@ -1176,7 +1211,15 @@ impl NativeContext {
     ) -> Result<Object<'env>> {
         let token = token_of(signal);
         self.promise(env, move |ctx, done| {
-            ctx.load_npy(PathBuf::from(path), token, done)
+            let checked_done: nmath_core::context::Done = Box::new(move |result| {
+                done(result.and_then(|output| {
+                    if let JobOutput::Array(array) = &output {
+                        checked_shape(array.shape())?;
+                    }
+                    Ok(output)
+                }));
+            });
+            ctx.load_npy(PathBuf::from(path), token, checked_done)
         })
     }
 
@@ -1235,9 +1278,17 @@ impl NativeContext {
                     return;
                 };
                 match result {
-                    Ok(archive) => {
-                        deferred.resolve(Box::new(move |_| Ok(NativeNpzResult(archive))))
-                    }
+                    Ok(archive) => match archive
+                        .arrays
+                        .iter()
+                        .try_for_each(|(_, array)| checked_shape(array.shape()).map(|_| ()))
+                    {
+                        Ok(()) => deferred.resolve(Box::new(move |_| Ok(NativeNpzResult(archive)))),
+                        Err(error) => {
+                            drop(archive);
+                            deferred.reject(to_napi(error));
+                        }
+                    },
                     Err(error) => deferred.reject(to_napi(error)),
                 }
             },
@@ -1304,3 +1355,23 @@ pub struct NativeNpzEntry {
 
 mod columnar;
 mod io_text;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shape_export_checks_every_dimension() {
+        assert_eq!(checked_shape(&[]).unwrap(), Vec::<u32>::new());
+        assert_eq!(
+            checked_shape(&[0, u32::MAX as usize]).unwrap(),
+            [0, u32::MAX]
+        );
+        if let Some(wide) = (u32::MAX as usize).checked_add(1) {
+            assert_eq!(
+                checked_shape(&[0, wide]).unwrap_err().code,
+                ErrorCode::IoFormat
+            );
+        }
+    }
+}

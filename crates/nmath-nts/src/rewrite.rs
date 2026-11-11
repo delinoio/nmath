@@ -163,7 +163,8 @@ impl Rewriter<'_> {
 
     fn visit(&mut self, node: P<Node>, async_context: bool, depth: i64) {
         match node.kind() {
-            // Type-level and constant contexts never contain runtime NMath operations.
+            // Type-level and constant contexts never contain runtime NMath
+            // operations.
             Kind::InterfaceDeclaration | Kind::TypeAliasDeclaration | Kind::EnumDeclaration => {
                 return;
             }
@@ -193,9 +194,20 @@ impl Rewriter<'_> {
                 }
                 return;
             }
-            Kind::ClassStaticBlockDeclaration
-            | Kind::PropertyDeclaration
-            | Kind::ModuleDeclaration => {
+            Kind::PropertyDeclaration => {
+                // Decorators run when the class is defined, in the enclosing
+                // await context. Field initializers run later and cannot use
+                // it.
+                for child in node.iter_children() {
+                    self.visit(
+                        child,
+                        child.kind() == Kind::Decorator && async_context,
+                        depth + 1,
+                    );
+                }
+                return;
+            }
+            Kind::ClassStaticBlockDeclaration | Kind::ModuleDeclaration => {
                 return self.visit_children(node, false, depth);
             }
             Kind::BinaryExpression => self.visit_binary(node, async_context, depth),

@@ -24,4 +24,5 @@ pub fn build(options: &ProjectOptions) -> CompilerResult {
     project::run(ProjectCommand::Build, options)
 }
 
+mod async_decorators;
 mod source_maps;
