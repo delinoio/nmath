@@ -271,12 +271,14 @@ test("string and temporal operators preserve native metadata", async () => {
 import { Temporal } from "@delinoio/nmath";
 const words = ctx.array(["한글", "😀"], {dtype: "str"});
 const joined = await (words + "!").compute();
+if (!(joined instanceof NMathArray)) throw new Error("expected a string array");
 if (joined.item(1) !== "😀!") throw new Error("Unicode concatenation");
 const dates = ctx.array(new BigInt64Array([-1n, 9007199254740993n]), {dtype:"datetime64", unit:"ns", shape:[2] as const});
 const shifted = dates + new Temporal(2n, "ns", "timedelta64");
 const value = await shifted[1].compute();
 if (value.ticks !== 9007199254740995n || value.unit !== "ns") throw new Error("temporal precision");
 const delta = await (shifted - dates).compute();
+if (!(delta instanceof NMathArray)) throw new Error("expected a temporal array");
 if (delta.dtype !== "timedelta64" || delta.item(0).ticks !== 2n) throw new Error("temporal subtraction");
 words[0] = "ok";
 if (words.item(0) !== "ok") throw new Error("Unicode assignment");

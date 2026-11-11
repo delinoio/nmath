@@ -295,7 +295,8 @@ fn lazy_graph_freezes_inputs_and_rejects_gpu_and_context_mix() {
         ErrorCode::GpuUnsupportedOperation
     );
     let foreign =
-        nmath_core::NdArray::from_dense(c.id() + 1, dense(vec![2], Buffer::F64(vec![1., 1.])));
+        nmath_core::NdArray::from_dense(c.id() + 1, dense(vec![2], Buffer::F64(vec![1., 1.])))
+            .unwrap();
     assert_eq!(
         Expr::linalg(
             LinalgOp::Solve,
