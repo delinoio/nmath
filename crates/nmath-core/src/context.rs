@@ -358,7 +358,7 @@ impl Context {
                     // Assignment copies values, so view-valued expressions
                     // (basic indexing of an input)
                     // materialize from the frozen snapshot.
-                    let dense = env.eval_dense(&value)?;
+                    let dense = env.eval_assignment_value(&value, target.dtype())?;
                     target.assign_with_budget(
                         &turn,
                         &selectors,

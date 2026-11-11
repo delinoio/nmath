@@ -995,6 +995,38 @@ impl JobEnv {
         result
     }
 
+    /// Assignment of a weak integer scalar uses NumPy's scalar conversion
+    /// through float64, even when an array cast to the same dtype rounds
+    /// directly.
+    pub(crate) fn eval_assignment_value(
+        &mut self,
+        expr: &Expr,
+        dtype: DType,
+    ) -> Result<DenseArray> {
+        self.begin(expr);
+        let result = self.eval_weak_operand(expr, dtype);
+        self.end();
+        result
+    }
+
+    fn eval_weak_operand(&mut self, expr: &Expr, dtype: DType) -> Result<DenseArray> {
+        let value = self.eval_node(expr)?;
+        if matches!(dtype, DType::Float32 | DType::Complex64)
+            && matches!(
+                expr.kind(),
+                ExprKind::Scalar(Scalar::Int(_) | Scalar::UInt(_))
+            )
+        {
+            let reservation = self.budget.reserve(DType::Float64.item_size() as u64)?;
+            return DenseArray::new(
+                vec![],
+                Buffer::F64(vec![value.buffer.get(0).as_f64()]),
+                reservation,
+            );
+        }
+        Ok(value)
+    }
+
     /// Evaluates a node of the current expression, reusing the result of a
     /// shared node. The last reader takes the cached array; earlier readers
     /// receive budgeted copies.
@@ -1039,14 +1071,14 @@ impl JobEnv {
                 rhs,
                 compute_dtype,
             } => {
-                let a = self.eval_node(lhs)?;
-                let b = self.eval_node(rhs)?;
+                let a = self.eval_weak_operand(lhs, *compute_dtype)?;
+                let b = self.eval_weak_operand(rhs, *compute_dtype)?;
                 kernels::binary(*op, &a, &b, *compute_dtype, &budget, &token)
             }
             ExprKind::Where(c, x, y) => {
                 let c = self.eval_node(c)?;
-                let x = self.eval_node(x)?;
-                let y = self.eval_node(y)?;
+                let x = self.eval_weak_operand(x, expr.dtype())?;
+                let y = self.eval_weak_operand(y, expr.dtype())?;
                 kernels::select(&c, &x, &y, expr.dtype(), &budget, &token)
             }
             ExprKind::Math(op, e) => {
@@ -1466,6 +1498,25 @@ mod tests {
         let e = Expr::binary(BinaryOp::Mul, &a, &Expr::scalar(Scalar::Float(2.0))).unwrap();
         assert_eq!(e.dtype(), DType::Float32);
         assert_eq!(eval(&e).buffer, Buffer::F32(vec![2.0, 4.0]));
+    }
+
+    #[test]
+    fn weak_wide_integer_scalar_keeps_float64_conversion_policy() {
+        let value = (1_i64 << 62) + (1_i64 << 38) + 1;
+        let zero = Expr::input(&arr(1, vec![1], Buffer::F32(vec![0.0])));
+        let scalar = Expr::scalar(Scalar::Int(value));
+        let add = Expr::binary(BinaryOp::Add, &zero, &scalar).unwrap();
+        let Buffer::F32(result) = eval(&add).buffer else {
+            panic!("expected float32 storage");
+        };
+        assert_eq!(result[0].to_bits(), 0x5e800000);
+
+        let array = Expr::input(&arr(1, vec![1], Buffer::I64(vec![value])));
+        let cast = Expr::cast(&array, DType::Float32).unwrap();
+        let Buffer::F32(result) = eval(&cast).buffer else {
+            panic!("expected float32 storage");
+        };
+        assert_eq!(result[0].to_bits(), 0x5e800001);
     }
 
     #[test]
