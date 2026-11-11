@@ -135,7 +135,7 @@ fn expression_inference_validation_and_gpu_rejection() {
         Reservation::none(),
     )
     .unwrap();
-    let input = Expr::input(&NdArray::from_dense(0, dense));
+    let input = Expr::input(&NdArray::from_dense(0, dense).unwrap());
 
     let flat = Expr::variance(VarianceOp::Var, &input, None, 0.0).unwrap();
     assert_eq!(flat.dtype(), nmath_core::DType::Float64);

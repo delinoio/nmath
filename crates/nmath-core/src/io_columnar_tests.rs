@@ -457,3 +457,133 @@ fn writer_rejects_unreadable_schema_before_publication() {
         }
     }
 }
+
+struct FailingSink<W> {
+    inner: W,
+    remaining: usize,
+}
+
+impl<W: Write> Write for FailingSink<W> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.remaining == 0 {
+            return Err(std::io::Error::other("private fixture path and data"));
+        }
+        let written = self
+            .inner
+            .write(&bytes[..bytes.len().min(self.remaining)])?;
+        self.remaining -= written;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+#[test]
+fn writer_io_causes_are_sanitized_and_format_causes_stay_format() {
+    let b = budget();
+    let (schema, table) = fixture(3, &b);
+    let token = CancellationToken::new();
+    for format in [Format::ArrowIpc, Format::Parquet] {
+        let mut complete = Vec::new();
+        write_payload(&mut complete, format, schema.clone(), &table, &token).unwrap();
+        for limit in [0, 8, complete.len() - 1] {
+            let mut sink = FailingSink {
+                inner: Vec::new(),
+                remaining: limit,
+            };
+            let error =
+                write_payload(&mut sink, format, schema.clone(), &table, &token).unwrap_err();
+            assert_eq!(error.code, ErrorCode::IoFailed);
+            assert!(!error.full_message().contains("private fixture"));
+        }
+    }
+
+    let nested = arrow_schema::ArrowError::from_external_error(Box::new(std::io::Error::other(
+        "private fixture data",
+    )));
+    assert_eq!(writer_error(nested).code, ErrorCode::IoFailed);
+    let wrapped = parquet::errors::ParquetError::External(Box::new(
+        arrow_schema::ArrowError::from_external_error(Box::new(std::io::Error::other(
+            "private fixture path",
+        ))),
+    ));
+    assert_eq!(writer_error(wrapped).code, ErrorCode::IoFailed);
+    assert_eq!(
+        writer_error(arrow_schema::ArrowError::SchemaError(
+            "invalid schema".into()
+        ))
+        .code,
+        ErrorCode::IoFormat
+    );
+    assert_eq!(
+        writer_error(parquet::errors::ParquetError::General(
+            "invalid format".into()
+        ))
+        .code,
+        ErrorCode::IoFormat
+    );
+}
+
+#[test]
+fn failed_codec_write_preserves_destination_and_cleans_owned_temp() {
+    let dir = tempfile::tempdir().unwrap();
+    let b = budget();
+    let (schema, table) = fixture(3, &b);
+    let token = CancellationToken::new();
+    let path = dir.path().join("output");
+    for format in [Format::ArrowIpc, Format::Parquet] {
+        let mut complete = Vec::new();
+        write_payload(&mut complete, format, schema.clone(), &table, &token).unwrap();
+        for mode in [WriteMode::CreateNew, WriteMode::Overwrite] {
+            fs::write(&path, b"original destination").unwrap();
+            let baseline = b.usage().used;
+            for limit in [0, 8, complete.len() - 1] {
+                let error = write_with_payload(
+                    &path,
+                    format,
+                    schema.clone(),
+                    &table,
+                    mode,
+                    &b,
+                    &token,
+                    |file, format, schema, table, token| {
+                        let mut sink = FailingSink {
+                            inner: file,
+                            remaining: limit,
+                        };
+                        write_payload(&mut sink, format, schema, table, token)
+                    },
+                )
+                .unwrap_err();
+                assert_eq!(error.code, ErrorCode::IoFailed);
+                assert!(!error.full_message().contains("private fixture"));
+                assert_eq!(fs::read(&path).unwrap(), b"original destination");
+                assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+                assert_eq!(b.usage().used, baseline);
+            }
+        }
+        fs::remove_file(&path).unwrap();
+        let error = write_with_payload(
+            &path,
+            format,
+            schema.clone(),
+            &table,
+            WriteMode::CreateNew,
+            &b,
+            &token,
+            |file, format, schema, table, token| {
+                let mut sink = FailingSink {
+                    inner: file,
+                    remaining: 0,
+                };
+                write_payload(&mut sink, format, schema, table, token)
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::IoFailed);
+        assert!(!path.exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+}

@@ -690,6 +690,7 @@ pub struct DenseArray {
 
 impl DenseArray {
     pub fn new(shape: Vec<usize>, buffer: Buffer, reservation: Reservation) -> Result<Self> {
+        crate::layout::checked_strides(&shape)?;
         let size = if shape.contains(&0) {
             Some(0)
         } else {

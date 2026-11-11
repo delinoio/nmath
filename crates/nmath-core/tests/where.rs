@@ -71,7 +71,7 @@ fn packed(j: &Json) -> DenseArray {
 
 fn operand(j: &Json) -> Expr {
     if let Some(array) = j.get("array") {
-        return Expr::input(&NdArray::from_dense(1, packed(array)));
+        return Expr::input(&NdArray::from_dense(1, packed(array)).unwrap());
     }
     let value = &j["value"];
     Expr::scalar(match j["scalar"].as_str().unwrap() {
@@ -105,7 +105,7 @@ fn fixed_numpy_where_oracle() {
     let fixture: Json = serde_json::from_str(include_str!("fixtures/where/oracle.json")).unwrap();
     assert_eq!(fixture["numpy"], "2.5.4");
     for (i, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
-        let condition = Expr::input(&NdArray::from_dense(1, packed(&case["condition"])));
+        let condition = Expr::input(&NdArray::from_dense(1, packed(&case["condition"])).unwrap());
         let x = operand(&case["x"]);
         let y = operand(&case["y"]);
         let expected = packed(&case["expected"]);
@@ -122,18 +122,13 @@ fn fixed_numpy_where_oracle() {
 
 #[test]
 fn where_validation_and_gpu_admission() {
-    let condition = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2], Buffer::Bool(vec![true, false])),
-    ));
-    let ints = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2], Buffer::U8(vec![1, 2])),
-    ));
-    let floats = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2], Buffer::F32(vec![1.0, 2.0])),
-    ));
+    let condition = Expr::input(
+        &NdArray::from_dense(1, dense(vec![2], Buffer::Bool(vec![true, false]))).unwrap(),
+    );
+    let ints =
+        Expr::input(&NdArray::from_dense(1, dense(vec![2], Buffer::U8(vec![1, 2]))).unwrap());
+    let floats =
+        Expr::input(&NdArray::from_dense(1, dense(vec![2], Buffer::F32(vec![1.0, 2.0]))).unwrap());
     let selected = Expr::select(&condition, &floats, &floats).unwrap();
     assert_eq!(selected.operation_id(), "where");
     assert_eq!(
@@ -148,34 +143,34 @@ fn where_validation_and_gpu_admission() {
             .code,
         ErrorCode::DTypeUnsupported
     );
-    let three = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![3], Buffer::F32(vec![1.0, 2.0, 3.0])),
-    ));
+    let three = Expr::input(
+        &NdArray::from_dense(1, dense(vec![3], Buffer::F32(vec![1.0, 2.0, 3.0]))).unwrap(),
+    );
     assert_eq!(
         Expr::select(&condition, &floats, &three).unwrap_err().code,
         ErrorCode::ShapeBroadcast
     );
-    let other_context = Expr::input(&NdArray::from_dense(
-        2,
-        dense(vec![2], Buffer::F32(vec![1.0, 2.0])),
-    ));
+    let other_context =
+        Expr::input(&NdArray::from_dense(2, dense(vec![2], Buffer::F32(vec![1.0, 2.0]))).unwrap());
     assert_eq!(
         Expr::select(&condition, &floats, &other_context)
             .unwrap_err()
             .code,
         ErrorCode::ContextMismatch
     );
-    let strings = Expr::input(&NdArray::from_dense(
-        1,
-        dense(
-            vec![2],
-            Buffer::Unicode {
-                width: 1,
-                values: vec![b'a' as u32, b'b' as u32],
-            },
-        ),
-    ));
+    let strings = Expr::input(
+        &NdArray::from_dense(
+            1,
+            dense(
+                vec![2],
+                Buffer::Unicode {
+                    width: 1,
+                    values: vec![b'a' as u32, b'b' as u32],
+                },
+            ),
+        )
+        .unwrap(),
+    );
     for (c, x, y) in [
         (&strings, &floats, &floats),
         (&condition, &strings, &strings),
@@ -223,7 +218,7 @@ fn where_budgets_snapshots_and_cancellation() {
     );
 
     // Inputs are frozen at job start; later writes do not change the result.
-    let source = NdArray::from_dense(1, dense(vec![2], Buffer::Bool(vec![true, false])));
+    let source = NdArray::from_dense(1, dense(vec![2], Buffer::Bool(vec![true, false]))).unwrap();
     let expr = Expr::select(
         &Expr::input(&source),
         &Expr::scalar(Scalar::Int(1)),
