@@ -68,19 +68,34 @@ export function reshape<
 ): Expr<D, ReshapeShape<S, R>> {
   return input.reshape<R>(shape, options);
 }
+export function transpose<D extends ComputableDType, S extends Shape>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, TransposeShape<S, undefined>>;
 export function transpose<
   D extends ComputableDType,
   S extends Shape,
-  const A extends Shape | undefined = undefined,
+  const A extends Shape | undefined,
 >(
   input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axes?: A & TransposeCheck<S, A>,
-): Expr<D, TransposeShape<S, A>> {
-  return input.transpose<A>(axes);
+  axes: A & TransposeCheck<S, A>,
+): Expr<D, TransposeShape<S, A>>;
+export function transpose<D extends ComputableDType, S extends Shape>(
+  input: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axes?: Shape,
+): Expr<D, any> {
+  // The public overloads check the argument and result; forwarding keeps undefined intact.
+  return input.transpose<Shape | undefined>(
+    axes as (Shape | undefined) & TransposeCheck<S, Shape | undefined>,
+  ) as Expr<D, any>;
 }
 
 type Nested<T> = T | readonly Nested<T>[];
 
+export function array<D extends ComputableDType, const S extends Shape>(
+  context: NMathContext,
+  data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+  options: ArrayOptions<D, S> & { shape: S },
+): NMathArray<D, S>;
 export function array<
   D extends ComputableDType,
   const S extends Shape = number[],
@@ -88,7 +103,15 @@ export function array<
   context: NMathContext,
   data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
   options: ArrayOptions<D, S>,
-): NMathArray<D, S> {
+): NMathArray<D, number[]>;
+export function array<
+  D extends ComputableDType,
+  const S extends Shape = number[],
+>(
+  context: NMathContext,
+  data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+  options: ArrayOptions<D, S>,
+): NMathArray<D, Shape> {
   return context.array(data, options);
 }
 
@@ -106,7 +129,16 @@ export function ones<D extends ComputableDType, const S extends Shape>(
   dtype: D,
 ): NMathArray<D, S> {
   const one = (
-    dtype === "int64" || dtype === "uint64" ? 1n : dtype === "bool" ? true : 1
+    dtype === "str"
+      ? "1"
+      : dtype === "datetime64" ||
+          dtype === "timedelta64" ||
+          dtype === "int64" ||
+          dtype === "uint64"
+        ? 1n
+        : dtype === "bool"
+          ? true
+          : 1
   ) as ScalarOf<D>;
   return context.full(shape, one, dtype);
 }
@@ -121,13 +153,28 @@ export function full<D extends ComputableDType, const S extends Shape>(
 }
 
 /** `np.arange(start, stop, step)` for numeric dtypes other than 64-bit integers. */
-export function arange<D extends "int32" | "uint32" | "float32" | "float64">(
+type ArangeDType = "int32" | "uint32" | "float32" | "float64";
+
+export function arange(
+  context: NMathContext,
+  start: number,
+  stop: number,
+  step?: number,
+): NMathArray<"float64", [number]>;
+export function arange<const D extends ArangeDType | undefined>(
+  context: NMathContext,
+  start: number,
+  stop: number,
+  step: number | undefined,
+  dtype: D,
+): NMathArray<D extends ArangeDType ? D : "float64", [number]>;
+export function arange(
   context: NMathContext,
   start: number,
   stop: number,
   step = 1,
-  dtype: D = "float64" as D,
-): NMathArray<D, [number]> {
+  dtype: ArangeDType = "float64",
+): NMathArray<ArangeDType, [number]> {
   if (step === 0) {
     throw new RangeError("arange step must not be zero.");
   }
@@ -164,11 +211,25 @@ export const remainder = mod;
 export const power = pow;
 export { add, mod };
 
-export function negative<T extends Lazy<ComputableDType, Shape>>(x: T) {
-  return x.neg();
+type UnarySupportedDType = Exclude<
+  ComputableDType,
+  "bool" | "str" | "datetime64"
+>;
+
+export function negative<D extends UnarySupportedDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, S>;
+// This internal bridge satisfies the conditional method receiver; the public
+// overload rejects unsupported dtypes. Remove it if TypeScript resolves the
+// constrained receiver directly.
+export function negative(x: Lazy<any, any>): Expr<any, any> {
+  return (x as Lazy<UnarySupportedDType, Shape>).neg();
 }
-export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
-  return x.pos();
+export function positive<D extends UnarySupportedDType, S extends Shape>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+): Expr<D, S>;
+export function positive(x: Lazy<any, any>): Expr<any, any> {
+  return (x as Lazy<UnarySupportedDType, Shape>).pos();
 }
 // Public overloads retain dtype/axis inference and reject unsupported reductions.
 // The broad internal signatures bridge conditional method receivers; no runtime
@@ -176,11 +237,20 @@ export function positive<T extends Lazy<ComputableDType, Shape>>(x: T) {
 export function sum<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<SumDType<D>, ReduceShape<S, undefined, K>>;
+export function sum<
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<SumDType<D>, ReduceShape<S, A, K>>;
 export function sum(
@@ -193,11 +263,23 @@ export function sum(
 export function mean<
   D extends Exclude<ComputableDType, "str" | "datetime64">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<
+  D extends "timedelta64" ? D : TrueDivide<D>,
+  ReduceShape<S, undefined, K>
+>;
+export function mean<
+  D extends Exclude<ComputableDType, "str" | "datetime64">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>>;
 export function mean(
@@ -210,11 +292,20 @@ export function mean(
 export function min<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, undefined, K>>;
+export function min<
+  D extends Exclude<ComputableDType, "str">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D, ReduceShape<S, A, K>>;
 export function min(
@@ -227,11 +318,20 @@ export function min(
 export function max<
   D extends Exclude<ComputableDType, "str">,
   S extends Shape,
-  const A extends number | readonly number[] | undefined = undefined,
   K extends boolean = false,
 >(
   x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
-  axis?: A,
+  axis?: undefined,
+  options?: ReduceOptions<K>,
+): Expr<D, ReduceShape<S, undefined, K>>;
+export function max<
+  D extends Exclude<ComputableDType, "str">,
+  S extends Shape,
+  const A extends number | readonly number[] | undefined,
+  K extends boolean = false,
+>(
+  x: Lazy<NoInfer<D>, S> & { readonly dtype: D },
+  axis: A,
   options?: ReduceOptions<K>,
 ): Expr<D, ReduceShape<S, A, K>>;
 export function max(

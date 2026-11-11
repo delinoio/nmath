@@ -21,9 +21,41 @@ use crate::{
     random::Generator,
     shape::Selector,
     sync::{CancellationToken, Ticket},
+    table::SNAPSHOT_GATE,
 };
 
 static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
+// Reserve each job's complete generator batch before another context can
+// reserve tickets for any of the same generators. Never hold this over a
+// ticket wait or job execution.
+static GENERATOR_TICKET_COLLECTION: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_FIRST_GENERATOR_TICKET: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        std::cell::RefCell::new(None);
+}
+
+fn collect_generator_tickets(generators: &[Generator]) -> Vec<Ticket> {
+    if generators.is_empty() {
+        return Vec::new();
+    }
+    let _collection = GENERATOR_TICKET_COLLECTION.lock().unwrap();
+    let mut tickets = Vec::with_capacity(generators.len());
+    for generator in generators {
+        tickets.push(generator.ticket());
+        #[cfg(test)]
+        if tickets.len() == 1 && generators.len() > 1 {
+            AFTER_FIRST_GENERATOR_TICKET.with(|hook| {
+                if let Some(hook) = hook.borrow_mut().take() {
+                    hook();
+                }
+            });
+        }
+    }
+    tickets
+}
+
 /// Finished executions kept for `metrics()`; cumulative counters cover all
 /// executions.
 const RECENT_EXECUTIONS: usize = 1024;
@@ -122,6 +154,22 @@ struct Queued {
     cancel: Cancel,
 }
 
+impl Queued {
+    fn cancel(self, error: Error) {
+        let Queued {
+            token,
+            start,
+            cancel,
+            ..
+        } = self;
+        // The start closure owns unused FIFO tickets. Release them before
+        // user completion code can submit and wait for a successor.
+        drop(start);
+        drop(token);
+        cancel(error);
+    }
+}
+
 #[derive(Default)]
 struct Sched {
     running: HashMap<u64, CancellationToken>,
@@ -212,10 +260,7 @@ impl Context {
     pub fn array(&self, shape: Vec<usize>, buffer: Buffer) -> Result<NdArray> {
         self.ensure_open()?;
         let reservation = self.inner.cpu.reserve(buffer.byte_len())?;
-        Ok(NdArray::from_dense(
-            self.id(),
-            DenseArray::new(shape, buffer, reservation)?,
-        ))
+        NdArray::from_dense(self.id(), DenseArray::new(shape, buffer, reservation)?)
     }
 
     pub fn generator(&self, seed: u128) -> Generator {
@@ -256,14 +301,16 @@ impl Context {
             device,
             token,
             move || {
-                let generator_tickets: Vec<Ticket> =
-                    generators.iter().map(Generator::ticket).collect();
+                let generator_tickets = collect_generator_tickets(&generators);
                 Box::new(move |env| {
                     env.generator_turns = generator_tickets
                         .into_iter()
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
-                    env.freeze(&expr)?;
+                    {
+                        let _gate = SNAPSHOT_GATE.lock().unwrap();
+                        env.freeze(&expr)?;
+                    }
                     let value = env.eval(&expr)?;
                     env.token.check()?;
                     Ok(JobOutput::Value(value))
@@ -296,8 +343,7 @@ impl Context {
             Device::Cpu,
             token,
             move || {
-                let generator_tickets: Vec<Ticket> =
-                    generators.iter().map(Generator::ticket).collect();
+                let generator_tickets = collect_generator_tickets(&generators);
                 let ticket = target.write_ticket();
                 Box::new(move |env| {
                     env.generator_turns = generator_tickets
@@ -305,26 +351,21 @@ impl Context {
                         .map(|t| t.wait(&env.token))
                         .collect::<Result<_>>()?;
                     let turn = ticket.wait(&env.token)?;
-                    env.freeze(&value)?;
+                    {
+                        let _gate = SNAPSHOT_GATE.lock().unwrap();
+                        env.freeze(&value)?;
+                    }
                     // Assignment copies values, so view-valued expressions
                     // (basic indexing of an input)
                     // materialize from the frozen snapshot.
                     let dense = env.eval_dense(&value)?;
-                    // String width and temporal unit casts allocate a full
-                    // source buffer. Hold its reservation
-                    // until the atomic write finishes.
-                    let _cast_charge = if target.dtype().kind() == crate::dtype::DTypeKind::Other {
-                        Some(
-                            env.budget.reserve(
-                                (dense.size() as u64)
-                                    .checked_mul(target.dtype().item_size() as u64)
-                                    .ok_or_else(crate::dtype::unsupported)?,
-                            )?,
-                        )
-                    } else {
-                        None
-                    };
-                    target.assign(&turn, &selectors, &dense, &env.token)?;
+                    target.assign_with_budget(
+                        &turn,
+                        &selectors,
+                        &dense,
+                        &env.token,
+                        &env.budget,
+                    )?;
                     Ok(JobOutput::Unit)
                 })
             },
@@ -338,8 +379,8 @@ impl Context {
         let source = source.clone();
         let id = self.id();
         let work: Work = Box::new(move |env| {
-            let snap = source.snapshot(&env.budget)?;
-            Ok(JobOutput::Array(NdArray::from_dense(id, snap)))
+            let snap = source.snapshot_cancellable(&env.budget, &env.token)?;
+            Ok(JobOutput::Array(NdArray::from_dense(id, snap)?))
         });
         self.submit(OperationKind::Copy, "copy", Device::Cpu, token, work, done)
     }
@@ -355,8 +396,9 @@ impl Context {
         self.ensure_owned(Some(array.context_id()))?;
         let array = array.clone();
         let work: Work = Box::new(move |env| {
-            let snap = array.snapshot(&env.budget)?;
-            let bytes = io::encode_npy(&snap.shape, &snap.buffer)?;
+            let snap = array.snapshot_cancellable(&env.budget, &env.token)?;
+            let (bytes, _serialization) =
+                io::encode_npy_budgeted(&snap.shape, &snap.buffer, &env.budget)?;
             io::write_atomic(&path, &bytes, mode, &env.token)?;
             Ok(JobOutput::Unit)
         });
@@ -382,7 +424,7 @@ impl Context {
             Ok(JobOutput::Array(NdArray::from_dense(
                 id,
                 DenseArray::new(shape, buffer, reservation)?,
-            )))
+            )?))
         });
         self.submit(
             OperationKind::FileRead,
@@ -525,7 +567,7 @@ impl Context {
         }
         for job in queued {
             finish_record(inner, job.id, ExecutionStatus::Cancelled);
-            (job.cancel)(Error::new(ErrorCode::Cancelled, "The context was closed."));
+            job.cancel(Error::new(ErrorCode::Cancelled, "The context was closed."));
         }
         let mut sched = inner.sched.lock().unwrap();
         while !sched.running.is_empty() {
@@ -572,7 +614,7 @@ fn cancel_queued(inner: &Arc<Inner>, id: u64) {
     };
     if let Some(job) = job {
         finish_record(inner, id, ExecutionStatus::Cancelled);
-        (job.cancel)(Error::new(
+        job.cancel(Error::new(
             ErrorCode::Cancelled,
             "The computation was cancelled while queued.",
         ));
@@ -631,7 +673,8 @@ fn run_job(
             );
             // Snapshots and returned host arrays use CPU memory even for GPU
             // jobs.
-            let mut env = JobEnv::new(device, inner.cpu.clone(), token.clone());
+            let mut env =
+                JobEnv::new_for_context(inner.id, device, inner.cpu.clone(), token.clone());
             env.gpu_budget = Some(inner.gpu.clone());
             let mut result = token.check().and_then(|()| work(&mut env));
 
@@ -698,10 +741,10 @@ mod io_npz_context;
 
 #[cfg(test)]
 mod admission_tests {
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{fs, sync::mpsc, thread, time::Duration};
 
     use super::*;
-    use crate::{Buffer, Scalar};
+    use crate::{BinaryOp, Buffer, Scalar, expr::freeze_test_hook};
 
     fn context(queue: usize) -> Context {
         Context::new(ContextOptions {
@@ -718,8 +761,593 @@ mod admission_tests {
         (Box::new(move |result| tx.send(result).unwrap()), rx)
     }
 
+    #[test]
+    fn npy_save_reserves_serialization_before_publication() {
+        let dir = tempfile::tempdir().unwrap();
+        let context_with_budget = |budget| {
+            Context::new(ContextOptions {
+                max_concurrent_jobs: 1,
+                max_queue_length: 0,
+                cpu_memory_budget: budget,
+                gpu_memory_budget: 0,
+            })
+            .unwrap()
+        };
+
+        let zero = context_with_budget(0);
+        let empty = zero.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let absent = dir.path().join("absent.npy");
+        let (done, rx) = completion();
+        zero.save_npy(
+            &empty,
+            absent.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert!(!absent.exists());
+        assert_eq!(zero.metrics().cpu_memory.used, 0);
+        assert_eq!(zero.metrics().cpu_memory.peak, 0);
+        zero.close();
+
+        let tight = context_with_budget(16);
+        let one = tight.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let existing = dir.path().join("existing.npy");
+        fs::write(&existing, b"original").unwrap();
+        let (done, rx) = completion();
+        tight
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::MemoryBudgetExceeded
+        );
+        assert_eq!(fs::read(&existing).unwrap(), b"original");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(tight.metrics().cpu_memory.used, 8);
+        tight.close();
+
+        let enough = context_with_budget(4096);
+        let empty = enough.array(vec![0], Buffer::F64(vec![])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &empty,
+                absent.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&absent).unwrap()).unwrap(),
+            (vec![0], Buffer::F64(vec![]))
+        );
+        let one = enough.array(vec![1], Buffer::F64(vec![7.0])).unwrap();
+        let (done, rx) = completion();
+        enough
+            .save_npy(
+                &one,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        assert_eq!(
+            io::decode_npy(&fs::read(&existing).unwrap()).unwrap(),
+            (vec![1], Buffer::F64(vec![7.0]))
+        );
+        assert!(enough.metrics().cpu_memory.peak > 16);
+        assert_eq!(enough.metrics().cpu_memory.used, 8);
+        enough.close();
+    }
+
+    #[test]
+    fn oversized_npy_header_fails_before_publication() {
+        let ctx = context(4);
+        let dir = tempfile::tempdir().unwrap();
+        for (index, rank) in [4_000, 22_000].into_iter().enumerate() {
+            let array = ctx.array(vec![1; rank], Buffer::U8(vec![1])).unwrap();
+            let used_before = ctx.metrics().cpu_memory.used;
+            let fresh = dir.path().join(format!("fresh-{rank}.npy"));
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                fresh.clone(),
+                WriteMode::CreateNew,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert!(!fresh.exists());
+
+            let existing = dir.path().join(format!("existing-{rank}.npy"));
+            fs::write(&existing, b"original").unwrap();
+            let (done, rx) = completion();
+            ctx.save_npy(
+                &array,
+                existing.clone(),
+                WriteMode::Overwrite,
+                CancellationToken::new(),
+                done,
+            )
+            .unwrap();
+            assert_eq!(
+                rx.recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap_err()
+                    .code,
+                ErrorCode::IoFormat
+            );
+            assert_eq!(fs::read(&existing).unwrap(), b"original");
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), index + 1);
+            assert_eq!(ctx.metrics().cpu_memory.used, used_before);
+        }
+
+        let supported = ctx.array(vec![1; 3_300], Buffer::U8(vec![1])).unwrap();
+        let path = dir.path().join("supported.npy");
+        let (done, rx) = completion();
+        ctx.save_npy(
+            &supported,
+            path.clone(),
+            WriteMode::CreateNew,
+            CancellationToken::new(),
+            done,
+        )
+        .unwrap();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Ok(JobOutput::Unit)
+        ));
+        let bytes = fs::read(&path).unwrap();
+        assert_eq!(u16::from_le_bytes([bytes[8], bytes[9]]), 9_974);
+        assert_eq!(
+            io::decode_npy(&bytes).unwrap(),
+            (vec![1; 3_300], Buffer::U8(vec![1]))
+        );
+        ctx.close();
+    }
+
     fn completed(rx: mpsc::Receiver<Result<JobOutput>>) {
         rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+    }
+
+    #[derive(Clone, Copy)]
+    enum RandomJob {
+        Compute,
+        Assign,
+    }
+
+    fn random_sum(ctx: &Context, first: &Generator, second: &Generator) -> Expr {
+        Expr::binary(
+            BinaryOp::Add,
+            &Expr::random(ctx.id(), first, vec![1]),
+            &Expr::random(ctx.id(), second, vec![1]),
+        )
+        .unwrap()
+    }
+
+    fn submit_random(
+        ctx: &Context,
+        kind: RandomJob,
+        expr: &Expr,
+        target: &NdArray,
+        token: CancellationToken,
+    ) -> (u64, mpsc::Receiver<Result<JobOutput>>) {
+        let (done, rx) = completion();
+        let id = match kind {
+            RandomJob::Compute => ctx.compute(expr, Device::Cpu, token, done),
+            RandomJob::Assign => ctx.assign(target, vec![], expr, token, done),
+        }
+        .unwrap();
+        (id, rx)
+    }
+
+    fn assert_random_result(
+        kind: RandomJob,
+        rx: mpsc::Receiver<Result<JobOutput>>,
+        target: &NdArray,
+        expected: f64,
+    ) {
+        let result = rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        let actual = match kind {
+            RandomJob::Compute => {
+                let JobOutput::Value(Value::Dense(value)) = result else {
+                    panic!("random compute did not return a dense value");
+                };
+                value.buffer
+            }
+            RandomJob::Assign => {
+                assert!(matches!(result, JobOutput::Unit));
+                target.to_buffer()
+            }
+        };
+        assert_eq!(actual, Buffer::F64(vec![expected]));
+    }
+
+    fn cross_context_random_jobs(first_kind: RandomJob, second_kind: RandomJob) {
+        let first_ctx = context(2);
+        let second_ctx = context(2);
+        let first_target = first_ctx.array(vec![1], Buffer::F64(vec![0.0])).unwrap();
+        let second_target = second_ctx.array(vec![1], Buffer::F64(vec![0.0])).unwrap();
+        let first_generator = Generator::new(101);
+        let second_generator = Generator::new(202);
+        let first_expr = random_sum(&first_ctx, &first_generator, &second_generator);
+        let second_expr = random_sum(&second_ctx, &second_generator, &first_generator);
+        let first_token = CancellationToken::new();
+        let second_token = CancellationToken::new();
+
+        let (first_ticket_tx, first_ticket_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let first_ctx_submit = first_ctx.clone();
+        let first_target_submit = first_target.clone();
+        let first_token_submit = first_token.clone();
+        let first = thread::spawn(move || {
+            AFTER_FIRST_GENERATOR_TICKET.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    first_ticket_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                }));
+            });
+            submit_random(
+                &first_ctx_submit,
+                first_kind,
+                &first_expr,
+                &first_target_submit,
+                first_token_submit,
+            )
+        });
+        first_ticket_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+
+        let (second_started_tx, second_started_rx) = mpsc::channel();
+        let (second_ticket_tx, second_ticket_rx) = mpsc::channel();
+        let second_ctx_submit = second_ctx.clone();
+        let second_target_submit = second_target.clone();
+        let second_token_submit = second_token.clone();
+        let second = thread::spawn(move || {
+            AFTER_FIRST_GENERATOR_TICKET.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    second_ticket_tx.send(()).unwrap();
+                }));
+            });
+            second_started_tx.send(()).unwrap();
+            submit_random(
+                &second_ctx_submit,
+                second_kind,
+                &second_expr,
+                &second_target_submit,
+                second_token_submit,
+            )
+        });
+        second_started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        let crossed_collection = second_ticket_rx
+            .recv_timeout(Duration::from_millis(200))
+            .is_ok();
+        release_tx.send(()).unwrap();
+        let (_, first_rx) = first.join().unwrap();
+        let (_, second_rx) = second.join().unwrap();
+        if crossed_collection {
+            first_token.cancel();
+            second_token.cancel();
+        }
+        assert!(!crossed_collection, "generator ticket batches interleaved");
+        second_ticket_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+
+        let mut first_expected_state = crate::random::Pcg64::from_seed(101);
+        let mut second_expected_state = crate::random::Pcg64::from_seed(202);
+        let first_expected = first_expected_state.next_f64() + second_expected_state.next_f64();
+        let second_expected = second_expected_state.next_f64() + first_expected_state.next_f64();
+        assert_random_result(first_kind, first_rx, &first_target, first_expected);
+        assert_random_result(second_kind, second_rx, &second_target, second_expected);
+        assert_eq!(first_generator.current(), first_expected_state);
+        assert_eq!(second_generator.current(), second_expected_state);
+        first_ctx.close();
+        second_ctx.close();
+    }
+
+    #[test]
+    fn shared_generator_batches_admit_cross_context_compute_and_assign() {
+        cross_context_random_jobs(RandomJob::Compute, RandomJob::Compute);
+        cross_context_random_jobs(RandomJob::Compute, RandomJob::Assign);
+        cross_context_random_jobs(RandomJob::Assign, RandomJob::Assign);
+    }
+
+    #[test]
+    fn waiting_and_cancelled_cross_context_jobs_release_generator_tickets() {
+        let first_ctx = context(1);
+        let second_ctx = context(1);
+        let first_generator = Generator::new(303);
+        let second_generator = Generator::new(404);
+        let first_initial = first_generator.current();
+        let second_initial = second_generator.current();
+        let held_turn = first_generator
+            .ticket()
+            .wait(&CancellationToken::new())
+            .unwrap();
+        let first_expr = random_sum(&first_ctx, &first_generator, &second_generator);
+        let second_expr = random_sum(&second_ctx, &second_generator, &first_generator);
+        let first_target = first_ctx.array(vec![1], Buffer::F64(vec![0.0])).unwrap();
+        let second_target = second_ctx.array(vec![1], Buffer::F64(vec![0.0])).unwrap();
+        let cancelled = CancellationToken::new();
+        let (_, first_rx) = submit_random(
+            &first_ctx,
+            RandomJob::Compute,
+            &first_expr,
+            &first_target,
+            cancelled.clone(),
+        );
+
+        let (admitted_tx, admitted_rx) = mpsc::channel();
+        let second_ctx_submit = second_ctx.clone();
+        let second_target_submit = second_target.clone();
+        let second = thread::spawn(move || {
+            let result = submit_random(
+                &second_ctx_submit,
+                RandomJob::Assign,
+                &second_expr,
+                &second_target_submit,
+                CancellationToken::new(),
+            );
+            admitted_tx.send(result).unwrap();
+        });
+        let (_, second_rx) = admitted_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        second.join().unwrap();
+        cancelled.cancel();
+        assert_eq!(
+            first_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert_eq!(first_generator.current(), first_initial);
+        assert_eq!(second_generator.current(), second_initial);
+
+        drop(held_turn);
+        let mut first_expected_state = first_initial;
+        let mut second_expected_state = second_initial;
+        let expected = second_expected_state.next_f64() + first_expected_state.next_f64();
+        assert_random_result(RandomJob::Assign, second_rx, &second_target, expected);
+        assert_eq!(first_generator.current(), first_expected_state);
+        assert_eq!(second_generator.current(), second_expected_state);
+        first_ctx.close();
+        second_ctx.close();
+    }
+
+    #[test]
+    fn rejected_random_job_never_reserves_generator_state() {
+        let ctx = context(0);
+        let first_generator = Generator::new(505);
+        let second_generator = Generator::new(606);
+        let first_initial = first_generator.current();
+        let second_initial = second_generator.current();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (block_done, block_rx) = completion();
+        ctx.submit(
+            OperationKind::Compute,
+            "blocker",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |_| {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(JobOutput::Unit)
+            }),
+            block_done,
+        )
+        .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let expr = random_sum(&ctx, &first_generator, &second_generator);
+        let (rejected_done, _) = completion();
+        assert_eq!(
+            ctx.compute(&expr, Device::Cpu, CancellationToken::new(), rejected_done)
+                .unwrap_err()
+                .code,
+            ErrorCode::SchedQueueFull
+        );
+        release_tx.send(()).unwrap();
+        completed(block_rx);
+        assert_eq!(first_generator.current(), first_initial);
+        assert_eq!(second_generator.current(), second_initial);
+        let target = ctx.array(vec![1], Buffer::F64(vec![0.0])).unwrap();
+        let (_, accepted_rx) = submit_random(
+            &ctx,
+            RandomJob::Assign,
+            &expr,
+            &target,
+            CancellationToken::new(),
+        );
+        let mut first_expected_state = first_initial;
+        let mut second_expected_state = second_initial;
+        let expected = first_expected_state.next_f64() + second_expected_state.next_f64();
+        assert_random_result(RandomJob::Assign, accepted_rx, &target, expected);
+        assert_eq!(first_generator.current(), first_expected_state);
+        assert_eq!(second_generator.current(), second_expected_state);
+        ctx.close();
+    }
+
+    fn aliased_freeze_case(overlapping_views: bool, assignment_rhs: bool) {
+        let ctx = Context::new(ContextOptions {
+            max_concurrent_jobs: 2,
+            max_queue_length: 2,
+            cpu_memory_budget: 1 << 20,
+            gpu_memory_budget: 0,
+        })
+        .unwrap();
+        let source = ctx.array(vec![2], Buffer::F64(vec![1.0, 1.0])).unwrap();
+        let view = || {
+            source
+                .view(&[Selector::Slice {
+                    start: Some(0),
+                    stop: Some(1),
+                    step: None,
+                }])
+                .unwrap()
+        };
+        let (left, right) = if overlapping_views {
+            (view(), view())
+        } else {
+            (source.clone(), source.clone())
+        };
+        let expr = Expr::binary(BinaryOp::Add, &Expr::input(&left), &Expr::input(&right)).unwrap();
+        let target = ctx
+            .array(
+                vec![expr.shape()[0]],
+                Buffer::F64(vec![0.0; expr.shape()[0]]),
+            )
+            .unwrap();
+        let (first_copy_tx, first_copy_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        freeze_test_hook::install(
+            source.storage_id(),
+            Box::new(move || {
+                first_copy_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }),
+        );
+        let (done, rx) = completion();
+        if assignment_rhs {
+            ctx.assign(&target, vec![], &expr, CancellationToken::new(), done)
+                .unwrap();
+        } else {
+            ctx.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+                .unwrap();
+        }
+        first_copy_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let freeze_holds_gate = SNAPSHOT_GATE.try_lock().is_err();
+        let writer_source = source.clone();
+        let writer = thread::spawn(move || {
+            let token = CancellationToken::new();
+            let turn = writer_source.write_ticket().wait(&token).unwrap();
+            let replacement = DenseArray::new(
+                vec![2],
+                Buffer::F64(vec![3.0, 3.0]),
+                crate::memory::Reservation::none(),
+            )
+            .unwrap();
+            writer_source
+                .assign(&turn, &[], &replacement, &token)
+                .unwrap();
+        });
+        release_tx.send(()).unwrap();
+        let result = rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        writer.join().unwrap();
+
+        assert!(
+            freeze_holds_gate,
+            "the entire input freeze must hold the gate"
+        );
+        let expected = Buffer::F64(vec![2.0; expr.shape()[0]]);
+        if assignment_rhs {
+            assert!(matches!(result, JobOutput::Unit));
+            assert_eq!(target.to_buffer(), expected);
+        } else {
+            let JobOutput::Value(Value::Dense(value)) = result else {
+                panic!("addition must return a dense result");
+            };
+            assert_eq!(value.buffer, expected);
+        }
+        assert_eq!(source.to_buffer(), Buffer::F64(vec![3.0, 3.0]));
+        if overlapping_views {
+            assert_eq!(left.to_buffer(), Buffer::F64(vec![3.0]));
+            assert_eq!(right.to_buffer(), Buffer::F64(vec![3.0]));
+        }
+        ctx.close();
+    }
+
+    #[test]
+    fn ordinary_freeze_keeps_aliases_and_overlapping_views_consistent() {
+        aliased_freeze_case(false, false);
+        aliased_freeze_case(true, false);
+        aliased_freeze_case(true, true);
+    }
+
+    #[test]
+    fn queued_compute_freezes_after_the_prior_write() {
+        let ctx = context(2);
+        let source = ctx.array(vec![1], Buffer::F64(vec![1.0])).unwrap();
+        let expr =
+            Expr::binary(BinaryOp::Add, &Expr::input(&source), &Expr::input(&source)).unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (block_done, block_rx) = completion();
+        ctx.submit(
+            OperationKind::Compute,
+            "blocker",
+            Device::Cpu,
+            CancellationToken::new(),
+            Box::new(move |_| {
+                started_tx.send(()).unwrap();
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                Ok(JobOutput::Unit)
+            }),
+            block_done,
+        )
+        .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (done, rx) = completion();
+        ctx.compute(&expr, Device::Cpu, CancellationToken::new(), done)
+            .unwrap();
+        let token = CancellationToken::new();
+        let turn = source.write_ticket().wait(&token).unwrap();
+        let replacement = DenseArray::new(
+            vec![1],
+            Buffer::F64(vec![3.0]),
+            crate::memory::Reservation::none(),
+        )
+        .unwrap();
+        source.assign(&turn, &[], &replacement, &token).unwrap();
+        drop(turn);
+        release_tx.send(()).unwrap();
+        completed(block_rx);
+        let JobOutput::Value(Value::Dense(value)) =
+            rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap()
+        else {
+            panic!("addition must return a dense result");
+        };
+        assert_eq!(value.buffer, Buffer::F64(vec![6.0]));
+        ctx.close();
     }
 
     #[test]
@@ -1059,6 +1687,7 @@ mod publication_tests {
     use std::{fs, sync::mpsc, time::Duration};
 
     use super::*;
+    use crate::{Buffer, Scalar};
 
     fn context() -> Context {
         Context::new(ContextOptions {
@@ -1192,6 +1821,185 @@ mod publication_tests {
                     panic!("completion case {case} exceeded 10 seconds");
                 }
                 std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    #[test]
+    fn queued_cancellation_callback_releases_tickets() {
+        use std::{process::Command, sync::atomic::AtomicUsize, thread};
+
+        const CASE_ENV: &str = "NMATH_QUEUED_CANCELLATION_TEST_CASE";
+        if let Ok(case) = std::env::var(CASE_ENV) {
+            let ctx = context();
+            let target = ctx.array(vec![1], Buffer::I32(vec![0])).unwrap();
+            let generator = ctx.generator(73);
+            let initial_state = generator.current();
+            let mut expected_state = initial_state;
+            let expected_sample = expected_state.next_f64();
+            let (started_tx, started_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let (block_done, block_rx) = completion();
+            ctx.submit(
+                OperationKind::Compute,
+                "blocker",
+                Device::Cpu,
+                CancellationToken::new(),
+                Box::new(move |_| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(JobOutput::Unit)
+                }),
+                block_done,
+            )
+            .unwrap();
+            started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+            let cancelled = CancellationToken::new();
+            let (callback_tx, callback_rx) = mpsc::channel();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let callback_calls = calls.clone();
+            let callback_ctx = ctx.clone();
+            let callback_target = target.clone();
+            let callback_generator = generator.clone();
+            let callback_release = release_tx.clone();
+            let callback_case = case.clone();
+            let on_cancel: Done = Box::new(move |result| {
+                callback_calls.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+                let metrics = callback_ctx.metrics();
+                assert_eq!(metrics.total_cancelled, 1);
+                assert_eq!(
+                    metrics
+                        .executions
+                        .iter()
+                        .filter(|record| record.status == ExecutionStatus::Cancelled)
+                        .count(),
+                    1
+                );
+                assert_eq!(callback_generator.current(), initial_state);
+                if callback_case == "control" {
+                    callback_tx.send(()).unwrap();
+                    return;
+                }
+
+                let (replacement_done, replacement_rx) = completion();
+                if callback_case == "generator" {
+                    callback_ctx
+                        .compute(
+                            &Expr::random(callback_ctx.id(), &callback_generator, vec![1]),
+                            Device::Cpu,
+                            CancellationToken::new(),
+                            replacement_done,
+                        )
+                        .unwrap();
+                } else {
+                    callback_ctx
+                        .assign(
+                            &callback_target,
+                            vec![],
+                            &Expr::scalar(Scalar::Int(2)),
+                            CancellationToken::new(),
+                            replacement_done,
+                        )
+                        .unwrap();
+                }
+                callback_release.send(()).unwrap();
+                let result = replacement_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                if callback_case == "generator" {
+                    match result.unwrap() {
+                        JobOutput::Value(Value::Dense(value)) => {
+                            assert_eq!(value.buffer, Buffer::F64(vec![expected_sample]));
+                        }
+                        output => panic!("unexpected replacement output: {output:?}"),
+                    }
+                    assert_eq!(callback_generator.current(), expected_state);
+                } else {
+                    assert!(result.is_ok());
+                    assert_eq!(callback_target.to_buffer(), Buffer::I32(vec![2]));
+                }
+                callback_tx.send(()).unwrap();
+            });
+
+            if case == "generator" {
+                ctx.compute(
+                    &Expr::random(ctx.id(), &generator, vec![1]),
+                    Device::Cpu,
+                    cancelled.clone(),
+                    on_cancel,
+                )
+                .unwrap();
+            } else {
+                ctx.assign(
+                    &target,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(1)),
+                    cancelled.clone(),
+                    on_cancel,
+                )
+                .unwrap();
+            }
+            let cancel_thread = thread::spawn(move || cancelled.cancel());
+            callback_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            cancel_thread.join().unwrap();
+
+            if case == "control" {
+                let (replacement_done, replacement_rx) = completion();
+                ctx.assign(
+                    &target,
+                    vec![],
+                    &Expr::scalar(Scalar::Int(2)),
+                    CancellationToken::new(),
+                    replacement_done,
+                )
+                .unwrap();
+                release_tx.send(()).unwrap();
+                replacement_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(target.to_buffer(), Buffer::I32(vec![2]));
+            }
+            block_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            let metrics = ctx.metrics();
+            assert_eq!(metrics.total_submitted, 3);
+            assert_eq!(metrics.total_succeeded, 2);
+            assert_eq!(metrics.total_cancelled, 1);
+            assert_eq!(metrics.total_failed, 0);
+            assert_eq!(metrics.total_rejected, 0);
+            ctx.close();
+            return;
+        }
+
+        for case in ["storage", "generator", "control"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "context::publication_tests::queued_cancellation_callback_releases_tickets",
+                    "--nocapture",
+                ])
+                .env(CASE_ENV, case)
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(12);
+            loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    assert!(
+                        status.success(),
+                        "queued cancellation case {case} failed: {status}"
+                    );
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    child.kill().unwrap();
+                    child.wait().unwrap();
+                    panic!("queued cancellation case {case} exceeded 12 seconds");
+                }
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
@@ -1508,8 +2316,8 @@ mod random_tests {
         assert_eq!(generator.current(), initial);
 
         let scalar = Expr::random(ctx.id(), &generator, vec![]);
-        let zero = Expr::random(ctx.id(), &generator, vec![usize::MAX, 2, 0]);
-        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[usize::MAX, 2, 0][..], 0)] {
+        let zero = Expr::random(ctx.id(), &generator, vec![0, 3, 4]);
+        for (expr, shape, len) in [(&scalar, &[][..], 1), (&zero, &[0, 3, 4][..], 0)] {
             assert_eq!(expr.dtype(), crate::DType::Float64);
             let JobOutput::Value(Value::Dense(value)) = compute(&ctx, expr).unwrap() else {
                 panic!("random compute did not return a dense value");

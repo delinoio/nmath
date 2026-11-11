@@ -47,18 +47,20 @@ export type PolyvalDType<
   C extends NumericalDType,
   CS extends Shape,
   X extends NumericalDType,
-> =
-  Empty<CS> extends true
+> = CS extends Shape
+  ? Empty<CS> extends true
     ? X
     : MaybeEmpty<CS> extends true
       ? X | Promote<C, X>
-      : Promote<C, X>;
-export type PolyvalShape<C extends Shape, X extends Shape> =
-  Empty<C> extends true
+      : Promote<C, X>
+  : never;
+export type PolyvalShape<C extends Shape, X extends Shape> = C extends Shape
+  ? Empty<C> extends true
     ? X
     : MaybeEmpty<C> extends true
       ? X | Broadcast<Tail<C>, X>
-      : Broadcast<Tail<C>, X>;
+      : Broadcast<Tail<C>, X>
+  : never;
 type PolynomialCheck<C extends Shape, X extends Shape, T extends boolean> =
   Empty<C> extends true
     ? never

@@ -30,7 +30,7 @@ pub enum Plan {
     Source(Vec<Column>),
     Select(Box<Plan>, Vec<usize>),
     Filter(Box<Plan>, usize),
-    Sort(Box<Plan>, usize, bool, bool),
+    Sort(Box<Plan>, usize, bool, bool, Flavor),
     Join(Box<Plan>, Box<Plan>, usize, usize, bool, bool),
     Group(Box<Plan>, usize, usize, Aggregate, bool, Flavor),
     Pivot(Box<Plan>, usize, usize, usize, PivotMode, Flavor),
@@ -429,7 +429,7 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
             }
             take(&t, &rows, env)
         }
-        Plan::Sort(p, k, descending, nulls_last) => {
+        Plan::Sort(p, k, descending, nulls_last, flavor) => {
             let t = execute(p, env, frozen)?;
             let c = &t.columns[*k];
             if c.values.dtype().kind() == crate::dtype::DTypeKind::Other {
@@ -438,22 +438,29 @@ fn execute(plan: &Plan, env: &mut JobEnv, frozen: &streaming::Frozen) -> Result<
             let _charge = reserve(env, t.rows, 2 * std::mem::size_of::<Option<usize>>())?;
             let mut rows: Vec<_> = (0..t.rows).map(Some).collect();
             let mut scratch = vec![None; t.rows];
-            let compare = |a: usize, b: usize| match (c.valid(a), c.valid(b)) {
-                (false, true) => {
-                    if *nulls_last {
-                        Ordering::Greater
-                    } else {
-                        Ordering::Less
-                    }
-                }
+            let pandas_float = *flavor == Flavor::Pandas
+                && matches!(c.values.dtype(), DType::Float32 | DType::Float64);
+            let missing = |row: usize| {
+                !c.valid(row)
+                    || (pandas_float
+                        && matches!(c.values.buffer.get(row), Scalar::Float(value) if value.is_nan()))
+            };
+            let compare = |a: usize, b: usize| match (missing(a), missing(b)) {
                 (true, false) => {
                     if *nulls_last {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Less
+                    }
+                }
+                (false, true) => {
+                    if *nulls_last {
                         Ordering::Less
                     } else {
                         Ordering::Greater
                     }
                 }
-                (false, false) => Ordering::Equal,
+                (true, true) => Ordering::Equal,
                 _ => {
                     let o = cmp(c.values.buffer.get(a), c.values.buffer.get(b));
                     if *descending { o.reverse() } else { o }
@@ -914,6 +921,16 @@ fn group(
                 float += s.as_f64();
             }
             if extreme.as_ref().is_none_or(|old: &Scalar| {
+                if flavor == Flavor::Polars && matches!(op, Aggregate::Max) {
+                    if let (Scalar::Float(next), Scalar::Float(current)) = (&s, old) {
+                        if next.is_nan() {
+                            return false;
+                        }
+                        if current.is_nan() {
+                            return true;
+                        }
+                    }
+                }
                 let c = cmp(s.clone(), old.clone());
                 if matches!(op, Aggregate::Min) {
                     c == Ordering::Less
