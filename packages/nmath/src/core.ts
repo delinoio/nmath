@@ -193,7 +193,11 @@ export interface SignalOptions {
 export type ComputeResult<
   D extends ComputableDType,
   S extends Shape,
-> = S extends readonly [] ? ScalarOf<D> : NMathArray<D, S>;
+> = S extends readonly []
+  ? ScalarOf<D>
+  : [] extends S
+    ? ScalarOf<D> | NMathArray<D, S>
+    : NMathArray<D, S>;
 
 // ---------------------------------------------------------------------------
 // Selectors
@@ -722,8 +726,28 @@ export abstract class Lazy<
     return keepDims(reduced, this.shape, axes, options);
   }
 
+  /** @internal */
+  pandasReduce(op: "sum"): Expr<SumDType<D>, []>;
+  pandasReduce(op: "mean"): Expr<TrueDivide<D>, []>;
+  pandasReduce(op: "min" | "max"): Expr<D, []>;
+  pandasReduce(op: "sum" | "mean" | "min" | "max"): Expr<any, []> {
+    return new Expr(
+      native(() => binding.NativeExpr.pandasReduce(op, this.nativeExpr())),
+      this.context,
+    );
+  }
+
+  sum<K extends boolean = false>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<SumDType<D>, ReduceShape<S, undefined, K>>;
   sum<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str" | "datetime64"]
@@ -731,14 +755,30 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<SumDType<D>, ReduceShape<S, A, K>> {
+  ): Expr<SumDType<D>, ReduceShape<S, A, K>>;
+  sum(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("sum", axis, options);
   }
 
+  mean<K extends boolean = false>(
+    this: [D] extends ["str" | "datetime64"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<
+    D extends "timedelta64" ? D : TrueDivide<D>,
+    ReduceShape<S, undefined, K>
+  >;
   mean<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str" | "datetime64"]
@@ -746,14 +786,27 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>> {
+  ): Expr<D extends "timedelta64" ? D : TrueDivide<D>, ReduceShape<S, A, K>>;
+  mean(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("mean", axis, options);
   }
 
+  min<K extends boolean = false>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, undefined, K>>;
   min<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str"]
@@ -761,14 +814,27 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D, ReduceShape<S, A, K>> {
+  ): Expr<D, ReduceShape<S, A, K>>;
+  min(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("min", axis, options);
   }
 
+  max<K extends boolean = false>(
+    this: [D] extends ["str"]
+      ? 0 extends 1 & D
+        ? Lazy<D, S>
+        : never
+      : Lazy<D, S>,
+    axis?: undefined,
+    options?: ReduceOptions<K>,
+  ): Expr<D, ReduceShape<S, undefined, K>>;
   max<
-    const A extends number | readonly number[] | undefined = undefined,
+    const A extends number | readonly number[] | undefined,
     K extends boolean = false,
   >(
     this: [D] extends ["str"]
@@ -776,9 +842,13 @@ export abstract class Lazy<
         ? Lazy<D, S>
         : never
       : Lazy<D, S>,
-    axis?: A,
+    axis: A,
     options?: ReduceOptions<K>,
-  ): Expr<D, ReduceShape<S, A, K>> {
+  ): Expr<D, ReduceShape<S, A, K>>;
+  max(
+    axis?: number | readonly number[],
+    options?: ReduceOptions,
+  ): Expr<any, any> {
     return this.reduceOp("max", axis, options);
   }
 
@@ -984,9 +1054,12 @@ export abstract class Lazy<
   }
 
   /** Lazy axis permutation; omitted axes reverse their order. */
-  transpose<const A extends Shape | undefined = undefined>(
-    axes?: A & TransposeCheck<S, A>,
-  ): Expr<D, TransposeShape<S, A>> {
+  transpose(): Expr<D, TransposeShape<S, undefined>>;
+  transpose<const A extends Shape | undefined>(
+    axes: A & TransposeCheck<S, A>,
+  ): Expr<D, TransposeShape<S, A>>;
+  // Only the overloads expose a result shape; the implementation handles both paths.
+  transpose(axes?: Shape): Expr<D, any> {
     const checked = axes?.map((axis) => {
       if (!Number.isSafeInteger(axis))
         throw new NMathError(
@@ -1617,10 +1690,18 @@ export class NMathContext {
   }
 
   /** Creates an array from a typed array or nested JS arrays. */
+  array<D extends ComputableDType, const S extends Shape>(
+    data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+    options: ArrayOptions<D, S> & { shape: S },
+  ): NMathArray<D, S>;
   array<D extends ComputableDType, const S extends Shape = number[]>(
     data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
     options: ArrayOptions<D, S>,
-  ): NMathArray<D, S> {
+  ): NMathArray<D, number[]>;
+  array<D extends ComputableDType, const S extends Shape = number[]>(
+    data: TypedArrayOf<D> | Nested<ScalarOf<D>>,
+    options: ArrayOptions<D, S>,
+  ): NMathArray<D, Shape> {
     const explicitShape = options.shape
       ? validatedShape(options.shape)
       : undefined;
@@ -1656,7 +1737,7 @@ export class NMathContext {
       this.ensureCpuBudget(data.length, options.dtype);
       const array = native(() =>
         this.nativeContext.array(
-          options.shape ? [...options.shape] : [data.length],
+          explicitShape ?? [data.length],
           options.dtype,
           Buffer.from(data.buffer, data.byteOffset, data.byteLength),
         ),
@@ -1710,10 +1791,18 @@ export class NMathContext {
   }
 
   /** Creates float16 storage from exact IEEE-754 binary16 encodings. */
+  arrayFromFloat16Bits<const S extends Shape>(
+    bits: Uint16Array,
+    options: { shape: S },
+  ): NMathArray<"float16", S>;
+  arrayFromFloat16Bits<const S extends Shape = number[]>(
+    bits: Uint16Array,
+    options?: { shape?: S },
+  ): NMathArray<"float16", number[]>;
   arrayFromFloat16Bits<const S extends Shape = number[]>(
     bits: Uint16Array,
     options: { shape?: S } = {},
-  ): NMathArray<"float16", S> {
+  ): NMathArray<"float16", Shape> {
     if (!(bits instanceof Uint16Array))
       throw new TypeError("Binary16 bits must be a Uint16Array.");
     const shape = validatedShape(options.shape ?? [bits.length]);

@@ -131,7 +131,12 @@ fn values(a: &DenseArray) -> Vec<Z> {
 fn run(op: LinalgOp, a: &DenseArray) -> DenseArray {
     let budget = MemoryBudget::new(Device::Cpu, 1 << 24);
     let copy = DenseArray::new(a.shape.clone(), a.buffer.clone(), Reservation::none()).unwrap();
-    let expr = Expr::linalg(op, &Expr::input(&NdArray::from_dense(1, copy)), None).unwrap();
+    let expr = Expr::linalg(
+        op,
+        &Expr::input(&NdArray::from_dense(1, copy).unwrap()),
+        None,
+    )
+    .unwrap();
     let out = linalg::execute(op, a, None, &budget, &CancellationToken::new()).unwrap();
     assert_eq!(out.shape, expr.shape());
     assert_eq!(out.dtype(), expr.dtype());
@@ -199,20 +204,17 @@ fn eig_errors_and_admission() {
         .code,
         ErrorCode::LinalgNoConvergence
     );
-    let wide = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2, 3], Buffer::F64(vec![0.0; 6])),
-    ));
+    let wide =
+        Expr::input(&NdArray::from_dense(1, dense(vec![2, 3], Buffer::F64(vec![0.0; 6]))).unwrap());
     assert_eq!(
         Expr::linalg(LinalgOp::EigValues, &wide, None)
             .unwrap_err()
             .code,
         ErrorCode::ShapeMismatch
     );
-    let real = Expr::input(&NdArray::from_dense(
-        1,
-        dense(vec![2, 2], Buffer::F32(vec![1.0, 0.0, 0.0, 2.0])),
-    ));
+    let real = Expr::input(
+        &NdArray::from_dense(1, dense(vec![2, 2], Buffer::F32(vec![1.0, 0.0, 0.0, 2.0]))).unwrap(),
+    );
     let w = Expr::linalg(LinalgOp::EigValues, &real, None).unwrap();
     assert_eq!(w.dtype(), DType::Complex64);
     assert_eq!(

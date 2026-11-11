@@ -17,6 +17,8 @@ type IntegerDType =
   | "uint32"
   | "uint64";
 type RandomDType = FloatDType | IntegerDType;
+type OptionalFloatDType<D extends FloatDType | undefined> =
+  Exclude<D, undefined> | (undefined extends D ? "float64" : never);
 
 function integer(value: number | bigint): string {
   if (typeof value !== "bigint" && !Number.isSafeInteger(value)) {
@@ -69,19 +71,47 @@ export class NMathGenerator {
     );
   }
 
-  random<const S extends Shape, D extends FloatDType = "float64">(
+  random<const S extends Shape>(shape: S): Expr<"float64", S>;
+  random<const S extends Shape, D extends FloatDType | undefined>(
     shape: S,
-    dtype: D = "float64" as D,
-  ): Expr<D, S> {
+    dtype: D,
+  ): Expr<OptionalFloatDType<D>, S>;
+  random<const S extends Shape>(
+    shape: S,
+    dtype: FloatDType = "float64",
+  ): Expr<FloatDType, S> {
     return this.expression("random", shape, dtype);
   }
 
-  integers<const S extends Shape, D extends IntegerDType = "int64">(
+  integers<const S extends Shape>(
     low: number | bigint,
     high: number | bigint | undefined,
     shape: S,
-    options: { dtype?: D; endpoint?: boolean } = {},
-  ): Expr<D, S> {
+  ): Expr<"int64", S>;
+  integers<const S extends Shape>(
+    low: number | bigint,
+    high: number | bigint | undefined,
+    shape: S,
+    options: { dtype: undefined; endpoint?: boolean },
+  ): Expr<"int64", S>;
+  integers<const S extends Shape, D extends IntegerDType>(
+    low: number | bigint,
+    high: number | bigint | undefined,
+    shape: S,
+    options: { dtype: D; endpoint?: boolean },
+  ): Expr<D, S>;
+  integers<const S extends Shape, D extends IntegerDType = never>(
+    low: number | bigint,
+    high: number | bigint | undefined,
+    shape: S,
+    options: { dtype?: D; endpoint?: boolean } | undefined,
+  ): Expr<D | "int64", S>;
+  integers<const S extends Shape>(
+    low: number | bigint,
+    high: number | bigint | undefined,
+    shape: S,
+    options: { dtype?: IntegerDType; endpoint?: boolean } = {},
+  ): Expr<IntegerDType, S> {
     if (high === undefined) {
       high = low;
       low = 0;
@@ -89,7 +119,7 @@ export class NMathGenerator {
     return this.expression(
       "integers",
       shape,
-      options.dtype ?? ("int64" as D),
+      options.dtype ?? "int64",
       integer(low),
       integer(high),
       options.endpoint ?? false,
@@ -104,10 +134,15 @@ export class NMathGenerator {
     return this.expression("uniform", shape, "float64", real(low), real(high));
   }
 
-  standard_normal<const S extends Shape, D extends FloatDType = "float64">(
+  standard_normal<const S extends Shape>(shape: S): Expr<"float64", S>;
+  standard_normal<const S extends Shape, D extends FloatDType | undefined>(
     shape: S,
-    dtype: D = "float64" as D,
-  ): Expr<D, S> {
+    dtype: D,
+  ): Expr<OptionalFloatDType<D>, S>;
+  standard_normal<const S extends Shape>(
+    shape: S,
+    dtype: FloatDType = "float64",
+  ): Expr<FloatDType, S> {
     return this.expression("standard_normal", shape, dtype);
   }
 
