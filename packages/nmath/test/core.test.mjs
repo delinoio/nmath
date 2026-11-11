@@ -376,6 +376,10 @@ test("NumPy arange fills from dtype-converted initial values", async () => {
   assert.equal(descendingUint32.item(2_099_999), 1);
   descendingUint32.dispose();
 
+  const longFloat32 = np.arange(ctx, 0, 18_454_940, 1.1, "float32");
+  assert.equal(longFloat32.item(16_777_217), 18_454_938);
+  longFloat32.dispose();
+
   assert.throws(() => np.arange(ctx, 0, 1, 0), RangeError);
   await ctx.close();
 });

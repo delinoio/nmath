@@ -198,7 +198,9 @@ export function arange(
         dtype === "int32" || dtype === "uint32"
           ? values[0] + Math.imul(i, increment[0])
           : dtype === "float32"
-            ? Math.fround(values[0] + Math.fround(i * increment[0]))
+            ? Math.fround(
+                values[0] + Math.fround(Math.fround(i) * increment[0]),
+              )
             : values[0] + i * increment[0];
     }
   }
