@@ -1,6 +1,6 @@
 # Development fixture generation only; never a package/runtime dependency.
 numpy==2.5.4
-pandas==3.1.0
+pandas==3.1.1
 polars==2.1.0
 polars-runtime-32==2.1.0
 python-dateutil==3.0.0
